@@ -180,6 +180,7 @@ Opens the interactive interface where you can browse sections, view disassembly,
 
 - [ ] x86 / x86-64 instruction decoder
 - [ ] ARM support
+- [ ] AI Generated Explanation of the code
 - [ ] DWARF debug info parsing
 - [ ] PE `.reloc` and `.pdata` support
 - [ ] GUI jump tree with zoom/pan
