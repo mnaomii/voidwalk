@@ -43,3 +43,9 @@
 
 # debug information files
 *.dwo
+
+# folders
+
+.testing/
+.vscode/
+.vs-project/
