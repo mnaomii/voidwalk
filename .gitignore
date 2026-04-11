@@ -37,5 +37,9 @@
 *.out
 *.app
 
+# Misc
+
+*.txt
+
 # debug information files
 *.dwo
