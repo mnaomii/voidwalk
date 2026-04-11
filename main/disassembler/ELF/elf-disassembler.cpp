@@ -1,52 +1,24 @@
 #include "elf-disassembler.h"
+#include <stdexcept>
 
-
-void ELF_Disassembler::getSymtabHeader() {
-
-}
-void ELF_Disassembler::getDynsymHeader() {
-
-}
-void ELF_Disassembler::getStrtabHeader() {
-
-}
-void ELF_Disassembler::getDynstrHeader() {
-
-}
-void ELF_Disassembler::getPLTHeader() {
-
-}
-void ELF_Disassembler::getGOTHeader() {
-
-}
-void ELF_Disassembler::getRelHeader() {
-
-}
-void ELF_Disassembler::getEHFrameHeader() {
+void ELF_Disassembler::setHeadersOffsets() {
+	uint32_t e_shoff = this->contents[0x28];
 
 }
 
-void ELF_Disassembler::getDataHeader()  {
-
-}
-void ELF_Disassembler::getTextHeader()  {
-
-}
-void ELF_Disassembler::getROnlyHeader()  {
-
-}
-void ELF_Disassembler::getBSSHeader()  {
-
-}
 
 ELF_Disassembler::ELF_Disassembler(vector<uint8_t> data): Disassembler(data) {
-	this->getSymtabHeader();
-	this->getSymtabHeader();
-	this->getDynsymHeader();
-	this->getStrtabHeader();
-	this->getDynstrHeader();
-	this->getPLTHeader();
-	this->getGOTHeader();
-	this->getRelHeader();
-	this->getEHFrameHeader();
+	if (this->contents[0x04] == 0x01) is32bit = true;
+	switch (this->contents[0x10]) {
+		case 0x3E:
+			this->filetype = "x86-64"; break;
+
+		case 0x28:
+			this->filetype = "ARM"; break;
+		
+		default:
+			throw runtime_error("Invalid architecture.");
+	}
+
+	this->setHeadersOffsets();
 }

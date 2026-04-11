@@ -3,24 +3,23 @@
 
 #include <cstdint>
 #include <vector>
+#include <string>
 using namespace std;
 
 class Disassembler {
 protected:
-
+    bool is32bit;
+    string filetype;
     vector<uint8_t> contents;
-    uint32_t* _text;
-    uint32_t* _data;
-    uint32_t* _ronly; //strings, constants
-    uint32_t* _bss;
+    uint64_t* _text;
+    uint64_t* _data;
+    uint64_t* _ronly; //strings, constants
+    uint64_t* _bss;
 
-    virtual void getDataHeader() = 0;
-    virtual void getTextHeader() = 0;
-    virtual void getROnlyHeader() = 0;
-    virtual void getBSSHeader() = 0;
+    virtual void setHeadersOffsets()=0;
 
 public:
-    Disassembler(vector<uint8_t>& temp) : contents(temp) {};
+    Disassembler(vector<uint8_t> temp) : contents(temp) {};
     virtual ~Disassembler() = default;
 
 };

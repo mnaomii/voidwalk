@@ -4,21 +4,13 @@
 
 class PE_Disassembler : public Disassembler {
 private:
-    uint32_t* __idata;
-    uint32_t* _edata;
-    uint32_t* _rsrc;
-    uint32_t* _pdata;
-    // uint32_t* _reloc - use for rebasing
+    uint64_t* __idata;
+    uint64_t* _edata;
+    uint64_t* _rsrc;
+    uint64_t* _pdata;
+    // uint64_t* _reloc - use for rebasing
 
-    void getIDATAHeader();
-    void getEDATAHeader();
-    void getRSRCHeader();
-    void getPDATAHeader();
-
-    void getDataHeader() override;
-    void getTextHeader() override;
-    void getROnlyHeader() override;
-    void getBSSHeader() override;
+    void setHeadersOffsets() override;
 public:
     PE_Disassembler(vector<uint8_t> data);
 };

@@ -1,6 +1,17 @@
 #include "hex_reader.h"
 #include <stdexcept>
 
+ void determine_filetype(vector<uint8_t>& contents, bool& is_elf, bool& is_pe) {
+
+    if (contents.size() >= 4 && contents[0] == 0x7F && contents[1] == 0x45 &&
+        contents[2] == 0x4C && contents[3] == 0x46) is_elf = true;
+    else if (contents.size() >= 2 && contents[0] == 0x4D && contents[1] == 0x5A) {
+        uint32_t pe_header_offset = *reinterpret_cast<uint32_t*>(&contents[0x3C]); // PE header offset pointer
+        if (pe_header_offset + 4 <= contents.size() && contents[pe_header_offset] == 0x50 && contents[pe_header_offset + 1] == 0x45 &&
+            contents[pe_header_offset + 2] == 0x00 && contents[pe_header_offset + 3] == 0x00) is_pe = true;
+    }
+}
+
 
 int main(int argc, char** argv){
 

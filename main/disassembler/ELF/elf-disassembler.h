@@ -4,29 +4,16 @@
 
 class ELF_Disassembler : public Disassembler {
 private:
-    uint32_t* __symtab;
-    uint32_t* _dynsym;
-    uint32_t* _strtab;
-    uint32_t* _dynstr;
-    uint32_t* _plt;
-    uint32_t* _got;
-    uint32_t* _rel;
-    uint32_t* _eh_frame;
+    uint64_t* __symtab;
+    uint64_t* _dynsym;
+    uint64_t* _strtab;
+    uint64_t* _dynstr;
+    uint64_t* _plt;
+    uint64_t* _got;
+    uint64_t* _rel;
+    uint64_t* _eh_frame;
 
-    void getSymtabHeader();
-    void getDynsymHeader();
-    void getStrtabHeader();
-    void getDynstrHeader();
-    void getPLTHeader();
-    void getGOTHeader();
-    void getRelHeader();
-    void getEHFrameHeader();
-
-    void getDataHeader() override;
-    void getTextHeader() override;
-    void getROnlyHeader() override;
-    void getBSSHeader() override;
-
+    void setHeadersOffsets() override;
 
 public:
     ELF_Disassembler(vector<uint8_t> data);
