@@ -14,7 +14,7 @@ protected:
     uint64_t* _text;
     uint64_t* _data;
     uint64_t* _ronly; //strings, constants
-    uint64_t* _bss;
+    uint64_t* _bss; // empty section, memory will be filled at runtime
 
     virtual void setHeadersOffsets()=0;
 
