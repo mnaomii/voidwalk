@@ -16,6 +16,7 @@ private:
     header _eh_frame;
 
     void setHeadersOffsets() override;
+    std::string getArchitecture() override;
 
 public:
     ELF_Disassembler(AddressSpace& data);

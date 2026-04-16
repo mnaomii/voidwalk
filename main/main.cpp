@@ -1,5 +1,8 @@
 #include "hex_reader.h"
 #include "address_space/address_space.h"
+#include "disassembler/disassembler.h"
+#include "disassembler/ELF/elf-disassembler.h"
+#include "disassembler/PE/pe-disassembler.h"
 #include <stdexcept>
 #include <string>
 
@@ -7,41 +10,61 @@
 
     if (contents.size() >= 4 && contents.read_u8(0) == 0x7F && contents.read_u8(1) == 0x45 &&
         contents.read_u8(2) == 0x4C && contents.read_u8(3) == 0x46) is_elf = true;
-    else if (contents.size() >= 2 && contents.read_u8(0) == 0x4D && contents.read_u8(1) == 0x5A) {
+    else if (contents.size() >= 2 && contents.read_u8(0) == 0x4D && contents.read_u8(1) == 0x5A) { // ms-dos compat line
         uint32_t pe_header_offset = contents.read_u32(0x3C); // PE header offset pointer
-        if (pe_header_offset + 4 <= static_cast<uint32_t>(contents.size()) && contents.read_u32(pe_header_offset) == 0x50 && contents.read_u32(pe_header_offset + 1) == 0x45 &&
-            contents.read_u32(pe_header_offset + 2) == 0x00 && contents.read_u32(pe_header_offset + 3) == 0x00) is_pe = true;
+        if (pe_header_offset <= contents.size() -4 &&
+            contents.read_u32(pe_header_offset) == 0x00004550) is_pe = true;
     }
 }
 
+ std::unique_ptr<Disassembler> make_disassembler(AddressSpace& data) {
+     bool is_elf = false, is_pe = false;
+     determine_filetype(data, is_elf, is_pe);
 
-int main(int argc, char** argv){
+     if (is_elf) {
+         std::cout << "ELF Binary detected..\n\n";
+         return std::make_unique<ELF_Disassembler>(data);
+     }
+     if (is_pe) {
+         std::cout << "PE Binary detected..\n\n";
+         return std::make_unique<PE_Disassembler>(data);
+     }
+     throw std::runtime_error("Not an ELF or PE binary.");
+ }
 
-    if(argc != 2 ){ 
-        bool condition = (argc == 1) ? true : false;
-        switch(condition){
-            case true:
-                cout<<"At least one argument is required. "; break;
-            default:
-                cout<<"Too many arguments provided."; break;
-        }
-        return 1;
-    }
 
-    try{
-    bool is_elf = false, is_pe = false;
-    AddressSpace data(argv[1]);
+ int main(int argc, char** argv) {
+     std::string filename;
 
-    determine_filetype(data,is_elf,is_pe);
-    if(!(is_elf || is_pe )) throw runtime_error("File is not a compatible executable. [ELF/PE] ");
-    else{
-        if(is_elf) cout<<"Provided file is an ELF-binary.\n";
-        else if(is_pe) cout<<"Provided file is a PE-binary.\n";
-        else{throw runtime_error("File is not an executable.\n");}
-    }
-   // output(data);
+     if (argc > 2) {
+         std::cout << "Too many arguments provided.\n";
+         return 1;
+     }
 
-    } catch(runtime_error& e) {cout<<e.what()<<"\n"; return 1;}
+     if (argc == 2) {
+         filename = argv[1];
+     }
+     else {
+         std::cout << "At least one argument is required.\n"
+             << "Give a path to an executable: >> ";
+         while (true) {
+             std::getline(std::cin,filename);
+             std::ifstream f(filename);
+             if (f.is_open()) break;
+             std::cerr << "Invalid path/executable. Try again.\n"
+                 << "Executable path: >> ";
+         }
+     }
 
-    return 0;
-}
+     try {
+         AddressSpace data(filename);
+         auto d = make_disassembler(data);
+         std::cout << "Detected architecture : " << d->getArchitecture() << "\n";
+         // d->disassemble();
+     }
+     catch (std::runtime_error& e) {
+         std::cout << e.what() << "\n";
+         return 1;
+     }
+     return 0;
+ }
