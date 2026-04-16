@@ -4,22 +4,32 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include "../../address_space/address_space.h"
+
 using namespace std;
+
+struct header {
+    uint64_t* offset;
+    size_t size;
+};
 
 class Disassembler {
 protected:
     bool is32bit;
-    string filetype;
-    vector<uint8_t> contents;
-    uint64_t* _text;
-    uint64_t* _data;
-    uint64_t* _ronly; //strings, constants
-    uint64_t* _bss; // empty section, memory will be filled at runtime
+    uint16_t architecture;
+    uint16_t filetype; // 1 - object file , 2 - executable, 3 - sharedlib (ELF)
+                       // ..  (PE)
+    AddressSpace& contents;
+
+    header _text;
+    header _data;
+    header _ronly; //strings, constants
+    header _bss; // empty section, memory will be filled at runtime
 
     virtual void setHeadersOffsets()=0;
 
 public:
-    Disassembler(vector<uint8_t> temp) : contents(temp) {};
+    Disassembler(AddressSpace& temp) : filetype(0), contents(temp) {}
     virtual ~Disassembler() = default;
 
 };

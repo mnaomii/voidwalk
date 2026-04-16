@@ -1,24 +1,57 @@
 #include "elf-disassembler.h"
+#include "parsers/elf-32bit.h"
+#include "parsers/elf-64bit.h"
+#include "parsers/elf-64bit-ARM.h"
 #include <stdexcept>
 
 void ELF_Disassembler::setHeadersOffsets() {
-	uint32_t e_shoff = this->contents[0x28];
+	if (is32bit) {
+		if(filetype==1)
+			setHeaders32bit( 
+			 _symtab,
+			 _dynsym,
+			 _strtab,
+			 _dynstr,
+			 _plt,
+			 _got,
+			 _rel,
+			 _eh_frame, contents); 
+
+		else
+			throw runtime_error("Invalid architecture [32bit ARM]");
+		
+	}
+	else {
+		if (filetype == 1)
+			setHeaders64bit(
+				_symtab,
+				_dynsym,
+				_strtab,
+				_dynstr,
+				_plt,
+				_got,
+				_rel,
+				_eh_frame, contents);
+		else
+			setHeaders64bitARM(
+				_symtab,
+				_dynsym,
+				_strtab,
+				_dynstr,
+				_plt,
+				_got,
+				_rel,
+				_eh_frame, contents);
+	}
 
 }
 
 
-ELF_Disassembler::ELF_Disassembler(vector<uint8_t> data): Disassembler(data) {
-	if (this->contents[0x04] == 0x01) is32bit = true;
-	switch (this->contents[0x10]) {
-		case 0x3E:
-			this->filetype = "x86-64"; break;
-
-		case 0x28:
-			this->filetype = "ARM"; break;
-		
-		default:
-			throw runtime_error("Invalid architecture.");
-	}
+ELF_Disassembler::ELF_Disassembler(AddressSpace& data): Disassembler(data) {
+	if (this->contents.read_u8(0x04) == 0x01) is32bit = true;
+	this->architecture = this->contents.read_u16(0x12);
+	if(! (this->architecture == 0x03 && this->architecture==0x3E && this->architecture==0xB7) ) throw exception("Architecture is not supported yet.");
+	
 
 	this->setHeadersOffsets();
 }

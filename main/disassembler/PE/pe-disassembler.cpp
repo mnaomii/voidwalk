@@ -4,7 +4,7 @@ void PE_Disassembler::setHeadersOffsets() {
 
 }
 
-PE_Disassembler::PE_Disassembler(vector<uint8_t> data) : Disassembler(data) {
+PE_Disassembler::PE_Disassembler(AddressSpace& data) : Disassembler(data) {
 	this->setHeadersOffsets();
 }
 
