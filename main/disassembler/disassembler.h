@@ -19,8 +19,7 @@ protected:
 
     bool is32bit;
     uint16_t architecture;
-    //uint16_t filetype; // 1 - object file , 2 - executable, 3 - sharedlib (ELF)
-                       // ..  (PE)
+
     AddressSpace& contents;
 
     header _text;

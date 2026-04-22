@@ -22,11 +22,11 @@
      determine_filetype(data, is_elf, is_pe);
 
      if (is_elf) {
-         std::cout << "ELF Binary detected..\n\n";
+         std::cout << "\nELF Binary detected..\n";
          return std::make_unique<ELF_Disassembler>(data);
      }
      if (is_pe) {
-         std::cout << "PE Binary detected..\n\n";
+         std::cout << "\nPE Binary detected..\n";
          return std::make_unique<PE_Disassembler>(data);
      }
      throw std::runtime_error("Not an ELF or PE binary.");

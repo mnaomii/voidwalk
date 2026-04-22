@@ -1,193 +1,84 @@
 # Disassembler & Dynamic Analysis Tool
 
-A work-in-progress binary analysis tool written in C++ supporting both **ELF** and **PE** executable formats. Features static disassembly, dynamic analysis, a control flow visualizer (jump tree), and both a CLI and GUI interface.
+An early-stage C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
+
+> **Status:** Active development. ELF x86/x86_64 section parsing is functional. PE support and instruction decoding are in progress.
 
 ---
 
+## What Works Today
 
+- **Format detection** — identifies ELF (`7F 45 4C 46`) and PE (`MZ` + PE signature) binaries from magic bytes and selects the correct parser automatically
+- **ELF section parsing (x86 / x86_64)** — walks the section header table and populates headers for `.text`, `.data`, `.rodata`, `.bss`, `.symtab`, `.dynsym`, `.strtab`, `.dynstr`, `.plt`, `.got`, `.rel`/`.rela`, and `.eh_frame`
+- **Architecture detection** — reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF header
+- **File-backed binary reader** — `AddressSpace` provides random-access reads (`read_u8/16/32/64`) directly from disk without loading the entire file into memory
 
+### Not yet implemented
 
-##  Features
-
-### ~ Format Support
-- ELF (Linux/Unix executables)
-- PE (Windows executables)
-- Magic byte detection at load time — automatically selects the correct parser
-
-### ~ Static Analysis
-- Section parsing (`.text`, `.data`, `.rodata`, `.bss`, `.idata`, `.dynsym`, and more)
-- Import/export resolution
-- Symbol table parsing (`.symtab`, `.dynsym` for ELF — survives stripping)
-- Relocation entry parsing (`.rel` / `.rela` for ELF)
-- Function boundary recovery via `.eh_frame`
-- Hex dump output with address offsets
-
-### ~ Control Flow Visualization
-- **Jump tree** — binary tree structure visualizing all jump/branch instructions and their targets
-- Nodes represent basic blocks; edges represent conditional and unconditional jumps
-- Rendered in both CLI (ASCII art) and GUI (interactive graph view)
-
-### ~ Dynamic Analysis
-- Runtime tracing of executed instructions
-- Tracking of branch outcomes (taken / not taken)
-- Import call logging — records which external functions are called and when
-- Memory access tracking (reads/writes to key regions)
-- Stack frame monitoring
-
-### ~ Dual Interface
-- **CLI** — full feature access from the terminal, scriptable and pipe-friendly
-- **GUI** — interactive interface with section browser, disassembly view, and jump tree visualizer
+- **PE parsing** — PE binaries are detected but the parser is a stub (`getArchitecture()` returns `"WIP"`)
+- **ELF ARM** — ARM32 and AArch64 dispatch exists but the parsers are not yet written
+- **Instruction decoding / disassembly** — the `disassemble()` entry point exists but is not yet wired up
 
 ---
 
-##  Architecture
+## Architecture
 
-The project is structured around a polymorphic base class design:
+The project uses a polymorphic base class design with format-specific subclasses:
 
 ```
 Disassembler (abstract base)
-├── ELFDisassembler
-└── PEDisassembler
+├── ELF_Disassembler
+└── PE_Disassembler
 ```
 
-Each child class implements format-specific parsing while sharing common infrastructure (hex reader, section container, output routines) from the base class. A factory function instantiates the correct parser based on detected magic bytes.
+**Key design decisions:**
+
+- **Factory instantiation** — `make_disassembler()` inspects the first bytes of the file and returns the matching subclass. New formats are added by subclassing, not by branching inside existing code.
+- **`AddressSpace`** — all binary reads go through a single file-backed reader. No raw buffer slicing or `reinterpret_cast` off an in-memory `vector`.
+- **Parser dispatch** — bitness and architecture are handled by free functions in `parsers/` headers (e.g., `elf_32bit.h`, `elf_64bit.h`). Each bitness/arch combination is isolated in its own function.
+- **`header` struct** — sections are represented as `{ uint64_t vaddr, offset, size }`, populated by the format-specific parsers onto the base class.
 
 ---
 
-##  Project Structure
+## Build
+
+Builds with **Visual Studio** (MSVC) via the `.vcxproj` in `.vs-project/`. No CMake or cross-platform build system yet.
 
 ```
-.
-├── src/
-│   ├── core/
-│   │   ├── disassembler.h        # Abstract base class
-│   │   ├── elf_disassembler.h/cpp
-│   │   └── pe_disassembler.h/cpp
-│   ├── analysis/
-│   │   ├── hex_reader.h          # Binary file loader
-│   │   ├── section.h             # Generic section container
-│   │   └── dynamic_tracer.h/cpp  # Runtime analysis
-│   ├── visualization/
-│   │   └── jump_tree.h/cpp       # Control flow binary tree
-│   ├── cli/
-│   │   └── cli.cpp               # CLI entry point
-│   └── gui/
-│       └── gui.cpp               # GUI entry point
-├── CMakeLists.txt
-└── README.md
+exec/dynamic-analysis-tool.exe <path-to-binary>
 ```
+
+Expects exactly one argument: the path to an ELF or PE binary.
 
 ---
 
-##  Jump Tree
+## Vision
 
-The jump tree is a binary tree where:
-- Each **node** is a basic block (a linear sequence of instructions with no branches)
-- The **left child** represents the branch-not-taken path
-- The **right child** represents the branch-taken path
-- Leaf nodes are either return instructions or unresolved indirect jumps
+The long-term goal is a complete binary analysis toolkit with both static and dynamic capabilities:
 
-**CLI output example:**
-```
-[0x00401000] entry
-├── [taken]     [0x00401020] loop_body
-│   ├── [taken]     [0x00401020] loop_body  (back edge)
-│   └── [not taken] [0x00401045] loop_exit
-└── [not taken] [0x00401060] error_handler
-```
-
-**GUI** renders this as an interactive, zoomable graph with color-coded edges (green = taken, red = not taken).
+- **Control flow visualization** — a jump tree representing basic blocks and branch targets, rendered in both CLI and an interactive GUI
+- **Dynamic analysis** — runtime instruction tracing, branch outcome tracking, import call logging, and memory access monitoring
+- **Dual interface** — full CLI for scripting and a GUI with section browser, disassembly view, and jump tree visualizer
 
 ---
 
-##  Getting Started
+## Roadmap
 
-### Requirements
-????
+**Near-term**
+- [ ] PE parser implementation (32-bit and 64-bit)
+- [ ] x86 / x86_64 instruction decoder
+- [ ] ARM32 / AArch64 ELF support
 
-### Build
-
-```bash
-git clone https://github.com/mnaomii/dynamic-analysis-tool.git
-cd disassembler
-mkdir build && cd build
-cmake ..
-make
-```
-
-### CLI Usage
-
-```bash
-# Detect format and print section info
-./disassembler --sections target.elf
-
-# Disassemble .text section
-./disassembler --disasm target.exe
-
-# Print hex dump
-./disassemler --hex target.elf
-
-# Show jump tree for a function at address
-./disassembler --jumptree 0x401000 target.exe
-
-# Run dynamic analysis (requires execution)
-./disassembler --trace target.elf
-```
-
-### GUI Usage
-
-```bash
-./disassembler target.exe --gui
-```
-
-Opens the interactive interface where you can browse sections, view disassembly, and explore the jump tree visually.
-
----
-
-##  Sections Parsed
-
-### ELF
-| Section | Parsed | Purpose |
-|---|---|---|
-| `.text` | ✅ | Executable code |
-| `.data` | ✅ | Initialized globals |
-| `.rodata` | ✅ | Read-only data / strings |
-| `.bss` | ✅ | Uninitialized globals |
-| `.symtab` | ✅ | Symbol table |
-| `.dynsym` | ✅ | Dynamic symbols (survives stripping) |
-| `.plt` / `.got` | ✅ | Dynamic call stubs |
-| `.rel` / `.rela` | ✅ | Relocations |
-| `.eh_frame` | ✅ | Function boundary recovery |
-| `.debug_*` | 🔜 | DWARF debug info (planned) |
-
-### PE
-| Section | Parsed | Purpose |
-|---|---|---|
-| `.text` | ✅ | Executable code |
-| `.data` | ✅ | Initialized globals |
-| `.rdata` | ✅ | Read-only data / strings |
-| `.bss` | ✅ | Uninitialized globals |
-| `.idata` | ✅ | Import table |
-| `.edata` | ✅ | Export table |
-| `.rsrc` | 🔜 | Resources (planned) |
-| `.reloc` | 🔜 | Base relocations (planned) |
-| `.tls` | 🔜 | Thread local storage (planned) |
-| `.pdata` | 🔜 | Exception handlers (planned) |
-
----
-
-##  Roadmap
-
-- [ ] x86 / x86-64 instruction decoder
-- [ ] ARM support
-- [ ] AI Generated Explanation of the code
+**Longer-term**
 - [ ] DWARF debug info parsing
 - [ ] PE `.reloc` and `.pdata` support
 - [ ] GUI jump tree with zoom/pan
 - [ ] Dynamic tracer with breakpoint support
+- [ ] AI-generated code explanation
 - [ ] Export analysis report to file
 
 ---
 
-##  LICENSE
+## License
+
 None.

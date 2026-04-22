@@ -10,6 +10,8 @@ private:
     header _edata;
     header _rsrc;
     header _pdata;
+
+    uint32_t e_lfanew;
     // uint64_t* _reloc - use for rebasing
 
     void setHeadersOffsets() override;

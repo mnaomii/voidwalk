@@ -3,6 +3,7 @@
 void Disassembler::initHeader(header& x) {
 	x.offset = 0;
 	x.size = 0;
+	x.vaddr = 0;
 }
 
 Disassembler::Disassembler(AddressSpace& temp) : //filetype(0),

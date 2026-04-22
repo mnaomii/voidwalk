@@ -42,7 +42,7 @@ std::string ELF_Disassembler::getArchitecture() {
 
 void ELF_Disassembler::setHeadersOffsets() {
 	if (is32bit) {
-		if (architecture == 0x03) {
+		if (this->architecture == 0x03) {
 			setHeaders32bit(this->_text, this->_data, this->_ronly, this->_bss,
 				this->_symtab,
 				this->_dynsym,
@@ -53,7 +53,7 @@ void ELF_Disassembler::setHeadersOffsets() {
 				this->_rel,
 				this->_eh_frame, this->contents);
 		}
-		else if (architecture == 0x28) setHeaders32bitARM(this->_text, this->_data, this->_ronly, this->_bss,
+		else if (this->architecture == 0x28) setHeaders32bitARM(this->_text, this->_data, this->_ronly, this->_bss,
 			this->_symtab,
 			this->_dynsym,
 			this->_strtab,
@@ -65,7 +65,7 @@ void ELF_Disassembler::setHeadersOffsets() {
 		else throw std::runtime_error("Unsupported 32-bit ELF architecture.");
 	}
 	else {
-		if (architecture == 0x3E) setHeaders64bit(this->_text, this->_data, this->_ronly, this->_bss,
+		if (this->architecture == 0x3E) setHeaders64bit(this->_text, this->_data, this->_ronly, this->_bss,
 			this->_symtab,
 			this->_dynsym,
 			this->_strtab,
@@ -74,7 +74,7 @@ void ELF_Disassembler::setHeadersOffsets() {
 			this->_got,
 			this->_rel,
 			this->_eh_frame, this->contents);
-		else if (architecture == 0xB7) setHeaders64bitARM(this->_text, this->_data, this->_ronly, this->_bss,
+		else if (this->architecture == 0xB7) setHeaders64bitARM(this->_text, this->_data, this->_ronly, this->_bss,
 			this->_symtab,
 			this->_dynsym,
 			this->_strtab,
