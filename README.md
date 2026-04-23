@@ -12,11 +12,11 @@ An early-stage C++ binary analysis tool targeting **ELF** and **PE** executable 
 - **ELF section parsing (x86 / x86_64)** — walks the section header table and populates headers for `.text`, `.data`, `.rodata`, `.bss`, `.symtab`, `.dynsym`, `.strtab`, `.dynstr`, `.plt`, `.got`, `.rel`/`.rela`, and `.eh_frame`
 - **Architecture detection** — reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF header
 - **File-backed binary reader** — `AddressSpace` provides random-access reads (`read_u8/16/32/64`) directly from disk without loading the entire file into memory
+- **PE parsing** — PE binaries are detected but the parser is a stub (`getArchitecture()` returns `"WIP"`)
+
 
 ### Not yet implemented
 
-- **PE parsing** — PE binaries are detected but the parser is a stub (`getArchitecture()` returns `"WIP"`)
-- **ELF ARM** — ARM32 and AArch64 dispatch exists but the parsers are not yet written
 - **Instruction decoding / disassembly** — the `disassemble()` entry point exists but is not yet wired up
 
 ---
