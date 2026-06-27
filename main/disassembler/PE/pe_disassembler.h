@@ -1,15 +1,17 @@
 #ifndef PE_DISASSEMBLER_H
 #define PE_DISASSEMBLER_H
 #include "../disassembler.h"
-#include "../../address_space/address_space.h"
+#include "../miscellaneous/sections/base/header.h"
 
+#include "../../address-space/address_space.h"
+
+struct PE_Sections {
+    Header _idata, _edata, _rsrc, _pdata;
+};
 
 class PE_Disassembler : public Disassembler {
 private:
-    header _idata;
-    header _edata;
-    header _rsrc;
-    header _pdata;
+    PE_Sections extraSections;
 
     uint32_t e_lfanew;
     // uint64_t* _reloc - use for rebasing
@@ -18,5 +20,7 @@ private:
     std::string getArchitecture() override;
 public:
     PE_Disassembler(AddressSpace& data);
+    std::string decodeLine() override;
+
 };
 #endif
