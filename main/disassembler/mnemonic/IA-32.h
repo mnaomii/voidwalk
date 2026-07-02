@@ -1,7 +1,9 @@
 #include "../../address-space/address_space.h"
 #include "../ELF/elf_disassembler.h"
+#include "instruction.h"
 #include <string>
 #include <cstdint>
+#pragma once
 
 // FORMAT:
 
@@ -12,7 +14,28 @@
 // Displacement : 0-4 bytes
 // Immediate : 0-4 bytes
 
+enum class STATE : int {
+	IS_IMMEDIATE = 2,
+	IS_MEMORY = 1,
+	IS_REGISTER = 0,
+	IS_NULL = -1
+};
 
+
+
+// in IA-32 -> default operand size : 32bits, change with 66f
+
+class IA_32: public Instruction{
+private:
+
+	uint16_t prefix, opcode;
+	struct {
+		uint16_t value;
+		int state;
+	} op1, op2;
+
+
+public:
 enum class Prefix : uint16_t {
 	LOCK = 0xF0,
 	REPNE = 0xF2,
@@ -26,6 +49,11 @@ enum class Prefix : uint16_t {
 	ES = 0X26,
 	FS = 0x64,
 	GS = 0x65,
+
+	HLT = 0xF4,
+	CMC = 0xF5,
+
+	INT1 = 0xF1,
 
 
 	// operand-size prefix
@@ -371,6 +399,19 @@ enum class OPCODE : uint16_t {
 
 };
 
-std::string decodeLine(ELF_Disassembler base, uint64_t offset) {
+enum class REGISTER : uint16_t {
+	AX = 0x00,
+	CX = 0x01,
+	DX = 0x02,
+	BX = 0x03,
+	SP = 0x04 , // also AH
+	BP = 0x05 , // also CH
+	SI = 0x06 , // also DH
+	DI = 0x07 // also BH
+};
+
+std::string decodeLineString() override {
 	return "";
 }
+
+};

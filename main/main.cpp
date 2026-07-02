@@ -40,13 +40,16 @@ std::string make_disassembler(AddressSpace& data, std::unique_ptr<Disassembler> 
 
 int main(int argc, char** argv) {
     std::unique_ptr<Disassembler> disassembler;
+ 
     if (argc <= 1) std::cout << "No interface selected.\n";
     else {
+        AddressSpace data(argv[argc - 1]);
+        std::string status =  make_disassembler(data, std::move(disassembler));
         if (std::string(argv[1]).find("-gui"))
             //GUIstart(argc, argv);
             return 0;
         else
-            UIstart(argc, argv);
+            UIstart(argc, argv, status, std::move(disassembler));
     }
 	return 0;
 }
