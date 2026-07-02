@@ -17,8 +17,9 @@ private:
     // uint64_t* _reloc - use for rebasing
 
     void setHeadersOffsets() override;
-    std::string getArchitecture() override;
 public:
+    std::string getArchitecture() override;
+
     PE_Disassembler(AddressSpace& data);
     std::string decodeLine() override;
 

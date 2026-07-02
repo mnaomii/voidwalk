@@ -21,35 +21,43 @@ void determine_filetype(AddressSpace& contents, bool& is_elf, bool& is_pe) {
     }
 }
 
-std::string make_disassembler(AddressSpace& data, std::unique_ptr<Disassembler> d) {
+std::string make_disassembler(AddressSpace& data, std::shared_ptr<Disassembler>* d) {
     bool is_elf = false, is_pe = false;
     determine_filetype(data, is_elf, is_pe);
 
     if (is_elf) {
         
-        d = std::make_unique<ELF_Disassembler>(data);
+        *d = std::make_shared<ELF_Disassembler>(data);
         return  "\nELF Binary detected..\n";
     }
     if (is_pe) {
         
-        d = std::make_unique<PE_Disassembler>(data);
+        *d = std::make_shared<PE_Disassembler>(data);
         return  "\nPE Binary detected..\n";
     }
     throw std::runtime_error("Not an ELF or PE binary.");
 }
 
 int main(int argc, char** argv) {
-    std::unique_ptr<Disassembler> disassembler;
+    std::shared_ptr<Disassembler> disassembler;
  
     if (argc <= 1) std::cout << "No interface selected.\n";
     else {
-        AddressSpace data(argv[argc - 1]);
-        std::string status =  make_disassembler(data, std::move(disassembler));
-        if (std::string(argv[1]).find("-gui"))
+        std::shared_ptr<AddressSpace> data;
+        try {
+            data = std::make_shared<AddressSpace>(argv[argc - 1]);
+        }
+        catch (std::runtime_error& e) {
+            std::cerr << "File could not be opened.\n";
+            return 1;
+        }
+        
+        std::string status =  make_disassembler(*data, &disassembler);
+        if (std::string(argv[1]).find("-gui")!= std::string::npos)
             //GUIstart(argc, argv);
             return 0;
         else
-            UIstart(argc, argv, status, std::move(disassembler));
+            UIstart(argc, argv, status, disassembler);
     }
 	return 0;
 }

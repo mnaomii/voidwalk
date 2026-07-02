@@ -14,10 +14,10 @@ private:
     ELF_Sections extraSections;
 
     void setHeadersOffsets() override;
-    std::string getArchitecture() override;
 
 
 public:
+    std::string getArchitecture() override;
     ELF_Disassembler(AddressSpace& data);
     std::string decodeLine() override;
 
