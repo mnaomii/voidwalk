@@ -65,8 +65,8 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 ## Roadmap
 
 **Near-term**
-- [ ] PE parser implementation (32-bit and 64-bit)
-- [ ] x86 / x86_64 instruction decoder
+- [x] PE parser implementation (32-bit and 64-bit)
+- [x] x86 / x86_64 instruction decoder
 - [ ] ARM32 / AArch64 ELF support
 
 **Longer-term**
