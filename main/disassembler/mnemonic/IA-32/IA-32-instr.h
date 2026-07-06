@@ -574,8 +574,6 @@ IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t di
 	}
 
 
-
-
 };
 
 	inline std::string decodeLineString()  {

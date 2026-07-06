@@ -1,9 +1,11 @@
 #include "elf_disassembler.h"
 #include "parsers/elf_section_map.h"
 #include <stdexcept>
-
-
+#include "../mnemonic/instruction.h"
 #include "../mnemonic/IA-32/IA-32-instr.h"
+#include "../mnemonic/AArch64/AArch64-instr.h"
+#include "../mnemonic/AMD64/AMD64-instr.h"
+#include "../mnemonic/ARM32/ARM32-instr.h"
 
 
 ELF_Disassembler::ELF_Disassembler(AddressSpace& data) : Disassembler(data) { // constructor
@@ -41,10 +43,8 @@ void ELF_Disassembler::setHeadersOffsets() {
 			throw std::runtime_error("Unsupported 64-bit ELF architecture.");
 	}
 }
-
-Instruction& ELF_Disassembler::decodeLine(uint64_t address) {
-	IA_32 temp;
-	return temp;
+size_t ELF_Disassembler::decodeLine(uint64_t address) {
+	return 0;
 }
 
 std::string ELF_Disassembler::decodeCS(FILE* outputStream) {

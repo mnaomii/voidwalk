@@ -5,6 +5,8 @@
 #include "../../address-space/address_space.h"
 #include "../mnemonic/instruction.h"
 
+#pragma once
+
 
 struct ELF_Sections {
     Header _symtab, _dynsym, _strtab, _dynstr, _plt, _got, _rel, _eh_frame;
@@ -21,7 +23,7 @@ private:
 public:
     std::string getArchitecture() override;
     ELF_Disassembler(AddressSpace& data);
-    Instruction& decodeLine(uint64_t address) override;
+    size_t decodeLine(uint64_t address) override;
 
     std::string decodeCS(FILE* outputStream) override;
 

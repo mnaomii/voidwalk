@@ -59,7 +59,7 @@ public:
     };
     virtual std::string decodeCS(FILE* outputStream) = 0;
     virtual std::string getArchitecture()=0;
-    virtual Instruction& decodeLine(uint64_t address) = 0;
+    virtual size_t decodeLine(uint64_t address) = 0;
     virtual ~Disassembler() = default;
 
 };

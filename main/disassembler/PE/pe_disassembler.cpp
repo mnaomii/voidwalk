@@ -1,6 +1,21 @@
 #include "pe_disassembler.h"
+#include "../../address-space/address_space.h"
 #include "parsers/pe_section_map.h"
+#include "../mnemonic/IA-32/IA-32-instr.h"
+#include "../mnemonic/AArch64/AArch64-instr.h"
+#include "../mnemonic/AMD64/AMD64-instr.h"
+#include "../mnemonic/ARM32/ARM32-instr.h"
 #include <stdexcept>
+
+
+PE_Disassembler::PE_Disassembler(AddressSpace& data) : Disassembler(data) {
+
+	this->e_lfanew = contents.read_u32(0x3C);
+
+	this->architecture = contents.read_u32(e_lfanew + 4);
+
+	this->setHeadersOffsets();
+}
 
 void PE_Disassembler::setHeadersOffsets() {
 	switch (this->architecture) {
@@ -37,25 +52,83 @@ std::string PE_Disassembler::getArchitecture() {
 	}
 }
 
-Instruction& PE_Disassembler::decodeLine(uint64_t address) {
+size_t PE_Disassembler::decodeLine(uint64_t address) {
 
-
-	uint32_t field1, field2, field3, field4, field5;
+	// field4 is SIB byte
+	uint32_t field1=0, field2=0, field3=0, field4=0, field5=0, field6 =0;
+	size_t size = 0;
 
 	switch (this->architecture) {
-	case 0x14c:
+	case 0x14c: // x86
 
-		break;
+		field1 = contents.read_u8(address);
+		size += 8;
+		if (!IA_32::isPrefix(field1)) // invalid prefix, just read opcode
+		{
+			field2 = field1; 
+			field1 = 0x00;
+		}
+		else { // must read opcode
+			address += 8;
+			size += 8;
+
+			field2 = contents.read_u8(address);
+
+			address += 8;
+		}
+
+		if (IA_32::hasRMbyte(field2)) {
+			field3 = contents.read_u8(address);
+			address += 8;
+
+			uint8_t mod = ((field3 & 0b11000000) >> 6);
+			uint8_t reg_op = ((field3 & 0b00111000) >> 3);
+			uint8_t rm = (field3 & 0b00000111);
+
+			if (rm == 0b100) {
+				switch (mod) {
+				case 0b01: { // mem + disp8
+					field4 = contents.read_u8(address);
+					address += 8;
+					break;
+				}
+
+				case 0b10: { // mem + disp32
+					field4 = contents.read_u32(address);
+					address += 32;
+					break;
+				}
+				default:
+					field4 = 0x0;
+				}
+
+			}
+
+			if (IA_32::hasImmediateByte(field2)) {
+				uint32_t size;
+				if(IA_32::opcodeStrOf(field2) == "IMUL")
+					size = static_cast<uint32_t>(IA_32::opcodeTable()[field2].op3s);
+				else size = static_cast<uint32_t>(IA_32::opcodeTable()[field2].op2s);
+
+
+				// wip
+			}
+
+		}
+
+		decodedInstructions.push_back(IA_32(field1, field2, field3, field4, field5, field6));
+		return;
 
 	case 0x8664:
-		break;
+		throw std::runtime_error("Not implemented yet.");
 
 	case 0xAA64:
-		break;
+		throw std::runtime_error("Not implemented yet.");
 
 	case 0x1c0:
+		throw std::runtime_error("Not implemented yet.");
 
-		break;
+		//return ;
 
 	default:
 		throw std::runtime_error("Invalid architecture. Cannot parse.");
@@ -63,21 +136,18 @@ Instruction& PE_Disassembler::decodeLine(uint64_t address) {
 	}
 }
 
-PE_Disassembler::PE_Disassembler(AddressSpace& data) : Disassembler(data) {
-	
-	this->e_lfanew = data.read_u32(0x3C);
 
-	this->architecture = data.read_u32(e_lfanew + 4);
-
-	this->setHeadersOffsets();
-}
 
 std::string PE_Disassembler::decodeCS(FILE* outputStream) {
+	
 	
 	uint64_t currentPtr = baseSections._text.getOffset();
 	uint64_t endBoundary = baseSections._text.getSize() + currentPtr;
 
-	while()
+	while (currentPtr != endBoundary) {
+		fprintf(outputStream, "%s", (decodedInstructions.end() - 1)->decodeLineString().c_str());
+		// noBytes of instruction needed to continue;
+	}
 
 }
 
