@@ -76,6 +76,7 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 - [ ] Dynamic tracer with breakpoint support
 - [ ] AI-generated code explanation
 - [ ] Export analysis report to file
+- [ ] Simulated stack visualiser
 
 ---
 
