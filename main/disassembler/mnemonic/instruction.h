@@ -1,24 +1,18 @@
 #include <cstdint>
 #include <string>
 
-enum class STATE : int {
-	IS_IMMEDIATE = 2,
-	IS_MEMORY = 1,
-	IS_REGISTER = 0,
-	IS_NULL = -1
-};
 
 struct OpcodeInfo {
 	std::string_view text;
 	bool hasRMByte;
 	bool hasImmediateByte;
-
+	uint8_t op1am, op2am, op3am;
+	uint8_t op1s, op2s, op3s;
 };
 
 struct Operand {
-	uint32_t value;
-	STATE state;
-
+	uint64_t value;
+	uint8_t addressingMode, size;
 };
 
 class Instruction {

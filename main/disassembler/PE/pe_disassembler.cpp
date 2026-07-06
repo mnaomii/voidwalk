@@ -45,7 +45,7 @@ PE_Disassembler::PE_Disassembler(AddressSpace& data) : Disassembler(data) {
 	this->setHeadersOffsets();
 }
 
-std::string PE_Disassembler::decodeLine() {
+std::string PE_Disassembler::decodeCS(FILE* outputStream) {
 	return "";
 }
 

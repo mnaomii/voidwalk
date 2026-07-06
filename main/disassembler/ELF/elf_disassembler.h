@@ -19,7 +19,7 @@ private:
 public:
     std::string getArchitecture() override;
     ELF_Disassembler(AddressSpace& data);
-    std::string decodeLine() override;
+    std::string decodeCS(FILE* outputStream) override;
 
 };
 #endif

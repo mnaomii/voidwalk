@@ -3,7 +3,13 @@
 
 //   E=modrm r/m, G=modrm reg, I=imm, J=rel offset, O=moffs, S=seg reg, M=memory,
 //   A=far ptr, Z=register in low 3 bits of opcode (+r), AL/eAX/DX/CL/One=implicit
-enum class ADDRESSING : uint8_t { None, E, G, I, J, O, S, M, A, Z, AL, eAX, DX, CL, One };
+enum class ADDRESSING : uint8_t {
+	None, E, G, I, J, O, S, M, A, Z, AL, eAX, DX, CL, One,
+	eCX, eDX, eBX, eSP, eBP, eSI, eDI,
+	ES, CS, SS, DS,
+	X, Y, F,
+	DL, BL, AH, CH, DH, BH
+};
 enum class SIZE : uint8_t { None, b, w, v, z, p, a };   // b=8 w=16 v=16/32 z=imm16/32 p=far a=bound
 
 enum class REGISTER : uint16_t {

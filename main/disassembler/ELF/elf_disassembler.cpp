@@ -39,7 +39,7 @@ void ELF_Disassembler::setHeadersOffsets() {
 	}
 }
 
-std::string ELF_Disassembler::decodeLine() {
+std::string ELF_Disassembler::decodeCS(FILE* outputStream) {
 	return "";
 }
 

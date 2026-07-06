@@ -3,6 +3,8 @@
 #include "disassembler/ELF/elf_disassembler.h"
 #include "disassembler/PE/pe_disassembler.h"
 
+#include "../tests/runner.cpp"
+
 //#include "GUI/runner/mainGUI.cpp"
 #include "UI/runner/mainUI.h"
 
@@ -53,11 +55,14 @@ int main(int argc, char** argv) {
         }
         
         std::string status =  make_disassembler(*data, &disassembler);
-        if (std::string(argv[1]).find("-gui")!= std::string::npos)
+        if (std::string(argv[1]) == "--gui")
             //GUIstart(argc, argv);
             return 0;
-        else
+        else if (std::string(argv[1]) == "--ui")
             UIstart(argc, argv, status, disassembler);
+        else if (std::string(argv[1]) == "--run-tests")
+            runTests(argc, argv, disassembler);
+            return 0;
     }
 	return 0;
 }

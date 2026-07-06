@@ -21,7 +21,7 @@ public:
     std::string getArchitecture() override;
 
     PE_Disassembler(AddressSpace& data);
-    std::string decodeLine() override;
+    std::string decodeCS(FILE* outputStream) override;
 
 };
 #endif
