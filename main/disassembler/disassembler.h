@@ -26,7 +26,7 @@ protected:
 
 
 public:
-    Disassembler(AddressSpace& temp) : contents(temp) {};
+    Disassembler(AddressSpace& temp) : contents(temp), architecture(0x00), offset(0x00) {};
     virtual std::string decodeLine() = 0;
     virtual std::string getArchitecture()=0;
     virtual ~Disassembler() = default;

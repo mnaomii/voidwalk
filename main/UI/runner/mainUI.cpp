@@ -7,6 +7,8 @@
 
 
  int UIstart(int argc, char** argv, std::string status, std::shared_ptr<Disassembler> disassembler) {
-     std::cout << status << " Architecture -> " << disassembler->getArchitecture() << "\n\n";
+     std::cout << "Analyzing file " << argv[argc - 1];
+     std::cout << status;
+     std::cout << " Architecture -> " << disassembler->getArchitecture() << "\n\n";
      return 0;
  }
