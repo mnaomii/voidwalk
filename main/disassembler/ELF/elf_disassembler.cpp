@@ -3,6 +3,9 @@
 #include <stdexcept>
 
 
+#include "../mnemonic/IA-32/IA-32-instr.h"
+
+
 ELF_Disassembler::ELF_Disassembler(AddressSpace& data) : Disassembler(data) { // constructor
 	this->architecture = this->contents.read_u16(0x12);
 
@@ -37,6 +40,11 @@ void ELF_Disassembler::setHeadersOffsets() {
 		default:
 			throw std::runtime_error("Unsupported 64-bit ELF architecture.");
 	}
+}
+
+Instruction& ELF_Disassembler::decodeLine(uint64_t address) {
+	IA_32 temp;
+	return temp;
 }
 
 std::string ELF_Disassembler::decodeCS(FILE* outputStream) {

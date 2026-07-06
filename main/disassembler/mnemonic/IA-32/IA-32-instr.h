@@ -10,6 +10,9 @@
 #include <stdexcept>
 #pragma once
 
+#define  NULL_OPERAND(name)  Operand name{"",UINT_MAX, static_cast<uint8_t>(ADDRESSING::None) ,static_cast<uint8_t>(SIZE::None)} 
+
+
 // FORMAT:
 
 // prefix : 0-3 bytes
@@ -367,9 +370,16 @@ static const std::array<OpcodeInfo, 256>& opcodeTable() {
 	return t;
 }
 
-static std::string_view opcodeStrOf(uint8_t op)  { return opcodeTable()[op].text; }
-static bool hasRMbyte(uint8_t op)                { return opcodeTable()[op].hasRMByte; }
-static bool hasImmediateByte(uint8_t op)         { return opcodeTable()[op].hasImmediateByte; }
+static std::string_view opcodeStrOf(uint32_t op)  { return opcodeTable()[op].text; }
+static bool hasRMbyte(uint32_t op)                { return opcodeTable()[op].hasRMByte; }
+static bool hasImmediateByte(uint32_t op)         { return opcodeTable()[op].hasImmediateByte; }
+static uint8_t op1AddressingMode(uint32_t op)	  { return opcodeTable()[op].op1am; }
+static uint8_t op2AddressingMode(uint32_t op) { return opcodeTable()[op].op2am; }
+static uint8_t op3AddressingMode(uint32_t op) { return opcodeTable()[op].op3am; }
+static uint8_t op1Size(uint32_t op) { return opcodeTable()[op].op1s; }
+static uint8_t op2Size(uint32_t op) { return opcodeTable()[op].op2s; }
+static uint8_t op3Size(uint32_t op) { return opcodeTable()[op].op3s; }
+
 
 
 
@@ -435,7 +445,19 @@ std::string registerOf(uint16_t r) {
 	return reg;
 }
 
+IA_32() {};
+
 IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t displacement, uint32_t immediate) {
+
+	NULL_OPERAND(op1); NULL_OPERAND(op2); NULL_OPERAND(op3);
+
+	bool hasDisplacement = false;
+	bool hasSIB = false;
+	bool op1IsMemory = false;
+	bool op2IsMemory = false;
+	bool skipOp2 = false;
+
+
 
 	if (isPrefix(prefix)) {
 		instructionStr = prefixStrOf(prefix).data();
@@ -445,16 +467,113 @@ IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t di
 	instructionStr += opcodeStrOf(opcode).data();
 
 	if (hasRMbyte(static_cast<uint8_t>(opcode))) {
-		uint8_t mod = ((rmbyte & 0b11000000) >> 6)
-		uint8_t reg = ((rmbyte & 0b00111000)) >> 3
+		uint8_t mod = ((rmbyte & 0b11000000) >> 6);
+		uint8_t reg_op = ((rmbyte & 0b00111000) >> 3);
 		uint8_t rm = (rmbyte & 0b00000111);
+
+
+
+		if (mod == 0b01 || mod == 0b10)
+			hasDisplacement = true;
+
+		if ((mod == 0 || hasDisplacement) && rm == static_cast<uint8_t>(REGISTER::SP))// rm == ESP == 0b100
+			hasSIB = true;
+
+		// operand 2 can be in reg_op : either register or opcode extension
+		if (reg_op > 0x07) {
+			// should be an opcode extension
+			instructionStr += std::string(opcodeStrOf(reg_op)) + " ";
+			skipOp2 = true;
+		}
+
+
+
+		// operand 1 is in RMbyte
+		op1.addressingMode = op1AddressingMode(opcode);
+		op1.size = op1Size(opcode);
+		if (op1.addressingMode == static_cast<uint8_t>(ADDRESSING::G) || op1.addressingMode == static_cast<uint8_t>(ADDRESSING::E)) {
+			try {
+				op1.text = registerOf(rm) + ", ";
+				if (op1.addressingMode == static_cast<uint8_t>(ADDRESSING::E)) {
+					op1IsMemory = true;
+					op1.text = "[ " + op1.text + " ] ";
+				}
+				else op1.text += ", ";
+
+				op1.value = rm;
+			}
+			catch (std::runtime_error& e) { throw; }
+		}
+
+
+		if (!skipOp2) { // is an operand
+
+			op2.addressingMode = op2AddressingMode(opcode);
+			op2.size = op2Size(opcode);
+			if (op1IsMemory && op2.addressingMode == static_cast<uint8_t>(ADDRESSING::G) ||
+				op2.addressingMode != static_cast<uint8_t>(ADDRESSING::E) && !op1IsMemory) {
+
+				if (!op1IsMemory) op2IsMemory = true;
+
+				try {
+					op2.text = registerOf(reg_op);
+					if (op2IsMemory)
+						op2.text = "[ " + op2.text + " ] ";
+					else op2.text += " ";
+					op2.value = reg_op;
+				}
+				catch (std::runtime_error& e) { throw; }
+			}
+
+		}
+
+		if (hasImmediateByte(opcode)) {
+			if (op2.addressingMode == static_cast<uint8_t>(ADDRESSING::None) || op2.addressingMode == static_cast<uint8_t>(ADDRESSING::I)) {
+				op2.value = immediate;
+				op2.addressingMode = op2AddressingMode(opcode);
+				op2.size = op2Size(opcode);
+			}
+			else {
+				op3.value = immediate;
+				op3.addressingMode = op3AddressingMode(opcode);
+				op3.size = op3Size(opcode);
+			}
+			instructionStr += " ";
+			instructionStr += std::format("{:#x}", immediate);
+		}
 	}
 
-	if (hasImmediateByte(opcode)) {
-		if (op2.value == 0) op2.value = immediate; else op3.value = immediate;
-		instructionStr += " ";
-		instructionStr += std::format("{:#x}", immediate);
+	if (hasSIB) { // either op1 or both op1 & op2 were filled in during analysis of RMbyte
+		scale = ((sib & 0b11000000) >> 6);
+		if (scale == 6) scale = 8;
+		index = ((sib & 0b00111000) >> 3);
+		base = (sib & 0b00000111);
+
+
+		if (op1IsMemory) {
+			try {
+				op1.text = " [ " + registerOf(base) + " + " + registerOf(index) + " * " + std::to_string(static_cast<int>(scale));
+			}
+			catch (std::runtime_error& e) { throw; }
+		}
+		else { // op2IsMemory = true, 3rd cannot be a memory address.
+			op2.text = " [ " + registerOf(base) + " + " + registerOf(index) + " * " + std::to_string(static_cast<int>(scale));
+
+		}
+
+
+		if (hasDisplacement) {
+			displacement = displacement;
+			instructionStr += " + " + std::format("{:#x}", displacement);
+		}
+		instructionStr += " ] ";
+
 	}
+	else {
+		instructionStr += op1.text + ", " + op2.text + " ";
+	}
+
+
 
 
 };

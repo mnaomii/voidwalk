@@ -11,6 +11,7 @@ struct OpcodeInfo {
 };
 
 struct Operand {
+	std::string text;
 	uint64_t value;
 	uint8_t addressingMode, size;
 };

@@ -3,9 +3,9 @@
 
 class Header {
 private:
-        uint64_t vaddr;
-        uint64_t offset;
-        uint64_t size;
+        uint64_t vaddr; // address during runtime
+        uint64_t offset; // address on disk
+        uint64_t size; // total size of section (bytes)
 
 public:
 
