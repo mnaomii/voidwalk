@@ -52,8 +52,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(ADD_EvGv, "ADD", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(ADD_GbEb, "ADD", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(ADD_GvEv, "ADD", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(ADD_ALIb, "ADD", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(ADD_eAXIv, "ADD", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(ADD_ALIb, "ADD AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(ADD_eAXIv, "ADD eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(PUSH_ES, "PUSH", false, false, a(ES), s(None), a(None), s(None), a(None), s(None));
 	P(POP_ES, "POP", false, false, a(ES), s(None), a(None), s(None), a(None), s(None));
@@ -62,8 +62,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(OR_EvGv, "OR", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(OR_GbEb, "OR", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(OR_GvEv, "OR", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(OR_ALIb, "OR", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(OR_eAXIv, "OR", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(OR_ALIb, "OR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(OR_eAXIv, "OR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(PUSH_CS, "PUSH", false, false, a(CS), s(None), a(None), s(None), a(None), s(None));
 	P(TWOBYTE, "2BYTE", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
@@ -72,8 +72,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(ADC_EvGv, "ADC", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(ADC_GbEb, "ADC", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(ADC_GvEv, "ADC", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(ADC_ALIb, "ADC", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(ADC_eAXIv, "ADC", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(ADC_ALIb, "ADC AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(ADC_eAXIv, "ADC eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(PUSH_SS, "PUSH", false, false, a(SS), s(None), a(None), s(None), a(None), s(None));
 	P(POP_SS, "POP", false, false, a(SS), s(None), a(None), s(None), a(None), s(None));
@@ -82,8 +82,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(SBB_EvGv, "SBB", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(SBB_GbEb, "SBB", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(SBB_GvEv, "SBB", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(SBB_ALIb, "SBB", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(SBB_eAXIv, "SBB", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(SBB_ALIb, "SBB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(SBB_eAXIv, "SBB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(PUSH_DS, "PUSH", false, false, a(DS), s(None), a(None), s(None), a(None), s(None));
 	P(POP_DS, "POP", false, false, a(DS), s(None), a(None), s(None), a(None), s(None));
@@ -92,8 +92,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(AND_EvGv, "AND", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(AND_GbEb, "AND", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(AND_GvEv, "AND", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(AND_ALIb, "AND", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(AND_eAXIv, "AND", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(AND_ALIb, "AND AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(AND_eAXIv, "AND eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(ES, "ES", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(DAA, "DAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
@@ -102,8 +102,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(SUB_EvGv, "SUB", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(SUB_GbEb, "SUB", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(SUB_GvEv, "SUB", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(SUB_ALIb, "SUB", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(SUB_eAXIv, "SUB", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(SUB_ALIb, "SUB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(SUB_eAXIv, "SUB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(CS, "CS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(DAS, "DAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
@@ -112,8 +112,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(XOR_EvGv, "XOR", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(XOR_GbEb, "XOR", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(XOR_GvEv, "XOR", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(XOR_ALIb, "XOR", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(XOR_eAXIv, "XOR", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(XOR_ALIb, "XOR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(XOR_eAXIv, "XOR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(SS, "SS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(AAA, "AAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
@@ -122,47 +122,47 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(CMP_EvGv, "CMP", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
 	P(CMP_GbEb, "CMP", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
 	P(CMP_GvEv, "CMP", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(CMP_ALIb, "CMP", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(CMP_eAXIv, "CMP", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(CMP_ALIb, "CMP AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(CMP_eAXIv, "CMP eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
 
 	P(DS, "DS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(AAS, "AAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 
-	P(INC_eAX, "INC", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eCX, "INC", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eDX, "INC", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eBX, "INC", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eSP, "INC", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eBP, "INC", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eSI, "INC", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eDI, "INC", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eAX, "INC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eCX, "INC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eDX, "INC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eBX, "INC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eSP, "INC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eBP, "INC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eSI, "INC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eDI, "INC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
 
-	P(DEC_eAX, "DEC", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eCX, "DEC", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eDX, "DEC", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eBX, "DEC", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eSP, "DEC", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eBP, "DEC", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eSI, "DEC", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eDI, "DEC", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eAX, "DEC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eCX, "DEC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eDX, "DEC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eBX, "DEC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eSP, "DEC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eBP, "DEC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eSI, "DEC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eDI, "DEC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
 
-	P(PUSH_eAX, "PUSH", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eCX, "PUSH", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eDX, "PUSH", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eBX, "PUSH", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eSP, "PUSH", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eBP, "PUSH", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eSI, "PUSH", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eDI, "PUSH", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eAX, "PUSH eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eCX, "PUSH eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eDX, "PUSH eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eBX, "PUSH eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eSP, "PUSH eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eBP, "PUSH eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eSI, "PUSH eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eDI, "PUSH eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
 
-	P(POP_eAX, "POP", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eCX, "POP", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eDX, "POP", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eAX, "POP eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eCX, "POP eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eDX, "POP eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
 	P(POP_eBX, "POP", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eSP, "POP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eBP, "POP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eSI, "POP", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eDI, "POP", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eSP, "POP eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eBP, "POP eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eSI, "POP eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eDI, "POP eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
 
 	P(PUSHA, "PUSHA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(POPA, "POPA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
@@ -181,8 +181,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 
 	P(INSB_YbDX, "INSB", false, false, a(Y), s(b), a(DX), s(None), a(None), s(None));
 	P(INSW_YzDX, "INSW", false, false, a(Y), s(z), a(DX), s(None), a(None), s(None));
-	P(OUTSB_DXXb, "OUTSB", false, false, a(DX), s(None), a(X), s(b), a(None), s(None));
-	P(OUTSW_DXXv, "OUTSW", false, false, a(DX), s(None), a(X), s(v), a(None), s(None));
+	P(OUTSB_DXXb, "OUTSB DX", false, false, a(DX), s(None), a(X), s(b), a(None), s(None));
+	P(OUTSW_DXXv, "OUTSW DX", false, false, a(DX), s(None), a(X), s(v), a(None), s(None));
 
 	P(JO, "JO", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
 	P(JNO, "JNO", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
@@ -201,10 +201,11 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(JLE, "JLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
 	P(JNLE, "JNLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
 
-	P(ADD_EbIb, "ADD", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
-	P(ADD_EvIv, "ADD", true, true, a(E), s(v), a(I), s(v), a(None), s(None));
-	P(SUB_EbIb, "SUB", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
-	P(SUB_EvIb, "SUB", true, true, a(E), s(v), a(I), s(b), a(None), s(None));
+	// Group 1 (0x80-0x83): "GRP1" is a placeholder; real mnemonic = grp1StrOf(ModRM.reg)
+	P(GRP1_EbIb,  "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
+	P(GRP1_EvIz,  "GRP1", true, true, a(E), s(v), a(I), s(v), a(None), s(None));
+	P(GRP1_EbIb2, "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
+	P(GRP1_EvIb,  "GRP1", true, true, a(E), s(v), a(I), s(b), a(None), s(None));
 
 	P(TEST_EbGb, "TEST", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
 	P(TEST_EvGv, "TEST", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
@@ -225,13 +226,13 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(POP_Ev, "POP", true, false, a(E), s(v), a(None), s(None), a(None), s(None));
 
 	P(NOP, "NOP", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(XCHG_eAXeCX, "XCHG", false, false, a(eAX), s(v), a(eCX), s(v), a(None), s(None));
-	P(XCHG_eAXeDX, "XCHG", false, false, a(eAX), s(v), a(eDX), s(v), a(None), s(None));
-	P(XCHG_eAXeBX, "XCHG", false, false, a(eAX), s(v), a(eBX), s(v), a(None), s(None));
-	P(XCHG_eAXeSP, "XCHG", false, false, a(eAX), s(v), a(eSP), s(v), a(None), s(None));
-	P(XCHG_eAXeBP, "XCHG", false, false, a(eAX), s(v), a(eBP), s(v), a(None), s(None));
-	P(XCHG_eAXeSI, "XCHG", false, false, a(eAX), s(v), a(eSI), s(v), a(None), s(None));
-	P(XCHG_eAXeDI, "XCHG", false, false, a(eAX), s(v), a(eDI), s(v), a(None), s(None));
+	P(XCHG_eAXeCX, "XCHG eAX, eCX", false, false, a(eAX), s(v), a(eCX), s(v), a(None), s(None));
+	P(XCHG_eAXeDX, "XCHG eAX, eDX", false, false, a(eAX), s(v), a(eDX), s(v), a(None), s(None));
+	P(XCHG_eAXeBX, "XCHG eAX, eBX", false, false, a(eAX), s(v), a(eBX), s(v), a(None), s(None));
+	P(XCHG_eAXeSP, "XCHG eAX, eSP", false, false, a(eAX), s(v), a(eSP), s(v), a(None), s(None));
+	P(XCHG_eAXeBP, "XCHG eAX, eBP", false, false, a(eAX), s(v), a(eBP), s(v), a(None), s(None));
+	P(XCHG_eAXeSI, "XCHG eAX, eSI", false, false, a(eAX), s(v), a(eSI), s(v), a(None), s(None));
+	P(XCHG_eAXeDI, "XCHG eAX, eDI", false, false, a(eAX), s(v), a(eDI), s(v), a(None), s(None));
 
 	P(CBW, "CBW", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(CWD, "CWD", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
@@ -242,8 +243,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(SAHF, "SAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(LAHF, "LAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 
-	P(MOV_ALOb, "MOV", false, true, a(AL), s(b), a(O), s(b), a(None), s(None));
-	P(MOV_eAXOv, "MOV", false, true, a(eAX), s(v), a(O), s(v), a(None), s(None));
+	P(MOV_ALOb, "MOV AL", false, true, a(AL), s(b), a(O), s(b), a(None), s(None));
+	P(MOV_eAXOv, "MOV eAX", false, true, a(eAX), s(v), a(O), s(v), a(None), s(None));
 	P(MOV_ObAL, "MOV", false, true, a(O), s(b), a(AL), s(b), a(None), s(None));
 	P(MOV_OveAX, "MOV", false, true, a(O), s(v), a(eAX), s(v), a(None), s(None));
 
@@ -260,23 +261,23 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(SCASB_ALYb, "SCASB", false, false, a(AL), s(b), a(Y), s(b), a(None), s(None));
 	P(SCASW_eAXYv, "SCASW", false, false, a(eAX), s(v), a(Y), s(v), a(None), s(None));
 
-	P(MOV_ALIb, "MOV", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_CLIb, "MOV", false, true, a(CL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_DLIb, "MOV", false, true, a(DL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_BLIb, "MOV", false, true, a(BL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_AHIb, "MOV", false, true, a(AH), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_CHIb, "MOV", false, true, a(CH), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_DHIb, "MOV", false, true, a(DH), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_BHIb, "MOV", false, true, a(BH), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_ALIb, "MOV AL,", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_CLIb, "MOV CL,", false, true, a(CL), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_DLIb, "MOV DL,", false, true, a(DL), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_BLIb, "MOV BL,", false, true, a(BL), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_AHIb, "MOV AH,", false, true, a(AH), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_CHIb, "MOV CH,", false, true, a(CH), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_DHIb, "MOV DH,", false, true, a(DH), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_BHIb, "MOV BH,", false, true, a(BH), s(b), a(I), s(b), a(None), s(None));
 
-	P(MOV_eAXIv, "MOV", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eCXIv, "MOV", false, true, a(eCX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eDXIv, "MOV", false, true, a(eDX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eBXIv, "MOV", false, true, a(eBX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eSPIv, "MOV", false, true, a(eSP), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eBPIv, "MOV", false, true, a(eBP), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eSIIv, "MOV", false, true, a(eSI), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eDIIv, "MOV", false, true, a(eDI), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eAXIv, "MOV eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eCXIv, "MOV eCX", false, true, a(eCX), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eDXIv, "MOV eDX", false, true, a(eDX), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eBXIv, "MOV eBX", false, true, a(eBX), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eSPIv, "MOV eSP", false, true, a(eSP), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eBPIv, "MOV eBP", false, true, a(eBP), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eSIIv, "MOV eSI", false, true, a(eSI), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eDIIv, "MOV eDI", false, true, a(eDI), s(v), a(I), s(v), a(None), s(None));
 
 	P(GRP2_EbIb, "GRP2", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
 	P(GRP2_EvIb, "GRP2", true, true, a(E), s(v), a(I), s(b), a(None), s(None));
@@ -318,8 +319,8 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(LOOPZ_Jb, "LOOPZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
 	P(LOOP_Jb, "LOOP", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
 	P(JCXZ_Jb, "JCXZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(IN_ALIb, "IN", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(IN_eAXIb, "IN", false, true, a(eAX), s(v), a(I), s(b), a(None), s(None));
+	P(IN_ALIb, "IN AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
+	P(IN_eAXIb, "IN eAX", false, true, a(eAX), s(v), a(I), s(b), a(None), s(None));
 	P(OUT_IbAL, "OUT", false, true, a(I), s(b), a(AL), s(b), a(None), s(None));
 	P(OUT_IbeAX, "OUT", false, true, a(I), s(b), a(eAX), s(v), a(None), s(None));
 
@@ -328,10 +329,10 @@ static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 	P(JMP_Ap, "JMP", false, true, a(A), s(p), a(None), s(None), a(None), s(None));
 	P(JMP_Jb, "JMP", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
 
-	P(IN_ALDX, "IN", false, false, a(AL), s(b), a(DX), s(None), a(None), s(None));
-	P(IN_eAXDX, "IN", false, false, a(eAX), s(v), a(DX), s(None), a(None), s(None));
-	P(OUT_DXAL, "OUT", false, false, a(DX), s(None), a(AL), s(b), a(None), s(None));
-	P(OUT_DXeAX, "OUT", false, false, a(DX), s(None), a(eAX), s(v), a(None), s(None));
+	P(IN_ALDX, "IN AL, DX", false, false, a(AL), s(b), a(DX), s(None), a(None), s(None));
+	P(IN_eAXDX, "IN eAX, DX", false, false, a(eAX), s(v), a(DX), s(None), a(None), s(None));
+	P(OUT_DXAL, "OUT DX, AL", false, false, a(DX), s(None), a(AL), s(b), a(None), s(None));
+	P(OUT_DXeAX, "OUT DX, eAX", false, false, a(DX), s(None), a(eAX), s(v), a(None), s(None));
 
 	P(LOCK, "LOCK", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
 	P(INT1, "INT1", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
@@ -378,6 +379,20 @@ static uint8_t op3AddressingMode(uint32_t op) { return opcodeTable()[op].op3am; 
 static uint8_t op1Size(uint32_t op) { return opcodeTable()[op].op1s; }
 static uint8_t op2Size(uint32_t op) { return opcodeTable()[op].op2s; }
 static uint8_t op3Size(uint32_t op) { return opcodeTable()[op].op3s; }
+
+
+// Group 1 (0x80-0x83) sub-mnemonics: selected by the ModRM.reg field (/0../7).
+static constexpr std::array<std::string_view, 8> buildGrp1() {
+	std::array<std::string_view, 8> n = {{ "ADD", "OR", "ADC", "SBB", "AND", "SUB", "XOR", "CMP" }};
+	return n;
+}
+
+static const std::array<std::string_view, 8>& grp1Table() {
+	static constexpr std::array<std::string_view, 8> t = buildGrp1();
+	return t;
+}
+
+static std::string_view grp1StrOf(uint8_t reg) { return grp1Table()[reg & 0x07]; }
 
 
 
@@ -446,7 +461,7 @@ std::string registerOf(uint16_t r) {
 
 IA_32() {};
 
-IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, uint32_t imm) {
+IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, uint32_t imm): prefix(0), opcode(0), scale(0), base(0), index(0), displacement(0), immediate(0) {
 
 	NULL_OPERAND(op1); NULL_OPERAND(op2); NULL_OPERAND(op3);
 
@@ -528,21 +543,23 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 
 		}
 
-		if (hasImmediateByte(opcode)) {
-			immediate = imm;
-			if (op2.addressingMode == static_cast<uint8_t>(ADDRESSING::None) || op2.addressingMode == static_cast<uint8_t>(ADDRESSING::I)) {
-				op2.value = immediate;
-				op2.addressingMode = op2AddressingMode(opcode);
-				op2.size = op2Size(opcode);
-			}
-			else {
-				op3.value = immediate;
-				op3.addressingMode = op3AddressingMode(opcode);
-				op3.size = op3Size(opcode);
-			}
-			instructionStr += " ";
-			instructionStr += std::format("{:#x}", immediate);
+
+	}
+
+	if (hasImmediateByte(opcode)) {
+		immediate = imm;
+		if (op2.addressingMode == static_cast<uint8_t>(ADDRESSING::None) || op2.addressingMode == static_cast<uint8_t>(ADDRESSING::I)) {
+			op2.value = immediate;
+			op2.addressingMode = op2AddressingMode(opcode);
+			op2.size = op2Size(opcode);
 		}
+		else {
+			op3.value = immediate;
+			op3.addressingMode = op3AddressingMode(opcode);
+			op3.size = op3Size(opcode);
+		}
+		instructionStr += " ";
+		instructionStr += std::format("{:#x}", immediate);
 	}
 
 	if (hasSIB) { // either op1 or both op1 & op2 were filled in during analysis of RMbyte

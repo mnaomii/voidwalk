@@ -94,7 +94,7 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address) {
 				address += 4;
 				break;
 			case 0b00:
-				if (rm == 0b101 || (rm == 100 && (field4 & 0b00000111) == 0b101)) {
+				if (rm == 0b101 || (rm == 0b100 && (field4 & 0b00000111) == 0b101)) {
 					field5 = contents.read_u32(address);
 					address += 4;
 				}
@@ -111,7 +111,14 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address) {
 
 #define cast(name) static_cast<uint8_t>(name)
 
-			auto immSize = (IA_32::opcodeStrOf(field2) == "IMUL") ? IA_32::op3Size(field2) : IA_32::op2Size(field2);
+			uint8_t immSize;
+			if (IA_32::opcodeTable()[field2].op1am == static_cast<uint8_t>(ADDRESSING::I))
+				immSize = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op1s);
+			else if (IA_32::opcodeTable()[field2].op2am == static_cast<uint8_t>(ADDRESSING::I))
+				immSize = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op2s);
+			else
+				immSize = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op3s);
+
 			if (field1 == 0x66) // 16bit
 				switch (immSize) {
 				case cast(SIZE::b):
@@ -182,13 +189,13 @@ void PE_Disassembler::decodeCS(FILE* outputStream) {
 	
 	
 	uint64_t currentPtr = baseSections._text.getOffset();
-	uint64_t endBoundary = baseSections._text.getSize() + currentPtr;
+	uint64_t endBoundary = baseSections._text.getSize() + currentPtr ;
 	size_t index=0;
 
 	while (currentPtr != endBoundary) {
 
-		currentPtr += decodeLine(currentPtr);
-		fprintf(outputStream, "%s", decodedInstructions[index++]->decodeLineString().c_str());
+		currentPtr = decodeLine(currentPtr);
+		fprintf(outputStream, "  | \t %s \n", decodedInstructions[index++]->decodeLineString().c_str());
 		
 	}
 

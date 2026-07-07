@@ -217,10 +217,11 @@ enum class OPCODE : uint16_t {
 	JNLE = 0x7F,
 
 
-	ADD_EbIb = 0x80,
-	ADD_EvIv = 0x81,
-	SUB_EbIb = 0x82,
-	SUB_EvIb = 0x83,
+	// Group 1: ADD/OR/ADC/SBB/AND/SUB/XOR/CMP — mnemonic comes from ModRM.reg (/0../7)
+	GRP1_EbIb  = 0x80,   // Eb, Ib
+	GRP1_EvIz  = 0x81,   // Ev, Iz
+	GRP1_EbIb2 = 0x82,   // Eb, Ib (undocumented alias of 0x80, invalid in 64-bit)
+	GRP1_EvIb  = 0x83,   // Ev, Ib (imm8 sign-extended)
 
 	TEST_EbGb = 0x84,
 	TEST_EvGv = 0x85,
