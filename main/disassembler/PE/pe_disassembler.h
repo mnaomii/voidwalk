@@ -19,10 +19,10 @@ private:
     void setHeadersOffsets() override;
 public:
     std::string getArchitecture() override;
-    size_t decodeLine(uint64_t address) override;
+    uint64_t decodeLine(uint64_t address) override;
 
     PE_Disassembler(AddressSpace& data);
-    std::string decodeCS(FILE* outputStream) override;
+    void decodeCS(FILE* outputStream) override;
 
 };
 #endif

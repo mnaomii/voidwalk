@@ -5,6 +5,7 @@
 #include <vector>
 #include <vector>
 #include <string>
+#include <memory>
 #include "../address-space/address_space.h"
 #include "miscellaneous/sections/base/header.h"
 #include "mnemonic/instruction.h"
@@ -27,7 +28,7 @@ protected:
 
 
 
-    std::vector<Instruction> decodedInstructions;
+    std::vector<std::unique_ptr<Instruction>> decodedInstructions;
     std::vector<uint64_t> virtStack;
     Sections baseSections;
     uint64_t offset;
@@ -57,9 +58,9 @@ public:
         registers.cs = registers.eip;
 
     };
-    virtual std::string decodeCS(FILE* outputStream) = 0;
+    virtual void decodeCS(FILE* outputStream) = 0;
     virtual std::string getArchitecture()=0;
-    virtual size_t decodeLine(uint64_t address) = 0;
+    virtual uint64_t decodeLine(uint64_t address) = 0;
     virtual ~Disassembler() = default;
 
 };

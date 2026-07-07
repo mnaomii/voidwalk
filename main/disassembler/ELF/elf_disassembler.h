@@ -23,9 +23,9 @@ private:
 public:
     std::string getArchitecture() override;
     ELF_Disassembler(AddressSpace& data);
-    size_t decodeLine(uint64_t address) override;
+    uint64_t decodeLine(uint64_t address) override;
 
-    std::string decodeCS(FILE* outputStream) override;
+    void decodeCS(FILE* outputStream) override;
 
 };
 #endif

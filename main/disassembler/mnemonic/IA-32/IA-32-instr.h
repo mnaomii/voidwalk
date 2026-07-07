@@ -1,5 +1,4 @@
 #include "../../../address-space/address_space.h"
-#include "../../ELF/elf_disassembler.h"
 #include "../instruction.h"
 #include "IA-32-mnemonic.h"
 #include <string>
@@ -447,7 +446,7 @@ std::string registerOf(uint16_t r) {
 
 IA_32() {};
 
-IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t displacement, uint32_t immediate) {
+IA_32(uint32_t pfx, uint32_t opc, uint8_t rmbyte, uint8_t sib, uint32_t disp, uint32_t imm) {
 
 	NULL_OPERAND(op1); NULL_OPERAND(op2); NULL_OPERAND(op3);
 
@@ -460,10 +459,12 @@ IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t di
 
 
 	if (isPrefix(prefix)) {
+		prefix = pfx;
 		instructionStr = prefixStrOf(prefix).data();
 		instructionStr += " ";
 	}
 
+	opcode = opc;
 	instructionStr += opcodeStrOf(opcode).data();
 
 	if (hasRMbyte(static_cast<uint8_t>(opcode))) {
@@ -493,12 +494,12 @@ IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t di
 		op1.size = op1Size(opcode);
 		if (op1.addressingMode == static_cast<uint8_t>(ADDRESSING::G) || op1.addressingMode == static_cast<uint8_t>(ADDRESSING::E)) {
 			try {
-				op1.text = registerOf(rm) + ", ";
+				op1.text = registerOf(rm) ;
 				if (op1.addressingMode == static_cast<uint8_t>(ADDRESSING::E)) {
 					op1IsMemory = true;
 					op1.text = "[ " + op1.text + " ] ";
 				}
-				else op1.text += ", ";
+				//else op1.text += ", ";
 
 				op1.value = rm;
 			}
@@ -528,6 +529,7 @@ IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t di
 		}
 
 		if (hasImmediateByte(opcode)) {
+			immediate = imm;
 			if (op2.addressingMode == static_cast<uint8_t>(ADDRESSING::None) || op2.addressingMode == static_cast<uint8_t>(ADDRESSING::I)) {
 				op2.value = immediate;
 				op2.addressingMode = op2AddressingMode(opcode);
@@ -545,7 +547,20 @@ IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t di
 
 	if (hasSIB) { // either op1 or both op1 & op2 were filled in during analysis of RMbyte
 		scale = ((sib & 0b11000000) >> 6);
-		if (scale == 6) scale = 8;
+		switch (scale) {
+
+		case 0b00:
+			scale = 1;
+			break;
+		case 0b11:
+			scale = 8;
+			break;
+
+		default:
+			scale *= 2;
+			break;
+
+		}
 		index = ((sib & 0b00111000) >> 3);
 		base = (sib & 0b00000111);
 
@@ -563,7 +578,7 @@ IA_32(uint32_t prefix, uint32_t opcode, uint8_t rmbyte, uint8_t sib, uint32_t di
 
 
 		if (hasDisplacement) {
-			displacement = displacement;
+			displacement = disp;
 			instructionStr += " + " + std::format("{:#x}", displacement);
 		}
 		instructionStr += " ] ";
