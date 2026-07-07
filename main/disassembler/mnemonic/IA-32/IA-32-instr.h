@@ -9,7 +9,7 @@
 #include <stdexcept>
 #pragma once
 
-#define  NULL_OPERAND(name)  Operand name{"",UINT_MAX, static_cast<uint8_t>(ADDRESSING::None) ,static_cast<uint8_t>(SIZE::None)} 
+#define  NULL_OPERAND(name)  Instruction::Operand name{"",UINT_MAX, static_cast<uint8_t>(ADDRESSING::None) ,static_cast<uint8_t>(SIZE::None)} 
 
 
 // FORMAT:
@@ -34,17 +34,17 @@ public:
 private:
 
 	uint16_t prefix, opcode, scale, index, base, displacement, immediate;
-	Operand op1, op2, op3;
+	Instruction::Operand op1, op2, op3;
 
 	std::string instructionStr;
 
 
 public:
 
-static constexpr std::array<OpcodeInfo, 256> buildOpcodes() {
+static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 
 	std::array<OpcodeInfo, 256> n{};
-#define P(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s) n[static_cast<uint16_t>(OPCODE::name)] = OpcodeInfo{text,hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s}
+#define P(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s) n[static_cast<uint16_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s}
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
 
@@ -364,8 +364,8 @@ static constexpr std::array<OpcodeInfo, 256> buildOpcodes() {
 	
 }
 
-static const std::array<OpcodeInfo, 256>& opcodeTable() {
-	static constexpr std::array<OpcodeInfo, 256> t = buildOpcodes();
+static const std::array<Instruction::OpcodeInfo, 256>& opcodeTable() {
+	static constexpr std::array<Instruction::OpcodeInfo, 256> t = buildOpcodes();
 	return t;
 }
 
@@ -446,7 +446,7 @@ std::string registerOf(uint16_t r) {
 
 IA_32() {};
 
-IA_32(uint32_t pfx, uint32_t opc, uint8_t rmbyte, uint8_t sib, uint32_t disp, uint32_t imm) {
+IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, uint32_t imm) {
 
 	NULL_OPERAND(op1); NULL_OPERAND(op2); NULL_OPERAND(op3);
 

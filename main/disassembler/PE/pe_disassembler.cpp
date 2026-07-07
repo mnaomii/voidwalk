@@ -58,7 +58,7 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address) {
 	uint32_t field1=0, field2=0, field3=0, field4=0, field5=0, field6 =0;
 
 	switch (this->architecture) {
-	case 0x14c: // x86
+	case 0x14c: {// x86 
 
 		field1 = contents.read_u8(address);
 		if (!IA_32::isPrefix(field1)) // invalid prefix, just read opcode
@@ -111,67 +111,67 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address) {
 
 #define cast(name) static_cast<uint8_t>(name)
 
-				auto immSize = (IA_32::opcodeStrOf(field2) == "IMUL") ? IA_32::op3Size(field2) : IA_32::op2Size(field2);
-				if(field1 == 0x66) // 16bit
-					switch (immSize) {
-					case cast(SIZE::b):
-						field6 = contents.read_u8(address++);
-						break;
-					case cast(SIZE::w):
-					case cast(SIZE::v):
-					case cast(SIZE::z):
-						field6 = contents.read_u16(address);
-						address += 2;
-						break;
+			auto immSize = (IA_32::opcodeStrOf(field2) == "IMUL") ? IA_32::op3Size(field2) : IA_32::op2Size(field2);
+			if (field1 == 0x66) // 16bit
+				switch (immSize) {
+				case cast(SIZE::b):
+					field6 = contents.read_u8(address++);
+					break;
+				case cast(SIZE::w):
+				case cast(SIZE::v):
+				case cast(SIZE::z):
+					field6 = contents.read_u16(address);
+					address += 2;
+					break;
 
-					default:
-						fprintf(stderr, "Not implemented yet");
-						break;
-					}
-				else { // 32bit
-					switch (immSize) {
-					case cast(SIZE::b):
-						field6 = contents.read_u8(address++);
-						break;
-					case cast(SIZE::w):
-						field6 = contents.read_u16(address);
-						address += 2;
-						break;
+				default:
+					fprintf(stderr, "Not implemented yet");
+					break;
+				}
+			else { // 32bit
+				switch (immSize) {
+				case cast(SIZE::b):
+					field6 = contents.read_u8(address++);
+					break;
+				case cast(SIZE::w):
+					field6 = contents.read_u16(address);
+					address += 2;
+					break;
 
-					case cast(SIZE::v):
-					case cast(SIZE::z):
-						field6 = contents.read_u32(address);
-						address += 4;
-						break;
+				case cast(SIZE::v):
+				case cast(SIZE::z):
+					field6 = contents.read_u32(address);
+					address += 4;
+					break;
 
-					default:
-						fprintf(stderr, "Not implemented yet");
-						break;
-					}
+				default:
+					fprintf(stderr, "Not implemented yet");
+					break;
 				}
 			}
-			else field6 = 0x0;
+		}
+		else field6 = 0x0;
 
 #undef cast
-		
 
-		decodedInstructions.push_back(std::make_unique<IA_32>(field1,field2,field3,field4,field5,field6));
+
+		decodedInstructions.push_back(std::make_unique<IA_32>(field1, field2, field3, field4, field5, field6));
 		return address; // address where next instruction begins
-
-	case 0x8664:
+	}
+	case 0x8664: {
 		throw std::runtime_error("Not implemented yet.");
-
-	case 0xAA64:
+	}
+	case 0xAA64: {
 		throw std::runtime_error("Not implemented yet.");
-
-	case 0x1c0:
+	}
+	case 0x1c0: {
 		throw std::runtime_error("Not implemented yet.");
 
 		//return ;
-
-	default:
+	}
+	default: {
 		throw std::runtime_error("Invalid architecture. Cannot parse.");
-
+	}
 	}
 
 }
@@ -183,7 +183,7 @@ void PE_Disassembler::decodeCS(FILE* outputStream) {
 	
 	uint64_t currentPtr = baseSections._text.getOffset();
 	uint64_t endBoundary = baseSections._text.getSize() + currentPtr;
-	size_t index;
+	size_t index=0;
 
 	while (currentPtr != endBoundary) {
 

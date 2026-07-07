@@ -42,7 +42,7 @@ protected:
 
 
 public:
-    Disassembler(AddressSpace& temp) : contents(temp), architecture(0x00), offset(0x00), decodedInstructions({}) {
+    Disassembler(AddressSpace& temp) : contents(temp), architecture(0x00), offset(0x00) {
 
         // emulated for the moment
         registers.eax = 0;

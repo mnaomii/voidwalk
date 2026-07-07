@@ -3,7 +3,7 @@
 #include "disassembler/ELF/elf_disassembler.h"
 #include "disassembler/PE/pe_disassembler.h"
 
-#include "../tests/runner.cpp"
+#include "../tests/runner.h"
 
 //#include "GUI/runner/mainGUI.cpp"
 #include "UI/runner/mainUI.h"
