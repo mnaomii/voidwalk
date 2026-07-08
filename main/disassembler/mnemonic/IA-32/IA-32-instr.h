@@ -33,7 +33,7 @@ public:
 	
 private:
 
-	uint16_t prefix, opcode, scale, index, base, displacement, immediate;
+	uint32_t prefix, opcode, scale, index, base, displacement, immediate;
 	Instruction::Operand op1, op2, op3;
 
 	std::string instructionStr;
@@ -602,6 +602,7 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 
 	}
 	else {
+		//if()
 		instructionStr += op1.text + ", " + op2.text + " ";
 	}
 

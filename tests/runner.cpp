@@ -8,12 +8,12 @@
 
 void runTests(int ac, char** av, std::shared_ptr<Disassembler> disasm) {
 
-    std::cout<< "Setting initial parameters...";
+    std::cout<< "  (*)  Setting initial parameters...\n";
     Tests::argc = ac;
     Tests::argv = av;
     Tests::disassembler = disasm;
 
-    std::cout<< "Running IA-32-tests .. \n  |\n";
+    std::cout<< "  (*)  Running IA-32-tests .. \n  |\n";
     if (IA_32_Tests().finishedCorrectly())
         std::cout<< "  -- All tests passed..\n\n";
     else
