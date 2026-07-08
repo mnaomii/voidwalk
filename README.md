@@ -98,8 +98,3 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 - [ ] Export analysis report to file
 - [ ] Simulated stack visualiser
 
----
-
-## License
-
-None.
