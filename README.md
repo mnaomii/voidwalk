@@ -1,6 +1,6 @@
 # Disassembler & Dynamic Analysis Tool
 
-An early-stage C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
+An **very** early-stage C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
 
 > **Status:** Active development. ELF x86/x86_64 section parsing is functional. IA-32 architecture is partially functional (extended PE support and instruction decoding are in progress).
 
