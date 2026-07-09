@@ -52,10 +52,11 @@ std::string PE_Disassembler::getArchitecture() {
 	}
 }
 
-uint64_t PE_Disassembler::decodeLine(uint64_t address) {
+uint64_t PE_Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 
 	// field4 is SIB byte
 	uint32_t field1=0, field2=0, field3=0, field4=0, field5=0, field6 =0;
+	//uint32_t initAddress = address;
 
 	switch (this->architecture) {
 	case 0x14c: {// x86 
@@ -112,22 +113,34 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address) {
 #define cast(name) static_cast<uint8_t>(name)
 
 			uint8_t immSize;
-			if (IA_32::opcodeTable()[field2].op1am == static_cast<uint8_t>(ADDRESSING::I))
+			uint8_t immAddr;
+			field6 = 0x0;
+
+			if (IA_32::opcodeTable()[field2].op1am == static_cast<uint8_t>(ADDRESSING::I) || IA_32::opcodeTable()[field2].op1am == static_cast<uint8_t>(ADDRESSING::J)) {
 				immSize = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op1s);
-			else if (IA_32::opcodeTable()[field2].op2am == static_cast<uint8_t>(ADDRESSING::I))
+				immAddr = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op1am);
+			}
+			else if (IA_32::opcodeTable()[field2].op2am == static_cast<uint8_t>(ADDRESSING::I) || IA_32::opcodeTable()[field2].op2am == static_cast<uint8_t>(ADDRESSING::J)) {
 				immSize = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op2s);
-			else
+				immAddr = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op2am);
+			}
+			else {
 				immSize = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op3s);
+				immAddr = static_cast<uint8_t>(IA_32::opcodeTable()[field2].op3am);
+
+			}
 
 			if (field1 == 0x66) // 16bit
 				switch (immSize) {
 				case cast(SIZE::b):
-					field6 = contents.read_u8(address++);
+					if (immAddr == static_cast<uint8_t>(ADDRESSING::J)) field6 = vaddr;
+					field6 += contents.read_u8(address++);
 					break;
 				case cast(SIZE::w):
 				case cast(SIZE::v):
 				case cast(SIZE::z):
-					field6 = contents.read_u16(address);
+					if (immAddr == static_cast<uint8_t>(ADDRESSING::J)) field6 = vaddr;
+					field6 += contents.read_u16(address);
 					address += 2;
 					break;
 
@@ -138,16 +151,19 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address) {
 			else { // 32bit
 				switch (immSize) {
 				case cast(SIZE::b):
-					field6 = contents.read_u8(address++);
+					if (immAddr == static_cast<uint8_t>(ADDRESSING::J)) field6 = vaddr;
+					field6 += contents.read_u8(address++);
 					break;
 				case cast(SIZE::w):
-					field6 = contents.read_u16(address);
+					if (immAddr == static_cast<uint8_t>(ADDRESSING::J)) field6 = vaddr;
+					field6 += contents.read_u16(address);
 					address += 2;
 					break;
 
 				case cast(SIZE::v):
 				case cast(SIZE::z):
-					field6 = contents.read_u32(address);
+					if (immAddr == static_cast<uint8_t>(ADDRESSING::J)) field6 = vaddr;
+					field6 += contents.read_u32(address);
 					address += 4;
 					break;
 
@@ -187,14 +203,16 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address) {
 
 void PE_Disassembler::decodeCS(FILE* outputStream) {
 	
-	
 	uint64_t currentPtr = baseSections._text.getOffset();
+	uint64_t prevPtr = currentPtr;
+	uint64_t currentVaddr = baseSections._text.getVaddr();
 	uint64_t endBoundary = baseSections._text.getSize() + currentPtr ;
 	size_t index=0;
 
 	while (currentPtr != endBoundary) {
-
-		currentPtr = decodeLine(currentPtr);
+		prevPtr = currentPtr;
+		currentPtr = decodeLine(currentPtr, currentVaddr);
+		currentVaddr += currentPtr - prevPtr;
 		fprintf(outputStream, "  | \t %s \n", decodedInstructions[index++]->decodeLineString().c_str());
 		
 	}

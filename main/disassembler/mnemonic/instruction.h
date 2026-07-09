@@ -15,6 +15,7 @@ public:
 		bool hasImmediateByte;
 		uint8_t op1am, op2am, op3am;
 		uint8_t op1s, op2s, op3s;
+		bool impliesOperands;
 	};
 
 	struct Operand {

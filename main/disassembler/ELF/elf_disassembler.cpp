@@ -43,7 +43,7 @@ void ELF_Disassembler::setHeadersOffsets() {
 			throw std::runtime_error("Unsupported 64-bit ELF architecture.");
 	}
 }
-uint64_t ELF_Disassembler::decodeLine(uint64_t address) {
+uint64_t ELF_Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 	return 0;
 }
 

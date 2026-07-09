@@ -57,7 +57,7 @@ enum class Prefix : uint16_t {
 
 };
 
-enum class OPCODE : uint16_t {
+enum class OPCODE : uint32_t {
 	ADD_EbGb = 0x00,
 	ADD_EvGv = 0x01,
 	ADD_GbEb = 0x02,
@@ -342,7 +342,8 @@ enum class OPCODE : uint16_t {
 	LOOPNZ_Jb = 0xE0,
 	LOOPZ_Jb = 0xE1,
 	LOOP_Jb = 0xE2,
-	JCXZ_Jb = 0xE3,
+	JeCXZ_Jb = 0xE3,
+	//JCXZ_Jb = 0x67E3,   // prefix+opcode, not a table index: resolved at decode time from the 67 prefix
 	IN_ALIb = 0xE4,
 	IN_eAXIb = 0xE5,
 	OUT_IbAL = 0xE6,

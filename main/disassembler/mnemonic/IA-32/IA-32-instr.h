@@ -44,316 +44,317 @@ public:
 static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 
 	std::array<OpcodeInfo, 256> n{};
-#define P(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s) n[static_cast<uint16_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s}
+#define P(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, impliesOperand) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s, impliesOperand}
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
 
-	P(ADD_EbGb, "ADD", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(ADD_EvGv, "ADD", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(ADD_GbEb, "ADD", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(ADD_GvEv, "ADD", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(ADD_ALIb, "ADD AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(ADD_eAXIv, "ADD eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(ADD_EbGb, "ADD", true, false, a(E), s(b), a(G), s(b), a(None), s(None),false);
+	P(ADD_EvGv, "ADD", true, false, a(E), s(v), a(G), s(v), a(None), s(None),false);
+	P(ADD_GbEb, "ADD", true, false, a(G), s(b), a(E), s(b), a(None), s(None),false);
+	P(ADD_GvEv, "ADD", true, false, a(G), s(v), a(E), s(v), a(None), s(None),false);
+	P(ADD_ALIb, "ADD AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None),true);
+	P(ADD_eAXIv, "ADD eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None),true);
 
-	P(PUSH_ES, "PUSH", false, false, a(ES), s(None), a(None), s(None), a(None), s(None));
-	P(POP_ES, "POP", false, false, a(ES), s(None), a(None), s(None), a(None), s(None));
+	P(PUSH_ES, "PUSH", false, false, a(ES), s(None), a(None), s(None), a(None), s(None),false);
+	P(POP_ES, "POP", false, false, a(ES), s(None), a(None), s(None), a(None), s(None),false);
 
-	P(OR_EbGb, "OR", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(OR_EvGv, "OR", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(OR_GbEb, "OR", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(OR_GvEv, "OR", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(OR_ALIb, "OR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(OR_eAXIv, "OR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(OR_EbGb, "OR", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(OR_EvGv, "OR", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(OR_GbEb, "OR", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(OR_GvEv, "OR", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(OR_ALIb, "OR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(OR_eAXIv, "OR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(PUSH_CS, "PUSH", false, false, a(CS), s(None), a(None), s(None), a(None), s(None));
-	P(TWOBYTE, "2BYTE", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(PUSH_CS, "PUSH", false, false, a(CS), s(None), a(None), s(None), a(None), s(None), false);
+	P(TWOBYTE, "2BYTE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(ADC_EbGb, "ADC", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(ADC_EvGv, "ADC", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(ADC_GbEb, "ADC", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(ADC_GvEv, "ADC", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(ADC_ALIb, "ADC AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(ADC_eAXIv, "ADC eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(ADC_EbGb, "ADC", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(ADC_EvGv, "ADC", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(ADC_GbEb, "ADC", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(ADC_GvEv, "ADC", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(ADC_ALIb, "ADC AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(ADC_eAXIv, "ADC eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(PUSH_SS, "PUSH", false, false, a(SS), s(None), a(None), s(None), a(None), s(None));
-	P(POP_SS, "POP", false, false, a(SS), s(None), a(None), s(None), a(None), s(None));
+	P(PUSH_SS, "PUSH", false, false, a(SS), s(None), a(None), s(None), a(None), s(None), false);
+	P(POP_SS, "POP", false, false, a(SS), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(SBB_EbGb, "SBB", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(SBB_EvGv, "SBB", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(SBB_GbEb, "SBB", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(SBB_GvEv, "SBB", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(SBB_ALIb, "SBB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(SBB_eAXIv, "SBB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(SBB_EbGb, "SBB", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(SBB_EvGv, "SBB", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(SBB_GbEb, "SBB", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(SBB_GvEv, "SBB", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(SBB_ALIb, "SBB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(SBB_eAXIv, "SBB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(PUSH_DS, "PUSH", false, false, a(DS), s(None), a(None), s(None), a(None), s(None));
-	P(POP_DS, "POP", false, false, a(DS), s(None), a(None), s(None), a(None), s(None));
+	P(PUSH_DS, "PUSH", false, false, a(DS), s(None), a(None), s(None), a(None), s(None), false);
+	P(POP_DS, "POP", false, false, a(DS), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(AND_EbGb, "AND", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(AND_EvGv, "AND", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(AND_GbEb, "AND", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(AND_GvEv, "AND", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(AND_ALIb, "AND AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(AND_eAXIv, "AND eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(AND_EbGb, "AND", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(AND_EvGv, "AND", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(AND_GbEb, "AND", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(AND_GvEv, "AND", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(AND_ALIb, "AND AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(AND_eAXIv, "AND eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(ES, "ES", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(DAA, "DAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(ES, "ES", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(DAA, "DAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(SUB_EbGb, "SUB", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(SUB_EvGv, "SUB", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(SUB_GbEb, "SUB", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(SUB_GvEv, "SUB", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(SUB_ALIb, "SUB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(SUB_eAXIv, "SUB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(SUB_EbGb, "SUB", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(SUB_EvGv, "SUB", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(SUB_GbEb, "SUB", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(SUB_GvEv, "SUB", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(SUB_ALIb, "SUB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(SUB_eAXIv, "SUB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(CS, "CS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(DAS, "DAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(CS, "CS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(DAS, "DAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(XOR_EbGb, "XOR", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(XOR_EvGv, "XOR", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(XOR_GbEb, "XOR", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(XOR_GvEv, "XOR", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(XOR_ALIb, "XOR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(XOR_eAXIv, "XOR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(XOR_EbGb, "XOR", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(XOR_EvGv, "XOR", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(XOR_GbEb, "XOR", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(XOR_GvEv, "XOR", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(XOR_ALIb, "XOR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(XOR_eAXIv, "XOR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(SS, "SS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(AAA, "AAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(SS, "SS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(AAA, "AAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(CMP_EbGb, "CMP", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(CMP_EvGv, "CMP", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(CMP_GbEb, "CMP", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(CMP_GvEv, "CMP", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(CMP_ALIb, "CMP AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(CMP_eAXIv, "CMP eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
+	P(CMP_EbGb, "CMP", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(CMP_EvGv, "CMP", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(CMP_GbEb, "CMP", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(CMP_GvEv, "CMP", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(CMP_ALIb, "CMP AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(CMP_eAXIv, "CMP eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(DS, "DS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(AAS, "AAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(DS, "DS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(AAS, "AAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(INC_eAX, "INC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eCX, "INC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eDX, "INC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eBX, "INC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eSP, "INC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eBP, "INC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eSI, "INC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(INC_eDI, "INC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(INC_eAX, "INC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
+	P(INC_eCX, "INC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
+	P(INC_eDX, "INC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
+	P(INC_eBX, "INC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), true);
+	P(INC_eSP, "INC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
+	P(INC_eBP, "INC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
+	P(INC_eSI, "INC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
+	P(INC_eDI, "INC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
 
-	P(DEC_eAX, "DEC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eCX, "DEC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eDX, "DEC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eBX, "DEC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eSP, "DEC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eBP, "DEC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eSI, "DEC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(DEC_eDI, "DEC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(DEC_eAX, "DEC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
+	P(DEC_eCX, "DEC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
+	P(DEC_eDX, "DEC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
+	P(DEC_eBX, "DEC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), true);
+	P(DEC_eSP, "DEC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
+	P(DEC_eBP, "DEC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
+	P(DEC_eSI, "DEC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
+	P(DEC_eDI, "DEC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
 
-	P(PUSH_eAX, "PUSH eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eCX, "PUSH eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eDX, "PUSH eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eBX, "PUSH eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eSP, "PUSH eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eBP, "PUSH eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eSI, "PUSH eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(PUSH_eDI, "PUSH eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(PUSH_eAX, "PUSH eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
+	P(PUSH_eCX, "PUSH eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
+	P(PUSH_eDX, "PUSH eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
+	P(PUSH_eBX, "PUSH eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), true);
+	P(PUSH_eSP, "PUSH eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
+	P(PUSH_eBP, "PUSH eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
+	P(PUSH_eSI, "PUSH eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
+	P(PUSH_eDI, "PUSH eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
 
-	P(POP_eAX, "POP eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eCX, "POP eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eDX, "POP eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eBX, "POP", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eSP, "POP eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eBP, "POP eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eSI, "POP eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None));
-	P(POP_eDI, "POP eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None));
+	P(POP_eAX, "POP eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
+	P(POP_eCX, "POP eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
+	P(POP_eDX, "POP eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
+	P(POP_eBX, "POP eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), false);
+	P(POP_eSP, "POP eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
+	P(POP_eBP, "POP eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
+	P(POP_eSI, "POP eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
+	P(POP_eDI, "POP eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
 
-	P(PUSHA, "PUSHA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(POPA, "POPA", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(PUSHA, "PUSHA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(POPA, "POPA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(BOUND_GvMa, "BOUND", true, false, a(G), s(v), a(M), s(a), a(None), s(None));
-	P(ARPL_EwGw, "ARPL", true, false, a(E), s(w), a(G), s(w), a(None), s(None));
-	P(FS, "FS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(GS, "GS", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(OPSIZE, "OPSIZE", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ADSIZE, "ADSIZE", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(BOUND_GvMa, "BOUND", true, false, a(G), s(v), a(M), s(a), a(None), s(None), false);
+	P(ARPL_EwGw, "ARPL", true, false, a(E), s(w), a(G), s(w), a(None), s(None), false);
+	P(FS, "FS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(GS, "GS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(OPSIZE, "OPSIZE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ADSIZE, "ADSIZE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(PUSH_Iv, "PUSH", false, true, a(I), s(v), a(None), s(None), a(None), s(None));
-	P(IMUL_GvEvIv, "IMUL", true, true, a(G), s(v), a(E), s(v), a(I), s(v));
-	P(PUSH_Ib, "PUSH", false, true, a(I), s(b), a(None), s(None), a(None), s(None));
-	P(IMUL_GvEvIb, "IMUL", true, true, a(G), s(v), a(E), s(v), a(I), s(b));
+	P(PUSH_Iv, "PUSH", false, true, a(I), s(v), a(None), s(None), a(None), s(None), false);
+	P(IMUL_GvEvIv, "IMUL", true, true, a(G), s(v), a(E), s(v), a(I), s(v), false);
+	P(PUSH_Ib, "PUSH", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
+	P(IMUL_GvEvIb, "IMUL", true, true, a(G), s(v), a(E), s(v), a(I), s(b), false);
 
-	P(INSB_YbDX, "INSB", false, false, a(Y), s(b), a(DX), s(None), a(None), s(None));
-	P(INSW_YzDX, "INSW", false, false, a(Y), s(z), a(DX), s(None), a(None), s(None));
-	P(OUTSB_DXXb, "OUTSB DX", false, false, a(DX), s(None), a(X), s(b), a(None), s(None));
-	P(OUTSW_DXXv, "OUTSW DX", false, false, a(DX), s(None), a(X), s(v), a(None), s(None));
+	P(INSB_YbDX, "INSB", false, false, a(Y), s(b), a(DX), s(None), a(None), s(None), false);
+	P(INSW_YzDX, "INSW", false, false, a(Y), s(z), a(DX), s(None), a(None), s(None), false);
+	P(OUTSB_DXXb, "OUTSB DX", false, false, a(DX), s(None), a(X), s(b), a(None), s(None), true);
+	P(OUTSW_DXXv, "OUTSW DX", false, false, a(DX), s(None), a(X), s(v), a(None), s(None), true);
 
-	P(JO, "JO", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JNO, "JNO", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JB, "JB", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JNB, "JNB", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JZ, "JZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JNZ, "JNZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JBE, "JBE", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JA, "JA", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JS, "JS", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JNS, "JNS", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JP, "JP", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JNP, "JNP", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JL, "JL", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JNL, "JNL", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JLE, "JLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JNLE, "JNLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
+	P(JO, "JO", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JNO, "JNO", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JB, "JB", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JNB, "JNB", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JZ, "JZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JNZ, "JNZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JBE, "JBE", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JA, "JA", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JS, "JS", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JNS, "JNS", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JP, "JP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JNP, "JNP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JL, "JL", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JNL, "JNL", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JLE, "JLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JNLE, "JNLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
 
 	// Group 1 (0x80-0x83): "GRP1" is a placeholder; real mnemonic = grp1StrOf(ModRM.reg)
-	P(GRP1_EbIb,  "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
-	P(GRP1_EvIz,  "GRP1", true, true, a(E), s(v), a(I), s(v), a(None), s(None));
-	P(GRP1_EbIb2, "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
-	P(GRP1_EvIb,  "GRP1", true, true, a(E), s(v), a(I), s(b), a(None), s(None));
+	P(GRP1_EbIb,  "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false);
+	P(GRP1_EvIz,  "GRP1", true, true, a(E), s(v), a(I), s(v), a(None), s(None), false);
+	P(GRP1_EbIb2, "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false);
+	P(GRP1_EvIb,  "GRP1", true, true, a(E), s(v), a(I), s(b), a(None), s(None), false);
 
-	P(TEST_EbGb, "TEST", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(TEST_EvGv, "TEST", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
+	P(TEST_EbGb, "TEST", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(TEST_EvGv, "TEST", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
 
-	P(XCHG_EbGb, "XCHG", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(XCHG_EvGv, "XCHG", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
+	P(XCHG_EbGb, "XCHG", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(XCHG_EvGv, "XCHG", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
 
-	P(MOV_EbGb, "MOV", true, false, a(E), s(b), a(G), s(b), a(None), s(None));
-	P(MOV_EvGv, "MOV", true, false, a(E), s(v), a(G), s(v), a(None), s(None));
-	P(MOV_GbEb, "MOV", true, false, a(G), s(b), a(E), s(b), a(None), s(None));
-	P(MOV_GvEv, "MOV", true, false, a(G), s(v), a(E), s(v), a(None), s(None));
-	P(MOV_EwSw, "MOV", true, false, a(E), s(w), a(S), s(w), a(None), s(None));
+	P(MOV_EbGb, "MOV", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
+	P(MOV_EvGv, "MOV", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+	P(MOV_GbEb, "MOV", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
+	P(MOV_GvEv, "MOV", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
+	P(MOV_EwSw, "MOV", true, false, a(E), s(w), a(S), s(w), a(None), s(None), false);
 
-	P(LEA_GvM, "LEA", true, false, a(G), s(v), a(M), s(None), a(None), s(None));
+	P(LEA_GvM, "LEA", true, false, a(G), s(v), a(M), s(None), a(None), s(None), false);
 
-	P(MOV_SwEw, "MOV", true, false, a(S), s(w), a(E), s(w), a(None), s(None));
+	P(MOV_SwEw, "MOV", true, false, a(S), s(w), a(E), s(w), a(None), s(None), false);
 
-	P(POP_Ev, "POP", true, false, a(E), s(v), a(None), s(None), a(None), s(None));
+	P(POP_Ev, "POP", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false);
 
-	P(NOP, "NOP", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(XCHG_eAXeCX, "XCHG eAX, eCX", false, false, a(eAX), s(v), a(eCX), s(v), a(None), s(None));
-	P(XCHG_eAXeDX, "XCHG eAX, eDX", false, false, a(eAX), s(v), a(eDX), s(v), a(None), s(None));
-	P(XCHG_eAXeBX, "XCHG eAX, eBX", false, false, a(eAX), s(v), a(eBX), s(v), a(None), s(None));
-	P(XCHG_eAXeSP, "XCHG eAX, eSP", false, false, a(eAX), s(v), a(eSP), s(v), a(None), s(None));
-	P(XCHG_eAXeBP, "XCHG eAX, eBP", false, false, a(eAX), s(v), a(eBP), s(v), a(None), s(None));
-	P(XCHG_eAXeSI, "XCHG eAX, eSI", false, false, a(eAX), s(v), a(eSI), s(v), a(None), s(None));
-	P(XCHG_eAXeDI, "XCHG eAX, eDI", false, false, a(eAX), s(v), a(eDI), s(v), a(None), s(None));
+	P(NOP, "NOP", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(XCHG_eAXeCX, "XCHG eAX, eCX", false, false, a(eAX), s(v), a(eCX), s(v), a(None), s(None), true);
+	P(XCHG_eAXeDX, "XCHG eAX, eDX", false, false, a(eAX), s(v), a(eDX), s(v), a(None), s(None), true);
+	P(XCHG_eAXeBX, "XCHG eAX, eBX", false, false, a(eAX), s(v), a(eBX), s(v), a(None), s(None), true);
+	P(XCHG_eAXeSP, "XCHG eAX, eSP", false, false, a(eAX), s(v), a(eSP), s(v), a(None), s(None), true);
+	P(XCHG_eAXeBP, "XCHG eAX, eBP", false, false, a(eAX), s(v), a(eBP), s(v), a(None), s(None), true);
+	P(XCHG_eAXeSI, "XCHG eAX, eSI", false, false, a(eAX), s(v), a(eSI), s(v), a(None), s(None), true);
+	P(XCHG_eAXeDI, "XCHG eAX, eDI", false, false, a(eAX), s(v), a(eDI), s(v), a(None), s(None), true);
 
-	P(CBW, "CBW", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(CWD, "CWD", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(CALL_Ap, "CALL", false, true, a(A), s(p), a(None), s(None), a(None), s(None));
-	P(FWAIT, "FWAIT", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(PUSHF_Fv, "PUSHF", false, false, a(F), s(v), a(None), s(None), a(None), s(None));
-	P(POPF_Fv, "POPF", false, false, a(F), s(v), a(None), s(None), a(None), s(None));
-	P(SAHF, "SAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(LAHF, "LAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(CBW, "CBW", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(CWD, "CWD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(CALL_Ap, "CALL", false, true, a(A), s(p), a(None), s(None), a(None), s(None), false);
+	P(FWAIT, "FWAIT", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(PUSHF_Fv, "PUSHF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
+	P(POPF_Fv, "POPF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
+	P(SAHF, "SAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(LAHF, "LAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(MOV_ALOb, "MOV AL", false, true, a(AL), s(b), a(O), s(b), a(None), s(None));
-	P(MOV_eAXOv, "MOV eAX", false, true, a(eAX), s(v), a(O), s(v), a(None), s(None));
-	P(MOV_ObAL, "MOV", false, true, a(O), s(b), a(AL), s(b), a(None), s(None));
-	P(MOV_OveAX, "MOV", false, true, a(O), s(v), a(eAX), s(v), a(None), s(None));
+	P(MOV_ALOb, "MOV AL", false, true, a(AL), s(b), a(O), s(b), a(None), s(None), true);
+	P(MOV_eAXOv, "MOV eAX", false, true, a(eAX), s(v), a(O), s(v), a(None), s(None), true);
+	P(MOV_ObAL, "MOV", false, true, a(O), s(b), a(AL), s(b), a(None), s(None), false);
+	P(MOV_OveAX, "MOV", false, true, a(O), s(v), a(eAX), s(v), a(None), s(None), false);
 
-	P(MOVSB_XbYb, "MOVSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None));
-	P(MOVSW_XvYv, "MOVSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None));
-	P(CMPSB_XbYb, "CMPSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None));
-	P(CMPSW_XvYv, "CMPSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None));
-	P(TEST_ALIb, "TEST", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(TEST_eAXIv, "TEST", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
-	P(STOSB_YbAL, "STOSB", false, false, a(Y), s(b), a(AL), s(b), a(None), s(None));
-	P(STOSW_YveAX, "STOSW", false, false, a(Y), s(v), a(eAX), s(v), a(None), s(None));
-	P(LODSB_ALXb, "LODSB", false, false, a(AL), s(b), a(X), s(b), a(None), s(None));
-	P(LODSW_eAXXv, "LODSW", false, false, a(eAX), s(v), a(X), s(v), a(None), s(None));
-	P(SCASB_ALYb, "SCASB", false, false, a(AL), s(b), a(Y), s(b), a(None), s(None));
-	P(SCASW_eAXYv, "SCASW", false, false, a(eAX), s(v), a(Y), s(v), a(None), s(None));
+	P(MOVSB_XbYb, "MOVSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None), false);
+	P(MOVSW_XvYv, "MOVSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
+	P(CMPSB_XbYb, "CMPSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None), false);
+	P(CMPSW_XvYv, "CMPSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
+	P(TEST_ALIb, "TEST", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), false);
+	P(TEST_eAXIv, "TEST", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), false);
+	P(STOSB_YbAL, "STOSB", false, false, a(Y), s(b), a(AL), s(b), a(None), s(None), false);
+	P(STOSW_YveAX, "STOSW", false, false, a(Y), s(v), a(eAX), s(v), a(None), s(None), false);
+	P(LODSB_ALXb, "LODSB", false, false, a(AL), s(b), a(X), s(b), a(None), s(None), false);
+	P(LODSW_eAXXv, "LODSW", false, false, a(eAX), s(v), a(X), s(v), a(None), s(None), false);
+	P(SCASB_ALYb, "SCASB", false, false, a(AL), s(b), a(Y), s(b), a(None), s(None), false);
+	P(SCASW_eAXYv, "SCASW", false, false, a(eAX), s(v), a(Y), s(v), a(None), s(None), false);
 
-	P(MOV_ALIb, "MOV AL,", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_CLIb, "MOV CL,", false, true, a(CL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_DLIb, "MOV DL,", false, true, a(DL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_BLIb, "MOV BL,", false, true, a(BL), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_AHIb, "MOV AH,", false, true, a(AH), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_CHIb, "MOV CH,", false, true, a(CH), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_DHIb, "MOV DH,", false, true, a(DH), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_BHIb, "MOV BH,", false, true, a(BH), s(b), a(I), s(b), a(None), s(None));
+	P(MOV_ALIb, "MOV AL,", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(MOV_CLIb, "MOV CL,", false, true, a(CL), s(b), a(I), s(b), a(None), s(None), true);
+	P(MOV_DLIb, "MOV DL,", false, true, a(DL), s(b), a(I), s(b), a(None), s(None), true);
+	P(MOV_BLIb, "MOV BL,", false, true, a(BL), s(b), a(I), s(b), a(None), s(None), true);
+	P(MOV_AHIb, "MOV AH,", false, true, a(AH), s(b), a(I), s(b), a(None), s(None), true);
+	P(MOV_CHIb, "MOV CH,", false, true, a(CH), s(b), a(I), s(b), a(None), s(None), true);
+	P(MOV_DHIb, "MOV DH,", false, true, a(DH), s(b), a(I), s(b), a(None), s(None), true);
+	P(MOV_BHIb, "MOV BH,", false, true, a(BH), s(b), a(I), s(b), a(None), s(None), true);
 
-	P(MOV_eAXIv, "MOV eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eCXIv, "MOV eCX", false, true, a(eCX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eDXIv, "MOV eDX", false, true, a(eDX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eBXIv, "MOV eBX", false, true, a(eBX), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eSPIv, "MOV eSP", false, true, a(eSP), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eBPIv, "MOV eBP", false, true, a(eBP), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eSIIv, "MOV eSI", false, true, a(eSI), s(v), a(I), s(v), a(None), s(None));
-	P(MOV_eDIIv, "MOV eDI", false, true, a(eDI), s(v), a(I), s(v), a(None), s(None));
+	P(MOV_eAXIv, "MOV eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+	P(MOV_eCXIv, "MOV eCX", false, true, a(eCX), s(v), a(I), s(v), a(None), s(None), true);
+	P(MOV_eDXIv, "MOV eDX", false, true, a(eDX), s(v), a(I), s(v), a(None), s(None), true);
+	P(MOV_eBXIv, "MOV eBX", false, true, a(eBX), s(v), a(I), s(v), a(None), s(None), true);
+	P(MOV_eSPIv, "MOV eSP", false, true, a(eSP), s(v), a(I), s(v), a(None), s(None), true);
+	P(MOV_eBPIv, "MOV eBP", false, true, a(eBP), s(v), a(I), s(v), a(None), s(None), true);
+	P(MOV_eSIIv, "MOV eSI", false, true, a(eSI), s(v), a(I), s(v), a(None), s(None), true);
+	P(MOV_eDIIv, "MOV eDI", false, true, a(eDI), s(v), a(I), s(v), a(None), s(None), true);
 
-	P(GRP2_EbIb, "GRP2", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
-	P(GRP2_EvIb, "GRP2", true, true, a(E), s(v), a(I), s(b), a(None), s(None));
-	P(RET_Iw, "RET", false, true, a(I), s(w), a(None), s(None), a(None), s(None));
-	P(RET, "RET", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(LES_GvMp, "LES", true, false, a(G), s(v), a(M), s(p), a(None), s(None));
-	P(LDS_GvMp, "LDS", true, false, a(G), s(v), a(M), s(p), a(None), s(None));
-	P(MOV_EbIb, "MOV", true, true, a(E), s(b), a(I), s(b), a(None), s(None));
-	P(MOV_EvIv, "MOV", true, true, a(E), s(v), a(I), s(v), a(None), s(None));
-	P(ENTER_IwIb, "ENTER", false, true, a(I), s(w), a(I), s(b), a(None), s(None));
-	P(LEAVE, "LEAVE", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(RETF_Iw, "RETF", false, true, a(I), s(w), a(None), s(None), a(None), s(None));
-	P(RETF, "RETF", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(INT3, "INT3", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(INT_Ib, "INT", false, true, a(I), s(b), a(None), s(None), a(None), s(None));
-	P(INTO, "INTO", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(IRET, "IRET", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(GRP2_EbIb, "GRP2", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false);
+	P(GRP2_EvIb, "GRP2", true, true, a(E), s(v), a(I), s(b), a(None), s(None), false);
+	P(RET_Iw, "RET", false, true, a(I), s(w), a(None), s(None), a(None), s(None), false);
+	P(RET, "RET", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(LES_GvMp, "LES", true, false, a(G), s(v), a(M), s(p), a(None), s(None), false);
+	P(LDS_GvMp, "LDS", true, false, a(G), s(v), a(M), s(p), a(None), s(None), false);
+	P(MOV_EbIb, "MOV", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false);
+	P(MOV_EvIv, "MOV", true, true, a(E), s(v), a(I), s(v), a(None), s(None), false);
+	P(ENTER_IwIb, "ENTER", false, true, a(I), s(w), a(I), s(b), a(None), s(None), false);
+	P(LEAVE, "LEAVE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(RETF_Iw, "RETF", false, true, a(I), s(w), a(None), s(None), a(None), s(None), false);
+	P(RETF, "RETF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(INT3, "INT3", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(INT_Ib, "INT", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
+	P(INTO, "INTO", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(IRET, "IRET", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(GRP2_Eb1, "GRP2", true, false, a(E), s(b), a(One), s(None), a(None), s(None));
-	P(GRP2_Ev1, "GRP2", true, false, a(E), s(v), a(One), s(None), a(None), s(None));
-	P(GRP2_EbCL, "GRP2", true, false, a(E), s(b), a(CL), s(None), a(None), s(None));
-	P(GRP2_EvCL, "GRP2", true, false, a(E), s(v), a(CL), s(None), a(None), s(None));
+	P(GRP2_Eb1, "GRP2", true, false, a(E), s(b), a(One), s(None), a(None), s(None), false);
+	P(GRP2_Ev1, "GRP2", true, false, a(E), s(v), a(One), s(None), a(None), s(None), false);
+	P(GRP2_EbCL, "GRP2", true, false, a(E), s(b), a(CL), s(None), a(None), s(None), false);
+	P(GRP2_EvCL, "GRP2", true, false, a(E), s(v), a(CL), s(None), a(None), s(None), false);
 
-	P(AAM_Ib, "AAM", false, true, a(I), s(b), a(None), s(None), a(None), s(None));
-	P(AAD_Ib, "AAD", false, true, a(I), s(b), a(None), s(None), a(None), s(None));
-	P(SALC, "SALC", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(XLAT, "XLAT", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(AAM_Ib, "AAM", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
+	P(AAD_Ib, "AAD", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
+	P(SALC, "SALC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(XLAT, "XLAT", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(ESC0, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ESC1, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ESC2, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ESC3, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ESC4, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ESC5, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ESC6, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(ESC7, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(ESC0, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ESC1, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ESC2, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ESC3, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ESC4, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ESC5, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ESC6, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(ESC7, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(LOOPNZ_Jb, "LOOPNZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(LOOPZ_Jb, "LOOPZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(LOOP_Jb, "LOOP", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(JCXZ_Jb, "JCXZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
-	P(IN_ALIb, "IN AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None));
-	P(IN_eAXIb, "IN eAX", false, true, a(eAX), s(v), a(I), s(b), a(None), s(None));
-	P(OUT_IbAL, "OUT", false, true, a(I), s(b), a(AL), s(b), a(None), s(None));
-	P(OUT_IbeAX, "OUT", false, true, a(I), s(b), a(eAX), s(v), a(None), s(None));
+	P(LOOPNZ_Jb, "LOOPNZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(LOOPZ_Jb, "LOOPZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(LOOP_Jb, "LOOP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+	P(JeCXZ_Jb, "JECXZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
 
-	P(CALL_Jv, "CALL", false, true, a(J), s(v), a(None), s(None), a(None), s(None));
-	P(JMP_Jv, "JMP", false, true, a(J), s(v), a(None), s(None), a(None), s(None));
-	P(JMP_Ap, "JMP", false, true, a(A), s(p), a(None), s(None), a(None), s(None));
-	P(JMP_Jb, "JMP", false, true, a(J), s(b), a(None), s(None), a(None), s(None));
+	P(IN_ALIb, "IN AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
+	P(IN_eAXIb, "IN eAX", false, true, a(eAX), s(v), a(I), s(b), a(None), s(None), true);
+	P(OUT_IbAL, "OUT", false, true, a(I), s(b), a(AL), s(b), a(None), s(None), false);
+	P(OUT_IbeAX, "OUT", false, true, a(I), s(b), a(eAX), s(v), a(None), s(None), false);
 
-	P(IN_ALDX, "IN AL, DX", false, false, a(AL), s(b), a(DX), s(None), a(None), s(None));
-	P(IN_eAXDX, "IN eAX, DX", false, false, a(eAX), s(v), a(DX), s(None), a(None), s(None));
-	P(OUT_DXAL, "OUT DX, AL", false, false, a(DX), s(None), a(AL), s(b), a(None), s(None));
-	P(OUT_DXeAX, "OUT DX, eAX", false, false, a(DX), s(None), a(eAX), s(v), a(None), s(None));
+	P(CALL_Jv, "CALL", false, true, a(J), s(v), a(None), s(None), a(None), s(None), false);
+	P(JMP_Jv, "JMP", false, true, a(J), s(v), a(None), s(None), a(None), s(None), false);
+	P(JMP_Ap, "JMP", false, true, a(A), s(p), a(None), s(None), a(None), s(None), false);
+	P(JMP_Jb, "JMP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
 
-	P(LOCK, "LOCK", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(INT1, "INT1", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(REPNE, "REPNE", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(REP, "REP", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(IN_ALDX, "IN AL, DX", false, false, a(AL), s(b), a(DX), s(None), a(None), s(None), true);
+	P(IN_eAXDX, "IN eAX, DX", false, false, a(eAX), s(v), a(DX), s(None), a(None), s(None), true);
+	P(OUT_DXAL, "OUT DX, AL", false, false, a(DX), s(None), a(AL), s(b), a(None), s(None), true);
+	P(OUT_DXeAX, "OUT DX, eAX", false, false, a(DX), s(None), a(eAX), s(v), a(None), s(None), true);
 
-	P(HLT, "HLT", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(CMC, "CMC", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(LOCK, "LOCK", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(INT1, "INT1", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(REPNE, "REPNE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(REP, "REP", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(GRP3_Eb, "GRP3", true, false, a(E), s(b), a(None), s(None), a(None), s(None));
-	P(GRP3_Ev, "GRP3", true, false, a(E), s(v), a(None), s(None), a(None), s(None));
+	P(HLT, "HLT", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(CMC, "CMC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
-	P(CLC, "CLC", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(STC, "STC", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(CLI, "CLI", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(STI, "STI", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(CLD, "CLD", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(STD, "STD", false, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(GRP3_Eb, "GRP3", true, false, a(E), s(b), a(None), s(None), a(None), s(None), false);
+	P(GRP3_Ev, "GRP3", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false);
 
-	P(GRP4, "GRP4", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
-	P(GRP5, "GRP5", true, false, a(None), s(None), a(None), s(None), a(None), s(None));
+	P(CLC, "CLC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(STC, "STC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(CLI, "CLI", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(STI, "STI", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(CLD, "CLD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(STD, "STD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+
+	P(GRP4, "GRP4", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+	P(GRP5, "GRP5", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
 
 
@@ -379,21 +380,6 @@ static uint8_t op3AddressingMode(uint32_t op) { return opcodeTable()[op].op3am; 
 static uint8_t op1Size(uint32_t op) { return opcodeTable()[op].op1s; }
 static uint8_t op2Size(uint32_t op) { return opcodeTable()[op].op2s; }
 static uint8_t op3Size(uint32_t op) { return opcodeTable()[op].op3s; }
-
-
-// Group 1 (0x80-0x83) sub-mnemonics: selected by the ModRM.reg field (/0../7).
-static constexpr std::array<std::string_view, 8> buildGrp1() {
-	std::array<std::string_view, 8> n = {{ "ADD", "OR", "ADC", "SBB", "AND", "SUB", "XOR", "CMP" }};
-	return n;
-}
-
-static const std::array<std::string_view, 8>& grp1Table() {
-	static constexpr std::array<std::string_view, 8> t = buildGrp1();
-	return t;
-}
-
-static std::string_view grp1StrOf(uint8_t reg) { return grp1Table()[reg & 0x07]; }
-
 
 
 
@@ -473,6 +459,7 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 
 
 
+
 	if (isPrefix(prefix)) {
 		prefix = pfx;
 		instructionStr = prefixStrOf(prefix).data();
@@ -480,7 +467,21 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 	}
 
 	opcode = opc;
+
+	if (prefix == 0x67)
+		opcode = ((prefix << 8) | opcode);
 	instructionStr += opcodeStrOf(opcode).data();
+
+
+	op1.size = op1Size(opcode);
+	op1.addressingMode = op1AddressingMode(opcode);
+
+	op2.size = op2Size(opcode);
+	op2.addressingMode = op2AddressingMode(opcode);
+
+	op3.size = op3Size(opcode);
+	op3.addressingMode = op3AddressingMode(opcode);
+
 
 	if (hasRMbyte(static_cast<uint8_t>(opcode))) {
 		uint8_t mod = ((rmbyte & 0b11000000) >> 6);
@@ -504,9 +505,7 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 
 
 
-		// operand 1 is in RMbyte
-		op1.addressingMode = op1AddressingMode(opcode);
-		op1.size = op1Size(opcode);
+
 		if (op1.addressingMode == static_cast<uint8_t>(ADDRESSING::G) || op1.addressingMode == static_cast<uint8_t>(ADDRESSING::E)) {
 			try {
 				op1.text = registerOf(rm) ;
@@ -524,8 +523,6 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 
 		if (!skipOp2) { // is an operand
 
-			op2.addressingMode = op2AddressingMode(opcode);
-			op2.size = op2Size(opcode);
 			if (op1IsMemory && op2.addressingMode == static_cast<uint8_t>(ADDRESSING::G) ||
 				op2.addressingMode != static_cast<uint8_t>(ADDRESSING::E) && !op1IsMemory) {
 
@@ -534,7 +531,7 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 				try {
 					op2.text = registerOf(reg_op);
 					if (op2IsMemory)
-						op2.text = "[ " + op2.text + " ] ";
+						op2.text = "[" + op2.text + "] ";
 					else op2.text += " ";
 					op2.value = reg_op;
 				}
@@ -548,18 +545,27 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 
 	if (hasImmediateByte(opcode)) {
 		immediate = imm;
-		if (op2.addressingMode == static_cast<uint8_t>(ADDRESSING::None) || op2.addressingMode == static_cast<uint8_t>(ADDRESSING::I)) {
+		if ( op1.addressingMode == static_cast<uint8_t>(ADDRESSING::I) || op1.addressingMode == static_cast<uint8_t>(ADDRESSING::J)) {
+			op1.value = immediate;
+			op1.addressingMode = op1AddressingMode(opcode);
+			op1.size = op1Size(opcode);
+			op1.text = std::format("{:#x}", immediate);
+
+		}
+		else if ( op2.addressingMode == static_cast<uint8_t>(ADDRESSING::I) || op2.addressingMode == static_cast<uint8_t>(ADDRESSING::J)) {
 			op2.value = immediate;
 			op2.addressingMode = op2AddressingMode(opcode);
 			op2.size = op2Size(opcode);
+			op2.text = std::format("{:#x}", immediate);
+
 		}
 		else {
 			op3.value = immediate;
 			op3.addressingMode = op3AddressingMode(opcode);
 			op3.size = op3Size(opcode);
+			op3.text = std::format("{:#x}", immediate);
+
 		}
-		instructionStr += " ";
-		instructionStr += std::format("{:#x}", immediate);
 	}
 
 	if (hasSIB) { // either op1 or both op1 & op2 were filled in during analysis of RMbyte
@@ -584,26 +590,33 @@ IA_32(uint32_t pfx, uint32_t opc, uint32_t rmbyte, uint32_t sib, uint32_t disp, 
 
 		if (op1IsMemory) {
 			try {
-				op1.text = " [ " + registerOf(base) + " + " + registerOf(index) + " * " + std::to_string(static_cast<int>(scale));
+				op1.text = " [" + registerOf(base) + " + " + registerOf(index) + "*" + std::to_string(static_cast<int>(scale));
 			}
 			catch (std::runtime_error& e) { throw; }
 		}
 		else { // op2IsMemory = true, 3rd cannot be a memory address.
-			op2.text = " [ " + registerOf(base) + " + " + registerOf(index) + " * " + std::to_string(static_cast<int>(scale));
+			op2.text = " [" + registerOf(base) + " + " + registerOf(index) + "*" + std::to_string(static_cast<int>(scale));
 
 		}
-
 
 		if (hasDisplacement) {
 			displacement = disp;
 			instructionStr += " + " + std::format("{:#x}", displacement);
 		}
-		instructionStr += " ] ";
+		instructionStr += "] ";
 
 	}
 	else {
-		//if()
-		instructionStr += op1.text + ", " + op2.text + " ";
+		if (opcodeTable()[opcode].impliesOperands == true && op1AddressingMode(opcode) != static_cast<uint8_t>(ADDRESSING::None) && op1.text != "")
+			instructionStr += ", ";
+		else
+			instructionStr += " ";
+		if (op1.addressingMode != static_cast<uint8_t>(ADDRESSING::None))
+			instructionStr += op1.text;
+		if (op2.addressingMode != static_cast<uint8_t>(ADDRESSING::None))
+			instructionStr += ", " + op2.text;
+		if (op3.addressingMode != static_cast<uint8_t>(ADDRESSING::None))
+			instructionStr += ", " + op3.text;
 	}
 
 
