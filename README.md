@@ -84,7 +84,7 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 
 **Near-term**
 - [x] PE parser implementation (32-bit and 64-bit)
-- [~] x86 instruction decoder
+- [x] x86 instruction decoder
 - [ ] TUI
 - [ ] Tests
 - [ ] GUI
