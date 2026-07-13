@@ -29,6 +29,9 @@ protected:
 
 
     std::vector<std::unique_ptr<Instruction>> decodedInstructions;
+    // Virtual address each decodedInstructions[i] starts at, recorded by decode().
+    // Parallel to decodedInstructions; Instruction itself carries no address.
+    std::vector<uint64_t> instructionAddresses;
     std::vector<uint64_t> virtStack;
     Sections baseSections;
     uint64_t offset;
@@ -62,6 +65,24 @@ public:
     virtual std::string getArchitecture()=0;
     virtual uint64_t decodeLine(uint64_t address, uint64_t vaddr) = 0;
     virtual ~Disassembler() = default;
+
+    // Walks .text driving decodeLine(), filling decodedInstructions. The decode
+    // pass itself, with no output sink - decodeCS() is this plus an fprintf loop,
+    // and consumers that want the instructions in memory (the TUI) call this.
+    // Idempotent: clears previous results, so re-running on a new binary is safe.
+    // Stops when decodeLine() stops advancing, so an arch whose decoder is still
+    // a stub (returns 0) yields an empty list instead of looping forever.
+    // decodeLine() may throw for unimplemented architectures; the instructions
+    // decoded before the throw stay in decodedInstructions.
+    void decode();
+
+    // read-only views for the UI layers (TUI/GUI); they must not mutate core state
+    const Registers& getRegisters() const { return registers; }
+    const std::vector<uint64_t>& getVirtStack() const { return virtStack; }
+    const std::vector<std::unique_ptr<Instruction>>& getDecodedInstructions() const { return decodedInstructions; }
+    const std::vector<uint64_t>& getInstructionAddresses() const { return instructionAddresses; }
+    const Sections& getSections() const { return baseSections; }
+    AddressSpace& getAddressSpace() { return contents; }
 
 };
 

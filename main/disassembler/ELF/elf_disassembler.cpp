@@ -44,10 +44,15 @@ void ELF_Disassembler::setHeadersOffsets() {
 	}
 }
 uint64_t ELF_Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
-	return 0;
+	return 0; // TODO: per-instruction decode; returning 0 means "no progress", decode() stops.
 }
 
 void ELF_Disassembler::decodeCS(FILE* outputStream) {
+
+	decode();
+
+	for (const auto& instruction : decodedInstructions)
+		fprintf(outputStream, "  | \t %s \n", instruction->decodeLineString().c_str());
 
 }
 

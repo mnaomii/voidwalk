@@ -16,9 +16,9 @@ public:
     void setOffset(uint64_t value) { offset = value; }
     void setSize(uint64_t value) { size = value; }
 
-    uint64_t getVaddr() { return vaddr; }
-    uint64_t getOffset() { return offset; }
-    uint64_t getSize() { return size; }
+    uint64_t getVaddr() const { return vaddr; }
+    uint64_t getOffset() const { return offset; }
+    uint64_t getSize() const { return size; }
 
     
 };

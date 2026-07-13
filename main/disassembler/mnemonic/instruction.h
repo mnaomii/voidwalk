@@ -15,7 +15,10 @@ public:
 		bool hasImmediateByte;
 		uint8_t op1am, op2am, op3am;
 		uint8_t op1s, op2s, op3s;
-		bool impliesOperands;
+		// The mnemonic text already spells its operands out ("ADD AL", "XCHG eAX, eCX"),
+		// so the decoder must not render them a second time from the addressing modes.
+		bool textNamesOperands;
+		int groupNo;
 	};
 
 	struct Operand {
@@ -25,5 +28,6 @@ public:
 	};
 
 	Instruction() {};
+	void decode() {}
 	virtual std::string decodeLineString() = 0;
 };
