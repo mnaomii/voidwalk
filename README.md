@@ -73,7 +73,7 @@ Flags:
 The long-term goal is a complete binary analysis toolkit with both static and dynamic capabilities:
 
 - **Control flow visualization** - a jump tree representing basic blocks and branch targets, rendered in both CLI and an interactive GUI
-- **Emulated stack
+- **Emulated stack**
 - **Dynamic analysis** - runtime instruction tracing, branch outcome tracking, import call logging, and memory access monitoring
 - **Dual interface** - full CLI for scripting and a GUI with section browser, disassembly view, and jump tree visualizer
 - **Emulation for non-native apps** - architecturally incompatible apps will have their runtime emulated to mimic debugging capabilities
