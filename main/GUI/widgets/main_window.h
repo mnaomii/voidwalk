@@ -9,6 +9,7 @@
 class QAction;
 class QDockWidget;
 class QLabel;
+class QStackedWidget;
 
 namespace gui {
 
@@ -17,10 +18,16 @@ class RegistersPane;
 class StackPane;
 class MemoryPane;
 class AiChatPane;
+class WelcomeWidget;
 
 // Top-level window for dat-gui. Owns the Session view-model and the panes,
 // wires the toolbar/menus, and fans a single refreshAll() out to every pane
 // after any state change (Open today; debugger steps later).
+//
+// Appearance: applyTheme() (Fusion + palette + QSS via ThemeManager) runs at
+// startup and whenever the theme changes in Settings. Icons come from the
+// recolorable SVG set in :/icons (theme/icons.h). The central widget is a
+// stack: WelcomeWidget until a binary loads, DisassemblyPane after.
 //
 // Action reality check: Open, Recompile, Settings, and the AI-pane toggle are
 // real. The debugger transport (Run/Step/Step Over/Continue/Pause/Reset) does
@@ -47,6 +54,7 @@ private:
 	void buildToolBar();
 	void buildMenus();
 	void buildDocks();
+	void applyTheme();        // Fusion + palette + QSS + icon recolor
 	void applyAiVisibility(); // show/hide the AI dock per settings_.aiEnabled
 	void refreshAll();
 	void setStatus(const QString& msg);
@@ -54,6 +62,8 @@ private:
 	Session session_;
 	AppSettings settings_;
 
+	QStackedWidget* central_ = nullptr;
+	WelcomeWidget* welcome_ = nullptr;
 	DisassemblyPane* disasm_ = nullptr;
 	RegistersPane* registers_ = nullptr;
 	StackPane* stack_ = nullptr;

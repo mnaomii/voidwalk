@@ -1,6 +1,7 @@
 #include "settings_dialog.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -15,6 +16,14 @@ SettingsDialog::SettingsDialog(const AppSettings& current, QWidget* parent)
 	: QDialog(parent) {
 	setWindowTitle(tr("Settings"));
 	setModal(true);
+
+	auto* uiGroup = new QGroupBox(tr("Appearance"), this);
+	auto* uiForm = new QFormLayout(uiGroup);
+	theme_ = new QComboBox(uiGroup);
+	theme_->addItem(tr("Dark"), QStringLiteral("dark"));
+	theme_->addItem(tr("Light"), QStringLiteral("light"));
+	theme_->setCurrentIndex(current.theme == QLatin1String("light") ? 1 : 0);
+	uiForm->addRow(tr("Theme"), theme_);
 
 	auto* aiGroup = new QGroupBox(tr("AI assistant (opt-in)"), this);
 	auto* form = new QFormLayout(aiGroup);
@@ -64,6 +73,7 @@ SettingsDialog::SettingsDialog(const AppSettings& current, QWidget* parent)
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
 	auto* layout = new QVBoxLayout(this);
+	layout->addWidget(uiGroup);
 	layout->addWidget(aiGroup);
 	layout->addWidget(note);
 	layout->addStretch();
@@ -72,6 +82,7 @@ SettingsDialog::SettingsDialog(const AppSettings& current, QWidget* parent)
 
 AppSettings SettingsDialog::settings() const {
 	AppSettings s;
+	s.theme = theme_->currentData().toString();
 	s.aiEnabled = aiEnabled_->isChecked();
 	s.aiApiKey = apiKey_->text();
 	s.aiModel = model_->text();

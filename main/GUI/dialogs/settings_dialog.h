@@ -6,12 +6,13 @@
 #include <QDialog>
 
 class QCheckBox;
+class QComboBox;
 class QLineEdit;
 class QSpinBox;
 
 namespace gui {
 
-// Settings dialog. Its main job for now is the opt-in AI toggle that shows the
+// Settings dialog. Appearance (theme) plus the opt-in AI toggle that shows the
 // AI chat pane; the model/endpoint/key fields are captured here and handed to
 // whatever AiBackend you wire in (the GUI does not use them itself). Editing is
 // non-destructive: values are read from AppSettings on open and written back
@@ -25,6 +26,7 @@ public:
 	AppSettings settings() const;
 
 private:
+	QComboBox* theme_ = nullptr;
 	QCheckBox* aiEnabled_ = nullptr;
 	QLineEdit* apiKey_ = nullptr;
 	QLineEdit* model_ = nullptr;

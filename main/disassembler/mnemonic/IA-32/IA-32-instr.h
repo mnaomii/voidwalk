@@ -57,6 +57,10 @@ public:
 static std::string_view opcodeStrOf(uint32_t op)  { return opcodeTable()[op].text; }
 static bool hasRMbyte(uint32_t op)                { return opcodeTable()[op].hasRMByte; }
 static bool hasImmediateByte(uint32_t op)         { return opcodeTable()[op].hasImmediateByte; }
+
+// Group-aware row: the only one safe to read operands and immediates from. Needs ModRM.reg,
+// so it can only be asked for after the ModRM byte has been read.
+static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t reg) { return IA_32Mnemonic::resolvedInfo(op, reg); }
 static uint8_t op1AddressingMode(uint32_t op)	  { return opcodeTable()[op].op1am; }
 static uint8_t op2AddressingMode(uint32_t op) { return opcodeTable()[op].op2am; }
 static uint8_t op3AddressingMode(uint32_t op) { return opcodeTable()[op].op3am; }
@@ -81,21 +85,15 @@ inline void decode(uint64_t pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, ui
 
 	
 
-	const Instruction::OpcodeInfo& info = opcodeTable()[opcode];
-
-	op1.addressingMode = info.op1am; op1.size = info.op1s;
-	op2.addressingMode = info.op2am; op2.size = info.op2s;
-	op3.addressingMode = info.op3am; op3.size = info.op3s;
+	const Instruction::OpcodeInfo& outer = opcodeTable()[opcode];
 
 	uint8_t mod = 0, reg_op = 0, rm = 0;
 	bool hasDisplacement = false;
 	bool hasSIB = false;
-	// isGroup(), not "groupNoOf() != -1": opcodes the table never filled in are value
-	// initialised, so their groupNo is 0 - which is not -1, and would send every undefined
-	// byte down the group path.
+
 	const bool isGroupOpcode = IA_32Mnemonic::isGroup(opcode);
 
-	if (info.hasRMByte) {
+	if (outer.hasRMByte) {
 		mod    = static_cast<uint8_t>((rmbyte & 0b11000000) >> 6);
 		reg_op = static_cast<uint8_t>((rmbyte & 0b00111000) >> 3);
 		rm     = static_cast<uint8_t>(rmbyte & 0b00000111);
@@ -109,10 +107,19 @@ inline void decode(uint64_t pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, ui
 		               || (mod == 0b00 && rm == 0b101 && !hasSIB);                  // 00/101 = disp32, no base
 	}
 
+	// ModRM.reg is known now, so the placeholder row a group opcode sits behind ("GRP5", no
+	// operands, no immediate) can be swapped for the instruction it actually names. Every
+	// operand field below reads from this, never from the 256-entry row.
+	const Instruction::OpcodeInfo info = IA_32Mnemonic::resolvedInfo(opcode, reg_op);
+
+	op1.addressingMode = info.op1am; op1.size = info.op1s;
+	op2.addressingMode = info.op2am; op2.size = info.op2s;
+	op3.addressingMode = info.op3am; op3.size = info.op3s;
+
 	// The one memory operand, if any: [base + index*scale + disp]. Whichever operand asks
 	// for E or M takes this text; with mod 11 there is no memory and E is a plain register.
 	std::string memory;
-	if (info.hasRMByte && mod != 0b11) {
+	if (outer.hasRMByte && mod != 0b11) {
 
 		if (hasSIB) {
 			scale = 1u << ((sib & 0b11000000) >> 6);          // 00/01/10/11 -> *1/*2/*4/*8
@@ -193,11 +200,9 @@ inline void decode(uint64_t pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, ui
 		instructionStr += " ";
 	}
 
-	if (isGroupOpcode) {
-		const std::string_view mnemonic = IA_32Mnemonic::groupEntryOf(opcode, reg_op).text;
-		instructionStr += mnemonic.empty() ? "(bad)" : mnemonic;   // illegal /reg for this group
-	}
-	else instructionStr += opcodeStrOf(opcode);
+	// Empty text = an illegal /reg for this group (FF /7, FE /2..7), or an opcode the table
+	// never named at all.
+	instructionStr += info.text.empty() ? "(bad)" : info.text;
 
 	std::string operands;
 	for (const Instruction::Operand* op : { &op1, &op2, &op3 }) {

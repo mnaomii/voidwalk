@@ -1,6 +1,7 @@
 #include "memory_pane.h"
 
-#include <QFontDatabase>
+#include "../theme/theme.h"
+
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -24,7 +25,7 @@ MemoryPane::MemoryPane(QWidget* parent)
 
 	view_ = new QPlainTextEdit(this);
 	view_->setReadOnly(true);
-	view_->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+	view_->setFont(monoFont());
 	view_->setLineWrapMode(QPlainTextEdit::NoWrap);
 	layout->addWidget(view_);
 

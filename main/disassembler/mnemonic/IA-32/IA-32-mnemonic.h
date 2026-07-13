@@ -583,6 +583,49 @@ public:
 		return groupTableOf(op)[reg & 0x07];
 	}
 
+	// The one row every caller should read: the 256-entry row for a plain opcode, and for a group
+	// opcode that row merged with the group entry ModRM.reg selects. Both the byte-eater and the
+	// printer must go through this, or they disagree on how long the instruction is and the next
+	// one decodes from the wrong offset.
+	//
+	// The two rows carry different halves of the truth, so neither can simply win:
+	//   groups 1 and 2 (0x80-0x83, 0xC0-0xD3) spell their operands out in the outer row and use
+	//     the group entry for the mnemonic alone - their entries name no operands at all;
+	//   groups 4 and 5 (0xFE, 0xFF) leave the outer row empty and carry operands in the entry;
+	//   group 3 (0xF6/0xF7) splits them - the outer row knows the operand width, and only the
+	//     entry knows that /0 and /1 (TEST) take an immediate the outer row never mentions.
+	// So: the entry wins wherever it names an operand, the outer row fills every blank, and a
+	// size of None on the entry means "the width this opcode works at" - which is what the outer
+	// row records in op1s. That is the only thing group 3's shared entries cannot know for
+	// themselves, since they are reached through both 0xF6 (byte) and 0xF7 (word/dword).
+	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t reg) {
+		const Instruction::OpcodeInfo& outer = opcodeTable()[op];
+		if (!isGroup(op)) return outer;
+
+		const Instruction::OpcodeInfo& entry = groupEntryOf(op, reg);
+		if (entry.text.empty()) return entry;   // illegal /reg (FF /7, FE /2..7): "(bad)", no operands
+
+		constexpr uint8_t none = static_cast<uint8_t>(SIZE::None);
+		constexpr uint8_t noMode = static_cast<uint8_t>(ADDRESSING::None);
+
+		Instruction::OpcodeInfo info = outer;
+		info.text = entry.text;
+		info.hasImmediateByte = outer.hasImmediateByte || entry.hasImmediateByte;
+
+		const uint8_t opSize = (outer.op1s != none) ? outer.op1s : entry.op1s;
+
+		auto take = [&](uint8_t entryMode, uint8_t entrySize, uint8_t& mode, uint8_t& size) {
+			if (entryMode == noMode) return;                     // entry says nothing: keep the outer row's
+			mode = entryMode;
+			size = (entrySize != none) ? entrySize : opSize;
+		};
+		take(entry.op1am, entry.op1s, info.op1am, info.op1s);
+		take(entry.op2am, entry.op2s, info.op2am, info.op2s);
+		take(entry.op3am, entry.op3s, info.op3am, info.op3s);
+
+		return info;
+	}
+
 //   E=modrm r/m, G=modrm reg, I=imm, J=rel offset, O=moffs, S=seg reg, M=memory,
 //   A=far ptr, Z=register in low 3 bits of opcode (+r), AL/eAX/DX/CL/One=implicit
 enum class ADDRESSING : uint8_t {

@@ -1,5 +1,7 @@
 #include "disassembly_pane.h"
 
+#include "disasm_delegate.h"
+
 #include <QAbstractItemView>
 #include <QFontDatabase>
 #include <QHeaderView>
@@ -13,17 +15,19 @@ namespace gui {
 DisassemblyPane::DisassemblyPane(QWidget* parent)
 	: QWidget(parent) {
 	auto* layout = new QVBoxLayout(this);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(0);
 
 	banner_ = new QLabel(this);
 	banner_->setWordWrap(true);
-	banner_->setStyleSheet(QStringLiteral("color: palette(mid);"));
+	banner_->setStyleSheet(QStringLiteral("color: palette(mid); padding: 8px 12px;"));
 	banner_->setVisible(false);
 	layout->addWidget(banner_);
 
 	table_ = new QTableWidget(this);
 	table_->setColumnCount(3);
-	table_->setHorizontalHeaderLabels({tr("Address"), tr("Bytes"), tr("Instruction")});
-	table_->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+	table_->setHorizontalHeaderLabels({tr("ADDRESS"), tr("BYTES"), tr("INSTRUCTION")});
+	table_->setFont(monoFont());
 	table_->setSelectionBehavior(QAbstractItemView::SelectRows);
 	// Only the Instruction column is meant to be edited; columns 0/1 are made
 	// non-editable per-item in refresh() via item flags.
@@ -31,8 +35,15 @@ DisassemblyPane::DisassemblyPane(QWidget* parent)
 		| QAbstractItemView::SelectedClicked
 		| QAbstractItemView::EditKeyPressed);
 	table_->verticalHeader()->setVisible(false);
+	table_->verticalHeader()->setDefaultSectionSize(24);
 	table_->horizontalHeader()->setStretchLastSection(true);
-	table_->setAlternatingRowColors(true);
+	table_->horizontalHeader()->setHighlightSections(false);
+	table_->setShowGrid(false);
+	table_->setFrameShape(QFrame::NoFrame);
+	table_->setAlternatingRowColors(false); // flat rows; the delegate carries the color
+
+	delegate_ = new DisasmDelegate(table_);
+	table_->setItemDelegate(delegate_);
 	layout->addWidget(table_);
 
 	connect(table_, &QTableWidget::cellChanged, this, [this](int row, int col) {
@@ -54,6 +65,11 @@ DisassemblyPane::DisassemblyPane(QWidget* parent)
 		edits_.emplace_back(rowIndex, text);
 		emit editsChanged();
 	});
+}
+
+void DisassemblyPane::setTheme(const Theme& theme) {
+	delegate_->setTheme(theme);
+	table_->viewport()->update();
 }
 
 void DisassemblyPane::refresh() {

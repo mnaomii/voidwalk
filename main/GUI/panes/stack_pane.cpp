@@ -1,6 +1,7 @@
 #include "stack_pane.h"
 
-#include <QFontDatabase>
+#include "../theme/theme.h"
+
 #include <QHeaderView>
 #include <QLabel>
 #include <QTableWidget>
@@ -39,7 +40,7 @@ void StackPane::refresh() {
 	placeholder_->setVisible(false);
 	table_->setVisible(true);
 
-	const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+	const QFont mono = monoFont();
 	const int count = static_cast<int>(st.size());
 	table_->setRowCount(count);
 

@@ -43,6 +43,7 @@ protected:
 
     virtual void setHeadersOffsets()=0;
 
+    uint64_t decodeLine_IA_32(uint64_t address, uint64_t vaddr);
 
 public:
     Disassembler(AddressSpace& temp) : contents(temp), architecture(0x00), offset(0x00) {
@@ -63,17 +64,9 @@ public:
     };
     virtual void decodeCS(FILE* outputStream) = 0;
     virtual std::string getArchitecture()=0;
-    virtual uint64_t decodeLine(uint64_t address, uint64_t vaddr) = 0;
+    uint64_t decodeLine(uint64_t address, uint64_t vaddr);
     virtual ~Disassembler() = default;
 
-    // Walks .text driving decodeLine(), filling decodedInstructions. The decode
-    // pass itself, with no output sink - decodeCS() is this plus an fprintf loop,
-    // and consumers that want the instructions in memory (the TUI) call this.
-    // Idempotent: clears previous results, so re-running on a new binary is safe.
-    // Stops when decodeLine() stops advancing, so an arch whose decoder is still
-    // a stub (returns 0) yields an empty list instead of looping forever.
-    // decodeLine() may throw for unimplemented architectures; the instructions
-    // decoded before the throw stay in decodedInstructions.
     void decode();
 
     // read-only views for the UI layers (TUI/GUI); they must not mutate core state

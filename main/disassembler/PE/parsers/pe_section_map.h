@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include "../../disassembler.h"
 
-enum SecKind { CODE, DATA, RODATA, BSS, NONE };
+enum SectionKind { CODE, DATA, RODATA, BSS, NONE };
 
 int classify(uint32_t c) {
 	if (c & 0x20000000 || c & 0x20) return CODE;          // EXECUTE or CNT_CODE
@@ -50,34 +50,26 @@ void setHeaders64bit(Sections& base, PE_Sections extra, AddressSpace& data, uint
 
 	uint16_t NumberOfSections = data.read_u16(e_lfanew + 6);
 	uint16_t SizeOfOptionalHeader = data.read_u16(e_lfanew + 20);
-	uint64_t SectionTable = e_lfanew + 24 + SizeOfOptionalHeader;
+	uint64_t SectionTable = e_lfanew + 24 + SizeOfOptionalHeader; // size of raw data, not virtual
+	uint64_t ImageBase = data.read_u8(e_lfanew + 48);
 
-	std::unordered_map<std::string, Header*> section_map = {
-	{ ".text",    &base._text    },
-	{ ".data",    &base._data    },
-	{ ".rodata",  &base._ronly   },
-	{ ".bss",     &base._bss     },
-	{ ".idata",  &extra._idata  },
-	{ ".edata",  &extra._edata  },
-	{ ".rsrc",  &extra._rsrc  },
-	{ ".pdata",  &extra._pdata}
+
+	std::unordered_map<int, Header*> section_map = {   
+		{ CODE,   &base._text  },
+		{ DATA,   &base._data  },
+		{ RODATA, &base._ronly },
+		{ BSS,    &base._bss   },
 	};
 
-
 	for (int i = 0; i < NumberOfSections; ++i) {
-		std::string section_name = "";
+		uint64_t b = SectionTable + i * 40;
+		uint32_t chars = data.read_u32(b + 36);
 
-		for (size_t j = 0; j < 8; ++j) {
-			char c = data.read_u8(SectionTable + i*40 + j);
-			if (c == '\0') break;
-			section_name += c;
-		}
-
-		auto it = section_map.find(section_name);
+		auto it = section_map.find(classify(chars));   
 		if (it != section_map.end()) {
-			it->second->setVaddr(data.read_u32(SectionTable + i * 40 + +12));
-			it->second->setSize(data.read_u32(SectionTable+ i*40 + 16));
-			it->second->setOffset(data.read_u32(SectionTable + i * 40 + 20));
+			it->second->setVaddr(ImageBase + data.read_u32(b + 12));
+			it->second->setSize(data.read_u32(b + 16));
+			it->second->setOffset(data.read_u32(b + 20));
 		}
 	}
 }

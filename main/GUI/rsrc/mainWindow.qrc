@@ -1,4 +1,15 @@
 <RCC>
     <qresource prefix="mainWindow">
     </qresource>
+    <qresource prefix="/icons">
+        <file alias="open.svg">icons/open.svg</file>
+        <file alias="run.svg">icons/run.svg</file>
+        <file alias="step-into.svg">icons/step-into.svg</file>
+        <file alias="step-over.svg">icons/step-over.svg</file>
+        <file alias="continue.svg">icons/continue.svg</file>
+        <file alias="pause.svg">icons/pause.svg</file>
+        <file alias="reset.svg">icons/reset.svg</file>
+        <file alias="recompile.svg">icons/recompile.svg</file>
+        <file alias="settings.svg">icons/settings.svg</file>
+    </qresource>
 </RCC>

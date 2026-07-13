@@ -1,6 +1,7 @@
 #include "registers_pane.h"
 
-#include <QFontDatabase>
+#include "../theme/theme.h"
+
 #include <QHeaderView>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -25,7 +26,7 @@ void RegistersPane::refresh() {
 	if (!session_) return;
 
 	const Registers& r = session_->registers();
-	const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+	const QFont mono = monoFont();
 
 	// General-purpose set + eip, then the segment registers. Order matches the
 	// pane's contract: eax..esp, eip, then cs/ds/ss/es/fs/gs, then flags.

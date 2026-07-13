@@ -6,6 +6,9 @@
 #include "../panes/memory_pane.h"
 #include "../panes/registers_pane.h"
 #include "../panes/stack_pane.h"
+#include "../theme/icons.h"
+#include "../theme/theme_manager.h"
+#include "welcome_widget.h"
 
 #include <QAction>
 #include <QDockWidget>
@@ -13,9 +16,10 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenuBar>
+#include <QStackedWidget>
 #include <QStatusBar>
-#include <QStyle>
 #include <QToolBar>
+#include <QToolButton>
 
 namespace gui {
 
@@ -24,11 +28,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	resize(1200, 800);
 
 	settings_ = AppSettings::load();
+	applyTheme(); // style/palette/QSS + icon colors, before any widget paints
 
 	disasm_ = new DisassemblyPane(this);
 	disasm_->setSession(&session_);
-	setCentralWidget(disasm_);
 	connect(disasm_, &DisassemblyPane::editsChanged, this, &MainWindow::onEditsChanged);
+
+	welcome_ = new WelcomeWidget(this);
+	connect(welcome_, &WelcomeWidget::openRequested, this, &MainWindow::onOpen);
+	connect(welcome_, &WelcomeWidget::fileDropped, this, &MainWindow::openPath);
+
+	central_ = new QStackedWidget(this);
+	central_->addWidget(welcome_);
+	central_->addWidget(disasm_);
+	setCentralWidget(central_);
 
 	buildActions();
 	buildToolBar();
@@ -38,53 +51,58 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	archLabel_ = new QLabel(this);
 	statusBar()->addPermanentWidget(archLabel_);
 
+	disasm_->setTheme(ThemeManager::current()); // delegate colors (created after applyTheme)
+
 	applyAiVisibility();
 	refreshAll();
 	setStatus(tr("Ready — open a PE/ELF binary to begin."));
 }
 
 void MainWindow::buildActions() {
-	const QStyle* s = style();
-
-	openAct_ = new QAction(s->standardIcon(QStyle::SP_DialogOpenButton), tr("&Open…"), this);
+	openAct_ = new QAction(Icons::icon(QStringLiteral("open")), tr("&Open…"), this);
 	openAct_->setShortcut(QKeySequence::Open);
 	connect(openAct_, &QAction::triggered, this, &MainWindow::onOpen);
 
-	runAct_ = new QAction(s->standardIcon(QStyle::SP_MediaPlay), tr("&Run"), this);
+	runAct_ = new QAction(Icons::icon(QStringLiteral("run")), tr("&Run"), this);
 	runAct_->setShortcut(Qt::Key_F5);
 	connect(runAct_, &QAction::triggered, this, &MainWindow::onDebugStub);
 
-	stepAct_ = new QAction(s->standardIcon(QStyle::SP_ArrowDown), tr("Step &Into"), this);
+	stepAct_ = new QAction(Icons::icon(QStringLiteral("step-into")), tr("Step &Into"), this);
 	stepAct_->setShortcut(Qt::Key_F7);
 	connect(stepAct_, &QAction::triggered, this, &MainWindow::onDebugStub);
 
-	stepOverAct_ = new QAction(s->standardIcon(QStyle::SP_ArrowForward), tr("Step &Over"), this);
+	stepOverAct_ = new QAction(Icons::icon(QStringLiteral("step-over")), tr("Step &Over"), this);
 	stepOverAct_->setShortcut(Qt::Key_F8);
 	connect(stepOverAct_, &QAction::triggered, this, &MainWindow::onDebugStub);
 
-	continueAct_ = new QAction(s->standardIcon(QStyle::SP_MediaSeekForward), tr("&Continue"), this);
+	continueAct_ = new QAction(Icons::icon(QStringLiteral("continue")), tr("&Continue"), this);
 	continueAct_->setShortcut(Qt::Key_F9);
 	connect(continueAct_, &QAction::triggered, this, &MainWindow::onDebugStub);
 
-	pauseAct_ = new QAction(s->standardIcon(QStyle::SP_MediaPause), tr("&Pause"), this);
+	pauseAct_ = new QAction(Icons::icon(QStringLiteral("pause")), tr("&Pause"), this);
 	connect(pauseAct_, &QAction::triggered, this, &MainWindow::onDebugStub);
 
-	resetAct_ = new QAction(s->standardIcon(QStyle::SP_MediaStop), tr("&Reset"), this);
+	resetAct_ = new QAction(Icons::icon(QStringLiteral("reset")), tr("&Reset"), this);
 	connect(resetAct_, &QAction::triggered, this, &MainWindow::onDebugStub);
 
-	recompileAct_ = new QAction(s->standardIcon(QStyle::SP_BrowserReload), tr("Re&compile"), this);
+	recompileAct_ = new QAction(Icons::icon(QStringLiteral("recompile")), tr("Re&compile"), this);
 	recompileAct_->setToolTip(tr("Reassemble the edited instructions"));
 	recompileAct_->setEnabled(false); // enabled once an instruction is edited
 	connect(recompileAct_, &QAction::triggered, this, &MainWindow::onRecompile);
 
-	settingsAct_ = new QAction(s->standardIcon(QStyle::SP_FileDialogDetailedView), tr("&Settings…"), this);
+	settingsAct_ = new QAction(Icons::icon(QStringLiteral("settings")), tr("&Settings…"), this);
 	connect(settingsAct_, &QAction::triggered, this, &MainWindow::onSettings);
 }
 
 void MainWindow::buildToolBar() {
 	auto* tb = addToolBar(tr("Main"));
 	tb->setObjectName(QStringLiteral("MainToolBar"));
-	tb->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	tb->setMovable(false);
+	tb->setIconSize(QSize(16, 16));
+
+	// Open and Run carry text; the rest are compact icon buttons with tooltips
+	// (the shortcut shows in the tooltip and the Debug menu spells them out).
+	tb->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	tb->addAction(openAct_);
 	tb->addSeparator();
 	tb->addAction(runAct_);
@@ -95,8 +113,22 @@ void MainWindow::buildToolBar() {
 	tb->addAction(resetAct_);
 	tb->addSeparator();
 	tb->addAction(recompileAct_);
-	tb->addSeparator();
+
+	// Right-aligned settings gear.
+	auto* spacer = new QWidget(tb);
+	spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	tb->addWidget(spacer);
 	tb->addAction(settingsAct_);
+
+	// Text on the two primary actions; QSS objectNames pick up the emphasis.
+	if (auto* openBtn = qobject_cast<QToolButton*>(tb->widgetForAction(openAct_)))
+		openBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	if (auto* runBtn = qobject_cast<QToolButton*>(tb->widgetForAction(runAct_))) {
+		runBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+		runBtn->setObjectName(QStringLiteral("runButton"));
+	}
+	if (auto* gear = qobject_cast<QToolButton*>(tb->widgetForAction(settingsAct_)))
+		gear->setObjectName(QStringLiteral("settingsButton"));
 }
 
 void MainWindow::buildMenus() {
@@ -155,7 +187,8 @@ void MainWindow::buildDocks() {
 	chatDock_->setWidget(chat_);
 	addDockWidget(Qt::RightDockWidgetArea, chatDock_);
 
-	// Stack the right-hand docks as tabs to save space.
+	// Stack the right-hand docks as tabs to save space; tabs read better on top.
+	setTabPosition(Qt::RightDockWidgetArea, QTabWidget::North);
 	tabifyDockWidget(registersDock_, stackDock_);
 	tabifyDockWidget(stackDock_, chatDock_);
 	registersDock_->raise();
@@ -170,6 +203,27 @@ void MainWindow::buildDocks() {
 			break;
 		}
 	}
+}
+
+void MainWindow::applyTheme() {
+	const Theme theme = Theme::byId(settings_.theme);
+	ThemeManager::apply(theme);
+	Icons::setColors(theme.text, theme.textFaint);
+
+	// Re-fetch icons: the cache was invalidated with the new colors.
+	if (openAct_) {
+		openAct_->setIcon(Icons::icon(QStringLiteral("open")));
+		runAct_->setIcon(Icons::icon(QStringLiteral("run")));
+		stepAct_->setIcon(Icons::icon(QStringLiteral("step-into")));
+		stepOverAct_->setIcon(Icons::icon(QStringLiteral("step-over")));
+		continueAct_->setIcon(Icons::icon(QStringLiteral("continue")));
+		pauseAct_->setIcon(Icons::icon(QStringLiteral("pause")));
+		resetAct_->setIcon(Icons::icon(QStringLiteral("reset")));
+		recompileAct_->setIcon(Icons::icon(QStringLiteral("recompile")));
+		settingsAct_->setIcon(Icons::icon(QStringLiteral("settings")));
+	}
+	if (disasm_)
+		disasm_->setTheme(theme);
 }
 
 void MainWindow::applyAiVisibility() {
@@ -208,8 +262,11 @@ void MainWindow::onRecompile() {
 void MainWindow::onSettings() {
 	SettingsDialog dlg(settings_, this);
 	if (dlg.exec() == QDialog::Accepted) {
+		const QString oldTheme = settings_.theme;
 		settings_ = dlg.settings();
 		settings_.save();
+		if (settings_.theme != oldTheme)
+			applyTheme();
 		applyAiVisibility();
 		setStatus(tr("Settings saved."));
 	}
@@ -230,6 +287,9 @@ void MainWindow::refreshAll() {
 	registers_->refresh();
 	stack_->refresh();
 	memory_->refresh();
+
+	central_->setCurrentWidget(session_.loaded()
+		? static_cast<QWidget*>(disasm_) : static_cast<QWidget*>(welcome_));
 
 	if (session_.loaded()) {
 		archLabel_->setText(tr("%1 · %2")

@@ -10,6 +10,8 @@ namespace gui {
 // The AI chat pane is opt-in: it stays hidden and its toolbar toggle disabled
 // until aiEnabled is set through the Settings dialog.
 struct AppSettings {
+	QString theme = QStringLiteral("dark");                  // "dark" | "light"
+
 	bool aiEnabled = false;
 	QString aiApiKey;                                        // never logged, PasswordEcho in the dialog
 	QString aiModel = QStringLiteral("claude-sonnet-5");
@@ -19,6 +21,7 @@ struct AppSettings {
 	static AppSettings load() {
 		QSettings s(QStringLiteral("DAT"), QStringLiteral("dat-gui"));
 		AppSettings a;
+		a.theme = s.value(QStringLiteral("ui/theme"), a.theme).toString();
 		a.aiEnabled = s.value(QStringLiteral("ai/enabled"), a.aiEnabled).toBool();
 		a.aiApiKey = s.value(QStringLiteral("ai/apiKey"), a.aiApiKey).toString();
 		a.aiModel = s.value(QStringLiteral("ai/model"), a.aiModel).toString();
@@ -29,6 +32,7 @@ struct AppSettings {
 
 	void save() const {
 		QSettings s(QStringLiteral("DAT"), QStringLiteral("dat-gui"));
+		s.setValue(QStringLiteral("ui/theme"), theme);
 		s.setValue(QStringLiteral("ai/enabled"), aiEnabled);
 		s.setValue(QStringLiteral("ai/apiKey"), aiApiKey);
 		s.setValue(QStringLiteral("ai/model"), aiModel);
