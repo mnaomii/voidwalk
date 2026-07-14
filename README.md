@@ -1,25 +1,27 @@
 # voidwalk
 
-A **very** early-stage C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
+An early-stage C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
 
-> **Status:** Active development. ELF x86/x86_64 section parsing is functional. IA-32 architecture is partially functional (extended PE support and instruction decoding are in progress).
+> **Status:** Active development. ELF x86/x86_64 section parsing is functional. IA-32 architecture is functional* (still in active fixing, final touches).
 
 ---
 
 ## What Works Today
 
 - **Format detection** - identifies ELF (`7F 45 4C 46`) and PE (`MZ` + PE signature) binaries from magic bytes and selects the correct parser automatically
-- **ELF section parsing (x86 / x86_64)**
-- **PE Section parsing**
+- **ELF section parsing** (x86 / x86_64)
+- **PE Section parsing** (x86 / x86_64)
 - **Architecture detection** - reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF header
 - **File-backed binary reader** - `AddressSpace` provides random-access reads (`read_u8/16/32/64`) directly from disk without loading the entire file into memory
-- **PE binary disassembly (x86)** - partially (group opcodes not addressed yet). Decodes every machine code instruction in a subclass of *Instruction*.
+- **PE binary disassembly (x86)** - Decodes every machine code instruction in a subclass of *Instruction*.
 
 
 ### Not yet implemented
 
 - **Extended instructions set for IA-32** such as AVX, SSE etc.
-
+- **ARM32/AArch64/AMD64 architecture decoding**
+- **Debugging capabilities** in the near future.
+- **AI chatbot integration** *opt-in* feature. Will be able to analyze the code and offer insight.
 ---
 
 ## Architecture
@@ -85,9 +87,9 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 **Near-term**
 - [x] PE parser implementation (32-bit and 64-bit)
 - [x] x86 instruction decoder
-- [ ] TUI
+- [x] TUI
 - [ ] Tests
-- [ ] GUI
+- [x] GUI
 
 **Longer-term**
 - [ ] DWARF debug info parsing
