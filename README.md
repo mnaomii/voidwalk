@@ -1,4 +1,4 @@
-# Disassembler & Dynamic Analysis Tool
+# voidwalk
 
 A **very** early-stage C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
 
@@ -56,7 +56,7 @@ Instruction (abstract)
 Builds with **Visual Studio** (MSVC) via the `.vcxproj` in `.vs-project/`. No CMake or cross-platform build system yet.
 
 ```
-exec/dynamic-analysis-tool.exe <path-to-binary>
+exec/voidwalk-tui.exe <path-to-binary>
 ```
 
 Expects flags + exactly one path to an executable.

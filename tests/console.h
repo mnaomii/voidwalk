@@ -16,7 +16,7 @@
 namespace test_console {
 
     // Empty until init() decides the stream can actually take escape codes, so piping
-    // the run to a file ("dat --run-tests bin > log.txt") stays free of escape junk.
+    // the run to a file ("voidwalk --run-tests bin > log.txt") stays free of escape junk.
     inline std::string_view green, red, cyan, dim, reset;
 
     inline void init() {

@@ -24,7 +24,7 @@ WelcomeWidget::WelcomeWidget(QWidget* parent) : QWidget(parent) {
 	title->setAlignment(Qt::AlignCenter);
 
 	auto* hint = new QLabel(
-		tr("dat analyzes PE and ELF executables — sections, disassembly,\n"
+		tr("voidwalk analyzes PE and ELF executables — sections, disassembly,\n"
 		   "and (soon) live debugging. Drop a file here or press Ctrl+O."),
 		this);
 	hint->setObjectName(QStringLiteral("welcomeHint"));

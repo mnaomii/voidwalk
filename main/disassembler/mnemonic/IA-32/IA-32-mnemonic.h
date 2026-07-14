@@ -9,9 +9,9 @@
 class IA_32Mnemonic{
 public:
 
-	static std::string registerOf(uint16_t r, uint32_t prefix) {
+	static std::string registerOf(uint16_t r, bool is16bit) {
 		std::string reg = "E";
-		if (prefix == 0x66) reg = "";
+		if (is16bit) reg = "";
 		switch (r) {
 		case static_cast<int>(REGISTER::AX):
 			reg += "AX";
@@ -59,8 +59,8 @@ public:
 	// the constant 1, a segment register, the string source/destination. Returns ""
 	// for addressing modes that encode their operand in the instruction (E, G, I, ...),
 	// which the decoder resolves itself.
-	static std::string implicitOperandOf(uint8_t am, uint32_t prefix) {
-		const std::string e = (prefix == static_cast<uint32_t>(Prefix::OPSIZE)) ? "" : "E";
+	static std::string implicitOperandOf(uint8_t am, bool is16bit) {
+		const std::string e = (is16bit) ? "" : "E";
 
 		switch (static_cast<ADDRESSING>(am)) {
 		case ADDRESSING::AL:  return "AL";

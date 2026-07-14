@@ -35,7 +35,8 @@ public:
 	
 private:
 
-	uint32_t prefix, opcode, opcode2 , scale, index, base, displacement, immediate;
+	Instruction::Prefix prefix;
+	uint32_t  opcode, opcode2 , scale, index, base, displacement, immediate;
 	Instruction::Operand op1, op2, op3;
 
 	std::string instructionStr;
@@ -69,27 +70,37 @@ static uint8_t op2Size(uint32_t op) { return opcodeTable()[op].op2s; }
 static uint8_t op3Size(uint32_t op) { return opcodeTable()[op].op3s; }
 
 
-static std::string_view prefixStrOf(uint8_t op) { return prefixTable()[op]; }
+static std::string_view prefixStrOf(uint8_t op) { if (isPrefix(op)) return prefixTable()[op];  else return ""; }
 static bool isPrefix(uint8_t op) { return !prefixTable()[op].empty(); }
 
 
 IA_32():prefix(0), opcode(0), scale(0), base(0), index(0), displacement(0), immediate(0), opcode2(0) {};
 
-inline void decode(uint64_t pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, uint64_t disp, uint64_t imm) {
+inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, uint64_t disp, uint64_t imm) {
+
+
+	uint8_t mod = 0, reg_op = 0, rm = 0;
+	bool hasDisplacement = false;
+	bool hasSIB = false;
+	bool is16bit = false;
 
 	op1 = op2 = op3 = Instruction::Operand{ "", UINT_MAX,
 		static_cast<uint8_t>(ADDRESSING::None), static_cast<uint8_t>(SIZE::None) };
 
-	prefix = isPrefix(static_cast<uint8_t>(pfx)) ? static_cast<uint32_t>(pfx) : 0;
+	prefix = pfx;
+	bool hasPrefix = (pfx.byte[0] != 0) ? true : false;
+	for (int i = 0; i < 4 && hasPrefix && !is16bit; i++)
+		if (prefix.byte[i] == 0x66)
+			is16bit = true;
+
+
 	opcode = static_cast<uint32_t>(opc);
 
 	
 
 	const Instruction::OpcodeInfo& outer = opcodeTable()[opcode];
 
-	uint8_t mod = 0, reg_op = 0, rm = 0;
-	bool hasDisplacement = false;
-	bool hasSIB = false;
+
 
 	const bool isGroupOpcode = IA_32Mnemonic::isGroup(opcode);
 
@@ -130,12 +141,12 @@ inline void decode(uint64_t pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, ui
 
 		memory = "[";
 		if (hasSIB) {
-			memory += registerOf(base, prefix);
+			memory += registerOf(base, is16bit);
 			if (index != static_cast<uint32_t>(REGISTER::SP))                       // index 100 = no index
-				memory += " + " + registerOf(index, prefix) + "*" + std::to_string(static_cast<int>(scale));
+				memory += " + " + registerOf(index, is16bit) + "*" + std::to_string(static_cast<int>(scale));
 		}
 		else if (!(mod == 0b00 && rm == 0b101)) {                                    // that form has no base register
-			memory += registerOf(rm, prefix);
+			memory += registerOf(rm, is16bit);
 		}
 		if (hasDisplacement) {
 			// Nothing printed yet means there is no base register: the displacement is an
@@ -165,12 +176,12 @@ inline void decode(uint64_t pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, ui
 		case ADDRESSING::E:
 		case ADDRESSING::M:
 			op->value = rm;
-			op->text = (mod == 0b11) ? registerOf(rm, prefix) : memory;
+			op->text = (mod == 0b11) ? registerOf(rm, is16bit) : memory;
 			break;
 
 		case ADDRESSING::G:
 			op->value = reg_op;
-			op->text = registerOf(reg_op, prefix);
+			op->text = registerOf(reg_op, is16bit);
 			break;
 
 		case ADDRESSING::S:
@@ -189,14 +200,14 @@ inline void decode(uint64_t pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, ui
 		default:
 			op->text = info.textNamesOperands
 				? ""
-				: IA_32Mnemonic::implicitOperandOf(op->addressingMode, prefix);
+				: IA_32Mnemonic::implicitOperandOf(op->addressingMode, is16bit);
 			break;
 		}
 	}
 
 	instructionStr.clear();
-	if (prefix) {
-		instructionStr += prefixStrOf(static_cast<uint8_t>(prefix));
+	if (isPrefix) {
+		instructionStr += std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[0]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[1]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[2]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[3])));
 		instructionStr += " ";
 	}
 

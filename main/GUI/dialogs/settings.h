@@ -6,7 +6,7 @@
 
 namespace gui {
 
-// Persisted app settings (QSettings, HKCU\Software\DAT\dat-gui).
+// Persisted app settings (QSettings, HKCU\Software\voidwalk\voidwalk-gui).
 // The AI chat pane is opt-in: it stays hidden and its toolbar toggle disabled
 // until aiEnabled is set through the Settings dialog.
 struct AppSettings {
@@ -19,7 +19,7 @@ struct AppSettings {
 	int aiContextLines = 200;                                // disassembly lines sent as context
 
 	static AppSettings load() {
-		QSettings s(QStringLiteral("DAT"), QStringLiteral("dat-gui"));
+		QSettings s(QStringLiteral("voidwalk"), QStringLiteral("voidwalk-gui"));
 		AppSettings a;
 		a.theme = s.value(QStringLiteral("ui/theme"), a.theme).toString();
 		a.aiEnabled = s.value(QStringLiteral("ai/enabled"), a.aiEnabled).toBool();
@@ -31,7 +31,7 @@ struct AppSettings {
 	}
 
 	void save() const {
-		QSettings s(QStringLiteral("DAT"), QStringLiteral("dat-gui"));
+		QSettings s(QStringLiteral("voidwalk"), QStringLiteral("voidwalk-gui"));
 		s.setValue(QStringLiteral("ui/theme"), theme);
 		s.setValue(QStringLiteral("ai/enabled"), aiEnabled);
 		s.setValue(QStringLiteral("ai/apiKey"), aiApiKey);

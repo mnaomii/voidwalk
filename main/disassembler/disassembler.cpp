@@ -35,20 +35,34 @@ void Disassembler::decode() {
 
 uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
-	uint64_t field1 = 0, field2 = 0, field3 = 0, field4 = 0, field5 = 0, field6 = 0;
+	Instruction::Prefix field1; uint64_t field1_tmp;
+	uint64_t field2 = 0, field3 = 0, field4 = 0, field5 = 0, field6 = 0;
 	uint64_t initAddress = address;
 
-	field1 = contents.read_u8(address);
-	if (!IA_32::isPrefix(field1)) // invalid prefix, just read opcode
-	{
-		field2 = field1;
-		field1 = 0x00;
-	}
-	else { // must read opcode
-		++address;
+	for (int i = 0; i < 4; ++i)
+		field1.byte[i] = 0x00;
 
-		field2 = contents.read_u8(address);
+	field1_tmp = contents.read_u8(address);
+
+	// The loop has to read one byte past the prefixes to know where they end, so on exit
+	// field1_tmp already holds the opcode and address already points at it. Reading the
+	// opcode again here would fetch the ModRM byte instead, and the ++address below is
+	// what steps past the opcode - both must happen exactly once.
+	//
+	// Only four prefixes fit in the field, but an instruction may carry more (it is legal
+	// up to a total of 15 bytes), and a prefix left unconsumed would be handed to the
+	// decoder as an opcode. So keep eating past the fourth, and stop at the length limit:
+	// a sweep of .text runs over data, and a run of 0x66 bytes there is not an instruction
+	// at all - without the bound it reads until it falls off the end of the file.
+	int index = 0;
+	for (int prefixBytes = 0; IA_32::isPrefix(field1_tmp) && prefixBytes < 14; ++prefixBytes) {
+		if (index < 4)
+			field1.byte[index++] = field1_tmp;
+
+		field1_tmp = contents.read_u8(++address);
 	}
+
+	field2 = field1_tmp;
 	++address;
 
 	field3 = 0x0;
@@ -103,11 +117,12 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 		uint8_t immAddr = 0;
 		field6 = 0x0;
 
-		if (info.op1am == cast(ADDRESSING::I) || info.op1am == cast(ADDRESSING::J) || info.op1am == cast(ADDRESSING::A)) {
+		if (info.op1am == cast(ADDRESSING::I) || info.op1am == cast(ADDRESSING::J) || info.op1am == cast(ADDRESSING::A) || info.op1am == cast(ADDRESSING::O) ){
 			immSize = info.op1s;
 			immAddr = info.op1am;
 		}
-		else if (info.op2am == cast(ADDRESSING::I) || info.op2am == cast(ADDRESSING::J) || info.op2am == cast(ADDRESSING::A)) {
+		else if (info.op2am == cast(ADDRESSING::I) || info.op2am == cast(ADDRESSING::J) || info.op2am == cast(ADDRESSING::A)
+			|| info.op2am == cast(ADDRESSING::O) ) {
 			immSize = info.op2s;
 			immAddr = info.op2am;
 		}
@@ -116,7 +131,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 			immAddr = info.op3am;
 		}
 
-		const bool sixteenBit = (field1 == 0x66);
+		const bool sixteenBit = (field1.byte[0] == 0x66 || field1.byte[1] == 0x66 || field1.byte[2] == 0x66 || field1.byte[3] == 0x66);
 		const bool isRelative = (immAddr == static_cast<uint8_t>(ADDRESSING::J));
 
 		uint32_t width = 0;   // bytes this immediate occupies in the stream
@@ -167,29 +182,15 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
 }
 
-uint64_t Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 
+void Disassembler::decodeCS(FILE* outputStream) {
 
-	switch (this->architecture) {
-	case 0x14c: {// x86 
+	decode();
 
-		return decodeLine_IA_32(address, vaddr);
-	}
-	case 0x8664: {
-		throw std::runtime_error("Not implemented yet.");
-	}
-	case 0xAA64: {
-		throw std::runtime_error("Not implemented yet.");
-	}
-	case 0x1c0: {
-		throw std::runtime_error("Not implemented yet.");
-
-		//return ;
-	}
-	default: {
-		throw std::runtime_error("Invalid architecture. Cannot parse.");
-	}
-	}
+	size_t i = 0;
+	for (const auto& instruction : decodedInstructions)
+		fprintf(outputStream, "  | \t%x:  \t %s \n", instructionAddresses[i++], instruction->decodeLineString().c_str());
 
 }
+
 

@@ -62,9 +62,9 @@ public:
         registers.cs = registers.eip;
 
     };
-    virtual void decodeCS(FILE* outputStream) = 0;
+    void decodeCS(FILE* outputStream);
     virtual std::string getArchitecture()=0;
-    uint64_t decodeLine(uint64_t address, uint64_t vaddr);
+    virtual uint64_t decodeLine(uint64_t address, uint64_t vaddr)=0;
     virtual ~Disassembler() = default;
 
     void decode();

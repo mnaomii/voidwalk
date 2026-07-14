@@ -2,14 +2,14 @@
 
 #include <QApplication>
 
-// Entry point for the dat-gui executable. Kept separate from the shared
+// Entry point for the voidwalk-gui executable. Kept separate from the shared
 // main/main.cpp (which routes the TUI/test harness) so the GUI project builds
-// standalone with no DAT_WITH_TUI / test dependencies. A binary path may be
+// standalone with no VOIDWALK_WITH_TUI / test dependencies. A binary path may be
 // passed as the last argument to open it on startup.
 int main(int argc, char** argv) {
 	QApplication app(argc, argv);
-	QApplication::setApplicationName(QStringLiteral("dat-gui"));
-	QApplication::setOrganizationName(QStringLiteral("DAT"));
+	QApplication::setApplicationName(QStringLiteral("voidwalk-gui"));
+	QApplication::setOrganizationName(QStringLiteral("voidwalk"));
 
 	gui::MainWindow window;
 	window.show();

@@ -9,6 +9,10 @@ class Instruction {
 
 public:
 
+	struct Prefix {
+		uint64_t byte[4];// up to 4 bytes supported for prefixes
+	};
+
 	struct OpcodeInfo {
 		std::string_view text;
 		bool hasRMByte;
@@ -28,6 +32,6 @@ public:
 	};
 
 	Instruction() {};
-	void decode() {}
+	//void decode() {}
 	virtual std::string decodeLineString() = 0;
 };

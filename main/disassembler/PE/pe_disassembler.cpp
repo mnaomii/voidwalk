@@ -54,13 +54,32 @@ std::string PE_Disassembler::getArchitecture() {
 	}
 }
 
+uint64_t PE_Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 
-void PE_Disassembler::decodeCS(FILE* outputStream) {
 
-	decode();
+	switch (this->architecture) {
+	case 0x14c: {// x86 
 
-	for (const auto& instruction : decodedInstructions)
-		fprintf(outputStream, "  | \t %s \n", instruction->decodeLineString().c_str());
+		return decodeLine_IA_32(address, vaddr);
+	}
+	case 0x8664: {
+		throw std::runtime_error("Not implemented yet.");
+	}
+	case 0xAA64: {
+		throw std::runtime_error("Not implemented yet.");
+	}
+	case 0x1c0: {
+		throw std::runtime_error("Not implemented yet.");
+
+		//return ;
+	}
+	default: {
+		throw std::runtime_error("Invalid architecture. Cannot parse.");
+	}
+	}
 
 }
+
+
+
 

@@ -24,7 +24,7 @@
 namespace gui {
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-	setWindowTitle(tr("dat-gui — dynamic analysis tool"));
+	setWindowTitle(tr("voidwalk"));
 	resize(1200, 800);
 
 	settings_ = AppSettings::load();
@@ -295,10 +295,10 @@ void MainWindow::refreshAll() {
 		archLabel_->setText(tr("%1 · %2")
 			.arg(QString::fromStdString(session_.format()),
 			     QString::fromStdString(session_.architecture())));
-		setWindowTitle(tr("dat-gui — %1").arg(QString::fromStdString(session_.filePath())));
+		setWindowTitle(tr("voidwalk — %1").arg(QString::fromStdString(session_.filePath())));
 	} else {
 		archLabel_->clear();
-		setWindowTitle(tr("dat-gui — dynamic analysis tool"));
+		setWindowTitle(tr("voidwalk"));
 	}
 }
 

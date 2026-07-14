@@ -20,7 +20,7 @@ class MemoryPane;
 class AiChatPane;
 class WelcomeWidget;
 
-// Top-level window for dat-gui. Owns the Session view-model and the panes,
+// Top-level window for voidwalk-gui. Owns the Session view-model and the panes,
 // wires the toolbar/menus, and fans a single refreshAll() out to every pane
 // after any state change (Open today; debugger steps later).
 //

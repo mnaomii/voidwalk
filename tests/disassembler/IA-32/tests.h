@@ -1,5 +1,6 @@
 #include "../../../main/disassembler/disassembler.h"
 #include "../../../main/disassembler/mnemonic/IA-32/IA-32-instr.h"
+#include "../../../main/disassembler/mnemonic/instruction.h"
 #include <memory>
 #include <iostream>
 #include <assert.h>
@@ -14,7 +15,7 @@ private:
 
     void testLineDecoding_OpcImm(){
         IA_32 instruction;
-        instruction.decode(0,0xb9,0,0,0,0x6);
+        instruction.decode(Instruction::Prefix( {0,0,0,0} ), 0xb9, 0, 0, 0, 0x6);
         auto res = instruction.decodeLineString();
         std::erase(res, ' ');
         assert(res == "MOVeCX,0x6");
@@ -22,7 +23,7 @@ private:
 
     void printOutput(){
         disassembler->decodeCS(stdout);
-    }
+    } 
 
     void runAll(){
 
