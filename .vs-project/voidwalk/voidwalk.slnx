@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="voidwalk.vcxproj" Id="08116dc1-37f6-4ab0-bb9a-128e3b63ec02" />
+</Solution>

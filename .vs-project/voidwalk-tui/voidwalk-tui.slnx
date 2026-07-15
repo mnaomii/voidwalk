@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="voidwalk-tui.vcxproj" Id="7a3c1f52-9b84-4e06-a1c3-5d2e8f4b6c90" />
+</Solution>
