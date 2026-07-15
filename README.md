@@ -1,6 +1,6 @@
 # voidwalk
 
-An early-stage C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
+An **early-stage** C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
 
 **Platforms** - Linux and Windows.
 
