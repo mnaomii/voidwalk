@@ -23,20 +23,20 @@
 // Immediate : 0-4 bytes
 
 
-
+#define PREFIX_MAX 255
+#define PREFIX_UNINITIALIZED 0
+#define OPCODE_MAX 255
 
 
 // in IA-32 -> default operand size : 32bits, change with 66f
 
 class IA_32: public Instruction{
 
-
-public:
 	
 private:
 
 	Instruction::Prefix prefix;
-	uint32_t  opcode, opcode2 , scale, index, base, displacement, immediate;
+	uint64_t  opcode, opcode2, scale, index, base, displacement, immediate;
 	Instruction::Operand op1, op2, op3;
 
 	std::string instructionStr;
@@ -55,26 +55,30 @@ public:
 	static const std::array<std::string_view, 256>& prefixTable() { return IA_32Mnemonic::prefixTable(); }
 
 
-static std::string_view opcodeStrOf(uint32_t op)  { return opcodeTable()[op].text; }
 static bool hasRMbyte(uint32_t op)                { return opcodeTable()[op].hasRMByte; }
-static bool hasImmediateByte(uint32_t op)         { return opcodeTable()[op].hasImmediateByte; }
-
-// Group-aware row: the only one safe to read operands and immediates from. Needs ModRM.reg,
-// so it can only be asked for after the ModRM byte has been read.
-static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t reg) { return IA_32Mnemonic::resolvedInfo(op, reg); }
-static uint8_t op1AddressingMode(uint32_t op)	  { return opcodeTable()[op].op1am; }
-static uint8_t op2AddressingMode(uint32_t op) { return opcodeTable()[op].op2am; }
-static uint8_t op3AddressingMode(uint32_t op) { return opcodeTable()[op].op3am; }
-static uint8_t op1Size(uint32_t op) { return opcodeTable()[op].op1s; }
-static uint8_t op2Size(uint32_t op) { return opcodeTable()[op].op2s; }
-static uint8_t op3Size(uint32_t op) { return opcodeTable()[op].op3s; }
+// Group-aware row: the only one safe to read the mnemonic, operands and immediates from. Needs
+// ModRM.reg, so it can only be asked for after the ModRM byte has been read. For a group opcode
+// (0xF6/0xF7, 0x80-0x83, 0xFE/0xFF, ...) the flat 256-row is a placeholder, so the accessors
+// below all resolve through this instead of reading opcodeTable()[op] directly - reading the flat
+// row would e.g. name 0xF7 by its group placeholder and miss that /0 (TEST) takes an immediate,
+// desyncing the byte stream. Each accessor rebuilds the row, so call resolvedInfo() once if you
+// need several.
+static Instruction::OpcodeInfo resolvedInfo(uint64_t op, uint8_t reg) { return IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(op), reg); }
+static std::string_view opcodeStrOf(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).text; }
+static bool hasImmediateByte(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).hasImmediateByte; }
+static uint8_t op1AddressingMode(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op1am; }
+static uint8_t op2AddressingMode(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op2am; }
+static uint8_t op3AddressingMode(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op3am; }
+static uint8_t op1Size(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op1s; }
+static uint8_t op2Size(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op2s; }
+static uint8_t op3Size(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op3s; }
 
 
 static std::string_view prefixStrOf(uint8_t op) { if (isPrefix(op)) return prefixTable()[op];  else return ""; }
 static bool isPrefix(uint8_t op) { return !prefixTable()[op].empty(); }
 
 
-IA_32():prefix(0), opcode(0), scale(0), base(0), index(0), displacement(0), immediate(0), opcode2(0) {};
+IA_32() :prefix({ PREFIX_UNINITIALIZED ,PREFIX_UNINITIALIZED,PREFIX_UNINITIALIZED,PREFIX_UNINITIALIZED }), opcode(UINT64_MAX), scale(UINT64_MAX), base(UINT64_MAX), index(UINT64_MAX), displacement(UINT64_MAX), immediate(UINT64_MAX), opcode2(UINT64_MAX){};
 
 inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, uint64_t disp, uint64_t imm) {
 
@@ -88,13 +92,15 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 		static_cast<uint8_t>(ADDRESSING::None), static_cast<uint8_t>(SIZE::None) };
 
 	prefix = pfx;
-	bool hasPrefix = (pfx.byte[0] != 0) ? true : false;
-	for (int i = 0; i < 4 && hasPrefix && !is16bit; i++)
-		if (prefix.byte[i] == 0x66)
+	bool hasPrefix = (pfx.byte[0] != PREFIX_UNINITIALIZED) ? true : false;
+	for (int i = 0; i < 4 && hasPrefix; i++) {
+		if (isPrefix(prefix.byte[i])) machineCode += std::format("{:#x}",prefix.byte[i]);
+		if (prefix.byte[i] == 0x67)
 			is16bit = true;
-
+	}
 
 	opcode = static_cast<uint32_t>(opc);
+	machineCode += std::format("{:#x}", opc);
 
 	
 
@@ -105,6 +111,8 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 	const bool isGroupOpcode = IA_32Mnemonic::isGroup(opcode);
 
 	if (outer.hasRMByte) {
+		machineCode += std::format("{:#x}", rmbyte);
+
 		mod    = static_cast<uint8_t>((rmbyte & 0b11000000) >> 6);
 		reg_op = static_cast<uint8_t>((rmbyte & 0b00111000) >> 3);
 		rm     = static_cast<uint8_t>(rmbyte & 0b00000111);
@@ -115,7 +123,7 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 
 		hasSIB = (mod != 0b11 && rm == static_cast<uint8_t>(REGISTER::SP));         // rm 100 = SIB byte follows
 		hasDisplacement = (mod == 0b01 || mod == 0b10)                              // disp8 / disp32
-		               || (mod == 0b00 && rm == 0b101 && !hasSIB);                  // 00/101 = disp32, no base
+		               || (mod == 0b00 && rm == 0b101);                  // 00/101 = disp32, no base
 	}
 
 	// ModRM.reg is known now, so the placeholder row a group opcode sits behind ("GRP5", no
@@ -133,11 +141,14 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 	if (outer.hasRMByte && mod != 0b11) {
 
 		if (hasSIB) {
+			machineCode += std::format("{:#x}", sib);
+
 			scale = 1u << ((sib & 0b11000000) >> 6);          // 00/01/10/11 -> *1/*2/*4/*8
 			index = static_cast<uint32_t>((sib & 0b00111000) >> 3);
 			base  = static_cast<uint32_t>(sib & 0b00000111);
 		}
 		if (hasDisplacement) displacement = static_cast<uint32_t>(disp);
+		
 
 		memory = "[";
 		if (hasSIB) {
@@ -164,7 +175,7 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 		memory += "]";
 	}
 
-	if (info.hasImmediateByte) immediate = static_cast<uint32_t>(imm);
+	if (info.hasImmediateByte) immediate = static_cast<uint64_t>(imm);
 
 	// Every operand is built from its addressing mode. The ones the opcode names in
 	// silicon (AL, eAX, CL, DX, the constant 1, ...) come from the mode as well - unless
@@ -206,14 +217,17 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 	}
 
 	instructionStr.clear();
-	if (isPrefix) {
+	if (hasPrefix) {
 		instructionStr += std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[0]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[1]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[2]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[3])));
 		instructionStr += " ";
 	}
 
 	// Empty text = an illegal /reg for this group (FF /7, FE /2..7), or an opcode the table
-	// never named at all.
-	instructionStr += info.text.empty() ? "(bad)" : info.text;
+	// never named at all. A non-empty text16 means the mnemonic itself moves with the operand
+	// size (CDQ/CWD, PUSHAD/PUSHA, ...), so a 0x66 prefix selects the other name.
+	instructionStr += info.text.empty()
+		? "(bad)"
+		: (is16bit && !info.text16.empty()) ? info.text16 : info.text;
 
 	std::string operands;
 	for (const Instruction::Operand* op : { &op1, &op2, &op3 }) {
@@ -226,8 +240,13 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 		instructionStr += (info.textNamesOperands ? ", " : " ") + operands;
 };
 
-	inline std::string decodeLineString()  {
+	inline std::string& decodeLineString()  {
 		return instructionStr;
+	}
+
+	inline std::string& getMachineCode() {
+
+		return machineCode;
 	}
 
 };

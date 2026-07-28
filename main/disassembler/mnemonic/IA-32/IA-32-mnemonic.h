@@ -129,7 +129,12 @@ public:
 
 		std::array<Instruction::OpcodeInfo, 256> n{};
 		// PG: member of an opcode-extension group (group number last). P: everything else, no group.
-#define PG(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s, textNamesOperands, group}
+		// P16/PG16: the mnemonic changes with the operand size - 32-bit name first, 16-bit name
+		// (the one a 0x66 prefix selects) second. P/PG leave the 16-bit name empty, meaning the
+		// name does not move with the operand size.
+#define PG16(name,text,text16, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,text16, hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s, textNamesOperands, group}
+#define PG(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) PG16(name,text,"", hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group)
+#define P16(name,text,text16, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands) PG16(name,text,text16, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, -1)
 #define P(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands) PG(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, -1)
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
@@ -250,8 +255,8 @@ public:
 		P(POP_eSI, "POP eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
 		P(POP_eDI, "POP eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
 
-		P(PUSHA, "PUSHA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(POPA, "POPA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P16(PUSHA, "PUSHAD", "PUSHA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P16(POPA, "POPAD", "POPA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
 		P(BOUND_GvMa, "BOUND", true, false, a(G), s(v), a(M), s(a), a(None), s(None), false);
 		P(ARPL_EwGw, "ARPL", true, false, a(E), s(w), a(G), s(w), a(None), s(None), false);
@@ -266,9 +271,9 @@ public:
 		P(IMUL_GvEvIb, "IMUL", true, true, a(G), s(v), a(E), s(v), a(I), s(b), false);
 
 		P(INSB_YbDX, "INSB", false, false, a(Y), s(b), a(DX), s(None), a(None), s(None), false);
-		P(INSW_YzDX, "INSW", false, false, a(Y), s(z), a(DX), s(None), a(None), s(None), false);
+		P16(INSW_YzDX, "INSD", "INSW", false, false, a(Y), s(z), a(DX), s(None), a(None), s(None), false);
 		P(OUTSB_DXXb, "OUTSB DX", false, false, a(DX), s(None), a(X), s(b), a(None), s(None), true);
-		P(OUTSW_DXXv, "OUTSW DX", false, false, a(DX), s(None), a(X), s(v), a(None), s(None), true);
+		P16(OUTSW_DXXv, "OUTSD DX", "OUTSW DX", false, false, a(DX), s(None), a(X), s(v), a(None), s(None), true);
 
 		P(JO, "JO", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
 		P(JNO, "JNO", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
@@ -320,12 +325,15 @@ public:
 		P(XCHG_eAXeSI, "XCHG eAX, eSI", false, false, a(eAX), s(v), a(eSI), s(v), a(None), s(None), true);
 		P(XCHG_eAXeDI, "XCHG eAX, eDI", false, false, a(eAX), s(v), a(eDI), s(v), a(None), s(None), true);
 
-		P(CBW, "CBW", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(CWD, "CWD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		// 0x98/0x99 name their operands in silicon and take no operand slots, so the operand
+		// size can only show up in the mnemonic: CWDE sign-extends AX into EAX, CBW AL into AX;
+		// CDQ sign-extends EAX into EDX:EAX, CWD AX into DX:AX.
+		P16(CBW, "CWDE", "CBW", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P16(CWD, "CDQ", "CWD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 		P(CALL_Ap, "CALL", false, true, a(A), s(p), a(None), s(None), a(None), s(None), false);
 		P(FWAIT, "FWAIT", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(PUSHF_Fv, "PUSHF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
-		P(POPF_Fv, "POPF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
+		P16(PUSHF_Fv, "PUSHFD", "PUSHF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
+		P16(POPF_Fv, "POPFD", "POPF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
 		P(SAHF, "SAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 		P(LAHF, "LAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
@@ -335,17 +343,20 @@ public:
 		P(MOV_OveAX, "MOV", false, true, a(O), s(v), a(eAX), s(v), a(None), s(None), false);
 
 		P(MOVSB_XbYb, "MOVSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None), false);
-		P(MOVSW_XvYv, "MOVSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
+		// Intel names the dword string ops MOVSD/CMPSD, which collide with the SSE2 scalar-double
+		// MOVSD/CMPSD (F2 0F 10, F2 0F C2). Same spelling, unrelated instructions - the operands
+		// tell them apart. AT&T sidesteps the clash by spelling these movsl/cmpsl instead.
+		P16(MOVSW_XvYv, "MOVSD", "MOVSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
 		P(CMPSB_XbYb, "CMPSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None), false);
-		P(CMPSW_XvYv, "CMPSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
+		P16(CMPSW_XvYv, "CMPSD", "CMPSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
 		P(TEST_ALIb, "TEST", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), false);
 		P(TEST_eAXIv, "TEST", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), false);
 		P(STOSB_YbAL, "STOSB", false, false, a(Y), s(b), a(AL), s(b), a(None), s(None), false);
-		P(STOSW_YveAX, "STOSW", false, false, a(Y), s(v), a(eAX), s(v), a(None), s(None), false);
+		P16(STOSW_YveAX, "STOSD", "STOSW", false, false, a(Y), s(v), a(eAX), s(v), a(None), s(None), false);
 		P(LODSB_ALXb, "LODSB", false, false, a(AL), s(b), a(X), s(b), a(None), s(None), false);
-		P(LODSW_eAXXv, "LODSW", false, false, a(eAX), s(v), a(X), s(v), a(None), s(None), false);
+		P16(LODSW_eAXXv, "LODSD", "LODSW", false, false, a(eAX), s(v), a(X), s(v), a(None), s(None), false);
 		P(SCASB_ALYb, "SCASB", false, false, a(AL), s(b), a(Y), s(b), a(None), s(None), false);
-		P(SCASW_eAXYv, "SCASW", false, false, a(eAX), s(v), a(Y), s(v), a(None), s(None), false);
+		P16(SCASW_eAXYv, "SCASD", "SCASW", false, false, a(eAX), s(v), a(Y), s(v), a(None), s(None), false);
 
 		P(MOV_ALIb, "MOV AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
 		P(MOV_CLIb, "MOV CL", false, true, a(CL), s(b), a(I), s(b), a(None), s(None), true);
@@ -381,7 +392,7 @@ public:
 		P(INT3, "INT3", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 		P(INT_Ib, "INT", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
 		P(INTO, "INTO", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(IRET, "IRET", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P16(IRET, "IRETD", "IRET", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
 
 		PG(GRP2_Eb1, "GRP2", true, false, a(E), s(b), a(One), s(None), a(None), s(None), false, 2);
 		PG(GRP2_Ev1, "GRP2", true, false, a(E), s(v), a(One), s(None), a(None), s(None), false, 2);
@@ -451,6 +462,8 @@ public:
 #undef a
 #undef P
 #undef PG
+#undef P16
+#undef PG16
 
 		return n;
 
@@ -468,7 +481,8 @@ public:
 
 
 
-#define G(reg,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) n[reg] = Instruction::OpcodeInfo{text,hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s, textNamesOperands, group}
+		// No group entry's mnemonic moves with the operand size, so the 16-bit name is always empty here.
+#define G(reg,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) n[reg] = Instruction::OpcodeInfo{text,"", hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s, textNamesOperands, group}
 #define GT(reg,text,group) G(reg, text, true, false, a(None), s(None), a(None), s(None), a(None), s(None), false, group)
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
@@ -610,6 +624,7 @@ public:
 
 		Instruction::OpcodeInfo info = outer;
 		info.text = entry.text;
+		info.text16 = entry.text16;   // both names come from whichever row named the instruction
 		info.hasImmediateByte = outer.hasImmediateByte || entry.hasImmediateByte;
 
 		const uint8_t opSize = (outer.op1s != none) ? outer.op1s : entry.op1s;

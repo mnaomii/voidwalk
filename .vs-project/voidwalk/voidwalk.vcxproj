@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Single bundled voidwalk executable: core + TUI (FTXUI) + GUI (Qt6) + test
+       harness. main/main.cpp dispatches by argv[1] into the gui, ui, or
+       run-tests mode. x64 only, because the Qt install below is msvc2022_64. -->
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -20,25 +15,16 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
-    <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{08116dc1-37f6-4ab0-bb9a-128e3b63ec02}</ProjectGuid>
     <RootNamespace>voidwalk</RootNamespace>
+    <Keyword>QtVS_v304</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <!-- FTXUI is pulled from the repo-root vcpkg.json manifest; the vcpkg
+         MSBuild integration auto-links its .libs from the installed tree. -->
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <QtMsBuild Condition="'$(QtMsBuild)'=='' OR !Exists('$(QtMsBuild)\qt.targets')">$(MSBuildProjectDirectory)\QtMsBuild</QtMsBuild>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -53,78 +39,49 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings">
+  <ImportGroup Condition="Exists('$(QtMsBuild)\qt_defaults.props')">
+    <Import Project="$(QtMsBuild)\qt_defaults.props" />
   </ImportGroup>
-  <ImportGroup Label="Shared">
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="QtSettings">
+    <QtInstall>6.11.1_msvc2022_64</QtInstall>
+    <QtModules>core;gui;widgets;svg</QtModules>
+    <QtBuildConfig>debug</QtBuildConfig>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="QtSettings">
+    <QtInstall>6.11.1_msvc2022_64</QtInstall>
+    <QtModules>core;gui;widgets;svg</QtModules>
+    <QtBuildConfig>release</QtBuildConfig>
+  </PropertyGroup>
+  <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
+    <Message Importance="High" Text="QtMsBuild: could not locate qt.targets, qt.props; project may not build correctly." />
+  </Target>
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(QtMsBuild)\Qt.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(QtMsBuild)\Qt.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>..\..\exec</OutDir>
-    <TargetName>voidwalk-testing</TargetName>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>..\..\exec</OutDir>
-    <TargetName>voidwalk-testing</TargetName>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>..\..\exec</OutDir>
-    <TargetName>voidwalk-testing</TargetName>
+    <TargetName>voidwalk</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>..\..\exec</OutDir>
-    <TargetName>voidwalk-testing</TargetName>
+    <TargetName>voidwalk</TargetName>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-    <Manifest>
-      <EnableSegmentHeap>true</EnableSegmentHeap>
-    </Manifest>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-    <Manifest>
-      <EnableSegmentHeap>true</EnableSegmentHeap>
-    </Manifest>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!-- Both frontends compiled in; _CONSOLE + the Console subsystem below keep
+           the TUI/test output visible (gui_main.cpp FreeConsole()s in gui mode). -->
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;VOIDWALK_WITH_TUI;VOIDWALK_WITH_GUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -138,23 +95,44 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;VOIDWALK_WITH_TUI;VOIDWALK_WITH_GUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
   </ItemDefinitionGroup>
+  <!-- Qt Q_OBJECT headers run through moc. Keep this list exact: a Q_OBJECT
+       header missing from QtMoc links with an undefined vtable/staticMetaObject. -->
   <ItemGroup>
+    <QtMoc Include="..\..\main\GUI\ai\ai_client.h" />
+    <QtMoc Include="..\..\main\GUI\dialogs\settings_dialog.h" />
+    <QtMoc Include="..\..\main\GUI\panes\disassembly_pane.h" />
+    <QtMoc Include="..\..\main\GUI\panes\registers_pane.h" />
+    <QtMoc Include="..\..\main\GUI\panes\stack_pane.h" />
+    <QtMoc Include="..\..\main\GUI\panes\memory_pane.h" />
+    <QtMoc Include="..\..\main\GUI\panes\ai_chat_pane.h" />
+    <QtMoc Include="..\..\main\GUI\panes\disasm_delegate.h" />
+    <QtMoc Include="..\..\main\GUI\widgets\main_window.h" />
+    <QtMoc Include="..\..\main\GUI\widgets\welcome_widget.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtRcc Include="..\..\main\GUI\rsrc\mainWindow.qrc" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- core / disassembler -->
     <ClInclude Include="..\..\main\address-space\address_space.h" />
     <ClInclude Include="..\..\main\disassembler\disassembler.h" />
     <ClInclude Include="..\..\main\disassembler\ELF\elf_disassembler.h" />
@@ -171,16 +149,88 @@
     <ClInclude Include="..\..\main\disassembler\mnemonic\instruction.h" />
     <ClInclude Include="..\..\main\disassembler\PE\parsers\pe_section_map.h" />
     <ClInclude Include="..\..\main\disassembler\PE\pe_disassembler.h" />
+    <ClInclude Include="..\..\main\miscellaneous\loader.h" />
+    <!-- TUI -->
+    <ClInclude Include="..\..\main\TUI\model\session.h" />
+    <ClInclude Include="..\..\main\TUI\panes\panes.h" />
+    <ClInclude Include="..\..\main\TUI\runner\mainUI.h" />
+    <ClInclude Include="..\..\main\TUI\ui\ui.h" />
+    <!-- GUI (non-moc headers) -->
+    <ClInclude Include="..\..\main\GUI\dialogs\settings.h" />
+    <ClInclude Include="..\..\main\GUI\model\gui_session.h" />
+    <ClInclude Include="..\..\main\GUI\runner\gui_main.h" />
+    <ClInclude Include="..\..\main\GUI\theme\theme.h" />
+    <ClInclude Include="..\..\main\GUI\theme\theme_manager.h" />
+    <ClInclude Include="..\..\main\GUI\theme\icons.h" />
   </ItemGroup>
   <ItemGroup>
+    <!-- core / entry / tests -->
     <ClCompile Include="..\..\main\address-space\address_space.cpp" />
     <ClCompile Include="..\..\main\disassembler\disassembler.cpp" />
     <ClCompile Include="..\..\main\disassembler\ELF\elf_disassembler.cpp" />
     <ClCompile Include="..\..\main\disassembler\PE\pe_disassembler.cpp" />
     <ClCompile Include="..\..\main\main.cpp" />
     <ClCompile Include="..\..\tests\runner.cpp" />
+    <!-- TUI -->
+    <ClCompile Include="..\..\main\TUI\model\session.cpp" />
+    <ClCompile Include="..\..\main\TUI\panes\disassembly_pane.cpp" />
+    <ClCompile Include="..\..\main\TUI\panes\memory_pane.cpp" />
+    <ClCompile Include="..\..\main\TUI\panes\registers_pane.cpp" />
+    <ClCompile Include="..\..\main\TUI\panes\stack_pane.cpp" />
+    <ClCompile Include="..\..\main\TUI\runner\mainUI.cpp" />
+    <ClCompile Include="..\..\main\TUI\ui\ui.cpp" />
+    <!-- GUI. disassembly_pane / memory_pane / registers_pane / stack_pane share
+         base names with the TUI panes, so their .obj would clobber the TUI ones
+         in $(IntDir). Route every GUI object into an $(IntDir)GUI\ subdir. -->
+    <ClCompile Include="..\..\main\GUI\model\gui_session.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\ai\ai_client.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\dialogs\settings_dialog.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\disassembly_pane.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\registers_pane.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\stack_pane.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\memory_pane.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\ai_chat_pane.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\disasm_delegate.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\theme\theme.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\theme\theme_manager.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\theme\icons.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\widgets\main_window.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\widgets\welcome_widget.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\runner\gui_main.cpp">
+      <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
+  <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
+    <Import Project="$(QtMsBuild)\qt.targets" />
   </ImportGroup>
+  <ImportGroup Label="ExtensionTargets" />
 </Project>

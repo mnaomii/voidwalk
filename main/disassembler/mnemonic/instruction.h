@@ -7,6 +7,10 @@
 
 class Instruction {
 
+protected:
+	std::string machineCode;
+	bool hasChanged;
+
 public:
 
 	struct Prefix {
@@ -15,6 +19,11 @@ public:
 
 	struct OpcodeInfo {
 		std::string_view text;
+		// Mnemonic when a 0x66 prefix drops the operand size to 16 bits. Empty for the
+		// opcodes whose name does not move with the operand size, which is almost all of
+		// them - the decoder falls back to text. text always holds the name at the mode's
+		// default operand size (32-bit for IA-32), which is what an unprefixed byte means.
+		std::string_view text16;
 		bool hasRMByte;
 		bool hasImmediateByte;
 		uint8_t op1am, op2am, op3am;
@@ -31,7 +40,8 @@ public:
 		uint8_t addressingMode, size;
 	};
 
-	Instruction() {};
+	Instruction() : hasChanged(false), machineCode("") {};
 	//void decode() {}
-	virtual std::string decodeLineString() = 0;
+	virtual std::string& decodeLineString() = 0;
+	virtual std::string& getMachineCode() = 0;
 };

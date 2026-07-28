@@ -1,11 +1,15 @@
 #include "address-space/address_space.h"
 #include "disassembler/disassembler.h"
 #include "miscellaneous/loader.h"
+#include <QMessageBox>
 
 #include "../tests/runner.h"
 
-//#include "GUI/runner/mainGUI.cpp"
-#ifdef VOIDWALK_WITH_TUI // defined by the voidwalk-tui project; the plain voidwalk project builds without FTXUI
+#ifdef VOIDWALK_WITH_GUI // defined when the Qt6 GUI is compiled into this binary
+#include "GUI/runner/gui_main.h"
+#endif
+
+#ifdef VOIDWALK_WITH_TUI // defined when the FTXUI TUI is compiled into this binary
 #include "TUI/runner/mainUI.h"
 #endif
 
@@ -14,11 +18,22 @@
 #include <string>
 
 int main(int argc, char** argv) {
-    if (argc <= 1) {
-        std::cout << "Usage: voidwalk [--ui | --gui | --run-tests] <binary>\n";
+
+    std::string mode = (argc > 1) ? argv[1] : "--gui";
+
+
+    // The GUI needs no pre-opened file - it opens one itself via its file
+    // dialog, so branch here before AddressSpace touches argv[argc - 1].
+    if (mode == "--gui") {
+#ifdef VOIDWALK_WITH_GUI
+        return GUIstart(argc, argv);
+#else
+        std::cout << "GUI not built in this configuration (enable VOIDWALK_BUILD_GUI).\n";
         return 0;
+#endif
     }
 
+    // The TUI and the test harness both need the target file opened up front.
     std::shared_ptr<AddressSpace> data;
     try {
         data = std::make_shared<AddressSpace>(argv[argc - 1]);
@@ -31,12 +46,6 @@ int main(int argc, char** argv) {
     std::shared_ptr<Disassembler> disassembler;
     std::string status = make_disassembler(*data, &disassembler);
 
-    std::string mode = argv[1];
-    if (mode == "--gui") {
-        //GUIstart(argc, argv); // GUI lives in the voidwalk-gui (Qt) project - placeholder here
-        std::cout << "GUI not wired into this executable yet.\n";
-        return 0;
-    }
     if (mode == "--run-tests") {
         runTests(argc, argv, disassembler);
         return 0;

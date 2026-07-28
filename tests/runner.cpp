@@ -29,4 +29,8 @@ void runTests(int ac, char** av, std::shared_ptr<Disassembler> disasm) {
 
     std::cout << dim << "  |\n  └─- " << reset
               << green << "All tests passed.." << reset << "\n\n";
+
+
+    std::cout << "Press [Enter] to exit.. " << std::endl;
+    std::cin.get();
 }

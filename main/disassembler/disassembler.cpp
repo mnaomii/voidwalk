@@ -107,7 +107,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 	// empty operand fields - 0xF7's row claims no immediate at all, though F7 /0 is TEST Ev, Iz.
 	// Resolve against the group table before deciding how many bytes this instruction eats:
 	// read one too few and every instruction after this one starts on the wrong byte.
-	const Instruction::OpcodeInfo info = IA_32::resolvedInfo(static_cast<uint32_t>(field2), reg_op);
+	const Instruction::OpcodeInfo info = IA_32::resolvedInfo(field2, reg_op);
 
 	if (info.hasImmediateByte) { // set immediate field
 
@@ -189,7 +189,7 @@ void Disassembler::decodeCS(FILE* outputStream) {
 
 	size_t i = 0;
 	for (const auto& instruction : decodedInstructions)
-		fprintf(outputStream, "  | \t%x:  \t %s \n", instructionAddresses[i++], instruction->decodeLineString().c_str());
+		fprintf(outputStream, "  | %08llx:  %-24s %s\n", instructionAddresses[i++], instruction->getMachineCode().c_str(), instruction->decodeLineString().c_str());
 
 }
 

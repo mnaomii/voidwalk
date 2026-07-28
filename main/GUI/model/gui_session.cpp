@@ -162,6 +162,13 @@ void Session::refresh() {
 		size_t n = raw.size() - i < 8 ? raw.size() - i : 8;
 		for (size_t b = 0; b < n; ++b)
 			row.bytes += (b ? " " : "") + hexByte(raw[i + b]);
+		// The Instruction column needs text here too. Leaving it empty renders as
+		// a blank column for the whole table, which reads as a broken pane rather
+		// than as "no decoder for this arch" - the banner says the latter. "db" is
+		// the usual spelling for a run of bytes no decoder claimed.
+		row.text = "db ";
+		for (size_t b = 0; b < n; ++b)
+			row.text += (b ? ", 0x" : "0x") + hexByte(raw[i + b]);
 		disasmRows_.push_back(std::move(row));
 	}
 }

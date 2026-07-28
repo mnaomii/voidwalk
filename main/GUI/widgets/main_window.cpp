@@ -193,6 +193,14 @@ void MainWindow::buildDocks() {
 	tabifyDockWidget(stackDock_, chatDock_);
 	registersDock_->raise();
 
+	// The tab bar already names the active pane, so the dock title bar would
+	// repeat it in a redundant strip right underneath. Drop that strip by giving
+	// each tabified dock an empty title bar widget. Done for the whole tab group
+	// (not just Registers/Stack) so the content doesn't shift when switching to a
+	// tab that still had one. Panels remain toggleable from the View menu.
+	for (QDockWidget* d : {registersDock_, stackDock_, chatDock_})
+		d->setTitleBarWidget(new QWidget(d));
+
 	// Populate the View menu with the docks' toggle actions.
 	for (QMenu* m : menuBar()->findChildren<QMenu*>()) {
 		if (m->title() == tr("&View")) {

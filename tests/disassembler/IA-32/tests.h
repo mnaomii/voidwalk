@@ -1,9 +1,10 @@
+#pragma once
 #include "../../../main/disassembler/disassembler.h"
 #include "../../../main/disassembler/mnemonic/IA-32/IA-32-instr.h"
 #include "../../../main/disassembler/mnemonic/instruction.h"
 #include <memory>
 #include <iostream>
-#include <assert.h>
+#include <cassert>
 #include <string>
 #include "../../base.h"
 #include "../../console.h"
@@ -13,7 +14,7 @@ private:
 
 
 
-    void testLineDecoding_OpcImm(){
+    static void testLineDecoding_OpcImm(){
         IA_32 instruction;
         instruction.decode(Instruction::Prefix( {0,0,0,0} ), 0xb9, 0, 0, 0, 0x6);
         auto res = instruction.decodeLineString();
@@ -22,8 +23,17 @@ private:
     }
 
     void printOutput(){
+        FILE* tmpOut;
+#ifdef _WIN32
+        fopen_s(&tmpOut, "tmpOut.txt", "w");
+#else
+        tmpOut = fopen("tmpOut.txt", "w");
+#endif
+
         disassembler->decodeCS(stdout);
-    } 
+        disassembler->decodeCS(tmpOut);
+        fclose(tmpOut);
+    }
 
     void runAll(){
 
