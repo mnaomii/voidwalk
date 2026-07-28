@@ -95,7 +95,7 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 	bool hasPrefix = (pfx.byte[0] != PREFIX_UNINITIALIZED) ? true : false;
 	for (int i = 0; i < 4 && hasPrefix; i++) {
 		if (isPrefix(prefix.byte[i])) machineCode += std::format("{:#x}",prefix.byte[i]);
-		if (prefix.byte[i] == 0x67)
+		if (prefix.byte[i] == 0x66)
 			is16bit = true;
 	}
 

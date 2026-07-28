@@ -1,7 +1,6 @@
 #include "address-space/address_space.h"
 #include "disassembler/disassembler.h"
 #include "miscellaneous/loader.h"
-#include <QMessageBox>
 
 #include "../tests/runner.h"
 
@@ -43,9 +42,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    std::string status = "";
     std::shared_ptr<Disassembler> disassembler;
-    std::string status = make_disassembler(*data, &disassembler);
-
+    try {
+         status = make_disassembler(*data, &disassembler);
+    }
+    catch (std::exception&) {
+        std::cerr << "Corrupt file.";
+        return 0;
+    }
     if (mode == "--run-tests") {
         runTests(argc, argv, disassembler);
         return 0;

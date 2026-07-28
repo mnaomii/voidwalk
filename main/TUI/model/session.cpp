@@ -14,8 +14,11 @@ std::string hex64(uint64_t v) {
 	return buf;
 }
 
+// 8 digits is the minimum width, not the maximum: the buffer has to hold a full
+// 64-bit address ("0x" + 16 digits + NUL) or snprintf truncates it to something
+// that still looks like a valid address - a PE32+ 0x140001000 became 0x14000100.
 std::string hexAddr(uint64_t v) {
-	char buf[11];
+	char buf[19];
 	std::snprintf(buf, sizeof(buf), "0x%08llx", static_cast<unsigned long long>(v));
 	return buf;
 }
@@ -55,7 +58,10 @@ bool Session::open(const std::string& path) {
 		newSpace = std::make_shared<AddressSpace>(path);
 		make_disassembler(*newSpace, &newDisassembler);
 	}
-	catch (std::runtime_error& e) {
+	// std::exception, not runtime_error: AddressSpace::initialize throws
+	// length_error (a logic_error) for a truncated or malformed file, which a
+	// runtime_error catch lets through - straight out of the FTXUI event loop.
+	catch (const std::exception& e) {
 		setStatus(std::string("Open failed: ") + e.what());
 		return false;
 	}
