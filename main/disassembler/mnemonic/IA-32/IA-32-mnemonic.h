@@ -1,6 +1,7 @@
 #include "../instruction.h"
 #include <cstdint>
 #include <array>
+#include <string>
 #include <string_view>
 #include <stdexcept>
 #pragma once
@@ -9,40 +10,27 @@
 class IA_32Mnemonic{
 public:
 
-	static std::string registerOf(uint16_t r, bool is16bit) {
-		std::string reg = "E";
-		if (is16bit) reg = "";
-		switch (r) {
-		case static_cast<int>(REGISTER::AX):
-			reg += "AX";
-			break;
-		case static_cast<int>(REGISTER::CX):
-			reg += "CX";
-			break;
-		case static_cast<int>(REGISTER::DX):
-			reg += "DX";
-			break;
-		case static_cast<int>(REGISTER::BX):
-			reg += "BX";
-			break;
-		case static_cast<int>(REGISTER::SP):
-			reg += "SP";
-			break;
-		case static_cast<int>(REGISTER::BP):
-			reg += "BP";
-			break;
-		case static_cast<int>(REGISTER::SI):
-			reg += "SI";
-			break;
-		case static_cast<int>(REGISTER::DI):
-			reg += "DI";
-			break;
-		default:
+	// Reg number -> name at a given operand size. size b picks the 8-bit set (AL..BH),
+	// where reg 4..7 alias to AH/CH/DH/BH instead of SP/BP/SI/DI; size w is always 16-bit;
+	// size v/z is 32-bit unless a 0x66 prefix (opsize16) drops it to 16-bit. Callers hand
+	// E/G registers the operand size and the memory base/index the address size, so the two
+	// no longer share one flag.
+	static std::string registerOf(uint16_t r, uint8_t size, bool opsize16) {
+		static constexpr std::string_view r8 [8] = { "AL","CL","DL","BL","AH","CH","DH","BH" };
+		static constexpr std::string_view r16[8] = { "AX","CX","DX","BX","SP","BP","SI","DI" };
+		if (r > 7)
 			throw std::runtime_error("Malformed expression detected..");
-			break;
-
+		switch (static_cast<SIZE>(size)) {
+		case SIZE::b: return std::string(r8[r]);
+		case SIZE::w: return std::string(r16[r]);
+		default:      return (opsize16 ? "" : "E") + std::string(r16[r]);   // v/z: 66h picks 16 vs 32
 		}
-		return reg;
+	}
+
+	// Legacy two-arg form: a bare is16bit flag means "default operand size, 16 or 32".
+	// Kept so existing callers keep working; it cannot reach the 8-bit set (pass a size for that).
+	static std::string registerOf(uint16_t r, bool is16bit) {
+		return registerOf(r, static_cast<uint8_t>(SIZE::v), is16bit);
 	}
 
 
@@ -55,57 +43,15 @@ public:
 		return std::string(names[r & 0x07]);
 	}
 
-	// Operands the opcode names in silicon rather than in its bytes: AL, eAX, CL, DX,
-	// the constant 1, a segment register, the string source/destination. Returns ""
-	// for addressing modes that encode their operand in the instruction (E, G, I, ...),
-	// which the decoder resolves itself.
-	static std::string implicitOperandOf(uint8_t am, bool is16bit) {
-		const std::string e = (is16bit) ? "" : "E";
-
-		switch (static_cast<ADDRESSING>(am)) {
-		case ADDRESSING::AL:  return "AL";
-		case ADDRESSING::CL:  return "CL";
-		case ADDRESSING::DL:  return "DL";
-		case ADDRESSING::BL:  return "BL";
-		case ADDRESSING::AH:  return "AH";
-		case ADDRESSING::CH:  return "CH";
-		case ADDRESSING::DH:  return "DH";
-		case ADDRESSING::BH:  return "BH";
-		case ADDRESSING::DX:  return "DX";
-		case ADDRESSING::One: return "1";
-
-		case ADDRESSING::eAX: return e + "AX";
-		case ADDRESSING::eCX: return e + "CX";
-		case ADDRESSING::eDX: return e + "DX";
-		case ADDRESSING::eBX: return e + "BX";
-		case ADDRESSING::eSP: return e + "SP";
-		case ADDRESSING::eBP: return e + "BP";
-		case ADDRESSING::eSI: return e + "SI";
-		case ADDRESSING::eDI: return e + "DI";
-
-		case ADDRESSING::ES:  return "ES";
-		case ADDRESSING::CS:  return "CS";
-		case ADDRESSING::SS:  return "SS";
-		case ADDRESSING::DS:  return "DS";
-
-		case ADDRESSING::X:   return "[" + e + "SI]";   // string source, DS:eSI
-		case ADDRESSING::Y:   return "[" + e + "DI]";   // string destination, ES:eDI
-		case ADDRESSING::F:   return "";                // EFLAGS: PUSHF/POPF show no operand
-
-		default: return "";
-		}
-	}
-
-
 	static constexpr std::array<std::string_view, 256> buildPrefixes() {
 		std::array<std::string_view, 256> n{};
 
 #define P(name, text) n[static_cast<uint16_t>(Prefix::name)] = text
 
 		P(LOCK, "LOCK"); P(REPNE, "REPNE"); P(REP, "REP");
-		P(CS, "CS:"); P(SS, "SS:"); P(DS, "DS:"); P(ES, "ES:"); P(FS, "FS:"); P(GS, "GS:");
-		P(OPSIZE, "OPSIZE");
-		P(ADDRSIZE, "ADDRSIZE");
+		P(CS, ""); P(SS, ""); P(DS, ""); P(ES, ""); P(FS, ""); P(GS, "");
+		P(OPSIZE, "");
+		P(ADDRSIZE, "");
 
 #undef P
 		return n;
@@ -118,346 +64,351 @@ public:
 		return prefix_str;
 	}
 
-	// groupNo is the Intel opcode-extension group (Table A-6). -1 = no group:
-	// the opcode byte alone names the instruction. >= 0 = the mnemonic lives in
-	// ModRM.reg and OpcodeInfo::text ("GRP1", "GRP2", ...) is only a placeholder.
-	// Unfilled table slots (undefined opcodes) get groupNo 0 from value-init, not
-	// -1, so check the group only on opcodes the table actually names.
-	// 0x8F (group 1A), 0xC6/0xC7 (group 11) are groups on paper, but only /0 is
-	// legal, so they stay -1 and keep their real mnemonic (POP / MOV).
 	static constexpr std::array<Instruction::OpcodeInfo, 256> buildOpcodes() {
 
 		std::array<Instruction::OpcodeInfo, 256> n{};
-		// PG: member of an opcode-extension group (group number last). P: everything else, no group.
-		// P16/PG16: the mnemonic changes with the operand size - 32-bit name first, 16-bit name
-		// (the one a 0x66 prefix selects) second. P/PG leave the 16-bit name empty, meaning the
-		// name does not move with the operand size.
-#define PG16(name,text,text16, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,text16, hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s, textNamesOperands, group}
-#define PG(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) PG16(name,text,"", hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group)
-#define P16(name,text,text16, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands) PG16(name,text,text16, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, -1)
-#define P(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands) PG(name,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, -1)
+
+		// A row is: mnemonic (32-bit name), then op1/op2/op3, then the group number.
+		//   P    - plain opcode, no group.
+		//   PG   - plain opcode that is an extension group (group number last).
+		//   P16  - the mnemonic itself flips with the operand size (32-bit name, then 16-bit name).
+		//   PG16 - the general form both build on.
+		// Each operand is OP(addressingMode, size, value, value16), or NOP_ for an absent one.
+		// value/value16 carry a silicon-named operand ("AL", "EAX"/"AX"); "" means "decode it
+		// from the bytes". For an operand whose name does not change with a 0x66 prefix, value16
+		// duplicates value.
+#define PG16(name,text,text16, hasRM, op1, op2, op3, group) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,text16, hasRM, op1, op2, op3, group}
+#define PG(name,text, hasRM, op1, op2, op3, group) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, group}
+#define P16(name,text,text16, hasRM, op1, op2, op3) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,text16, hasRM, op1, op2, op3, -1}
+#define P(name,text, hasRM, op1, op2, op3) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, -1}
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define NOP_ OP(None,None,"","")
 
-		P(ADD_EbGb, "ADD", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(ADD_EvGv, "ADD", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(ADD_GbEb, "ADD", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(ADD_GvEv, "ADD", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(ADD_ALIb, "ADD AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(ADD_eAXIv, "ADD eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(ADD_EbGb, "ADD", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(ADD_EvGv, "ADD", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(ADD_GbEb, "ADD", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(ADD_GvEv, "ADD", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(ADD_ALIb, "ADD", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(ADD_eAXIv, "ADD", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(PUSH_ES, "PUSH", false, false, a(ES), s(None), a(None), s(None), a(None), s(None), false);
-		P(POP_ES, "POP", false, false, a(ES), s(None), a(None), s(None), a(None), s(None), false);
+		P(PUSH_ES, "PUSH", false, OP(ES,None,"ES","ES"), NOP_, NOP_);
+		P(POP_ES, "POP", false, OP(ES,None,"ES","ES"), NOP_, NOP_);
 
-		P(OR_EbGb, "OR", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(OR_EvGv, "OR", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(OR_GbEb, "OR", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(OR_GvEv, "OR", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(OR_ALIb, "OR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(OR_eAXIv, "OR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(OR_EbGb, "OR", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(OR_EvGv, "OR", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(OR_GbEb, "OR", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(OR_GvEv, "OR", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(OR_ALIb, "OR", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(OR_eAXIv, "OR", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(PUSH_CS, "PUSH", false, false, a(CS), s(None), a(None), s(None), a(None), s(None), false);
-		P(TWOBYTE, "2BYTE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(PUSH_CS, "PUSH", false, OP(CS,None,"CS","CS"), NOP_, NOP_);
+		P(TWOBYTE, "2BYTE", false, NOP_, NOP_, NOP_);
 
-		P(ADC_EbGb, "ADC", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(ADC_EvGv, "ADC", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(ADC_GbEb, "ADC", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(ADC_GvEv, "ADC", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(ADC_ALIb, "ADC AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(ADC_eAXIv, "ADC eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(ADC_EbGb, "ADC", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(ADC_EvGv, "ADC", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(ADC_GbEb, "ADC", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(ADC_GvEv, "ADC", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(ADC_ALIb, "ADC", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(ADC_eAXIv, "ADC", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(PUSH_SS, "PUSH", false, false, a(SS), s(None), a(None), s(None), a(None), s(None), false);
-		P(POP_SS, "POP", false, false, a(SS), s(None), a(None), s(None), a(None), s(None), false);
+		P(PUSH_SS, "PUSH", false, OP(SS,None,"SS","SS"), NOP_, NOP_);
+		P(POP_SS, "POP", false, OP(SS,None,"SS","SS"), NOP_, NOP_);
 
-		P(SBB_EbGb, "SBB", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(SBB_EvGv, "SBB", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(SBB_GbEb, "SBB", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(SBB_GvEv, "SBB", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(SBB_ALIb, "SBB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(SBB_eAXIv, "SBB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(SBB_EbGb, "SBB", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(SBB_EvGv, "SBB", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(SBB_GbEb, "SBB", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(SBB_GvEv, "SBB", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(SBB_ALIb, "SBB", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(SBB_eAXIv, "SBB", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(PUSH_DS, "PUSH", false, false, a(DS), s(None), a(None), s(None), a(None), s(None), false);
-		P(POP_DS, "POP", false, false, a(DS), s(None), a(None), s(None), a(None), s(None), false);
+		P(PUSH_DS, "PUSH", false, OP(DS,None,"DS","DS"), NOP_, NOP_);
+		P(POP_DS, "POP", false, OP(DS,None,"DS","DS"), NOP_, NOP_);
 
-		P(AND_EbGb, "AND", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(AND_EvGv, "AND", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(AND_GbEb, "AND", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(AND_GvEv, "AND", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(AND_ALIb, "AND AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(AND_eAXIv, "AND eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(AND_EbGb, "AND", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(AND_EvGv, "AND", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(AND_GbEb, "AND", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(AND_GvEv, "AND", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(AND_ALIb, "AND", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(AND_eAXIv, "AND", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(ES, "ES", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(DAA, "DAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(ES, "ES", false, NOP_, NOP_, NOP_);
+		P(DAA, "DAA", false, NOP_, NOP_, NOP_);
 
-		P(SUB_EbGb, "SUB", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(SUB_EvGv, "SUB", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(SUB_GbEb, "SUB", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(SUB_GvEv, "SUB", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(SUB_ALIb, "SUB AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(SUB_eAXIv, "SUB eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(SUB_EbGb, "SUB", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(SUB_EvGv, "SUB", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(SUB_GbEb, "SUB", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(SUB_GvEv, "SUB", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(SUB_ALIb, "SUB", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(SUB_eAXIv, "SUB", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(CS, "CS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(DAS, "DAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(CS, "CS", false, NOP_, NOP_, NOP_);
+		P(DAS, "DAS", false, NOP_, NOP_, NOP_);
 
-		P(XOR_EbGb, "XOR", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(XOR_EvGv, "XOR", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(XOR_GbEb, "XOR", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(XOR_GvEv, "XOR", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(XOR_ALIb, "XOR AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(XOR_eAXIv, "XOR eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(XOR_EbGb, "XOR", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(XOR_EvGv, "XOR", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(XOR_GbEb, "XOR", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(XOR_GvEv, "XOR", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(XOR_ALIb, "XOR", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(XOR_eAXIv, "XOR", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(SS, "SS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(AAA, "AAA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(SS, "SS", false, NOP_, NOP_, NOP_);
+		P(AAA, "AAA", false, NOP_, NOP_, NOP_);
 
-		P(CMP_EbGb, "CMP", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(CMP_EvGv, "CMP", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(CMP_GbEb, "CMP", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(CMP_GvEv, "CMP", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(CMP_ALIb, "CMP AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(CMP_eAXIv, "CMP eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
+		P(CMP_EbGb, "CMP", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(CMP_EvGv, "CMP", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(CMP_GbEb, "CMP", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(CMP_GvEv, "CMP", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(CMP_ALIb, "CMP", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(CMP_eAXIv, "CMP", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
 
-		P(DS, "DS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(AAS, "AAS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(DS, "DS", false, NOP_, NOP_, NOP_);
+		P(AAS, "AAS", false, NOP_, NOP_, NOP_);
 
-		P(INC_eAX, "INC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
-		P(INC_eCX, "INC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
-		P(INC_eDX, "INC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
-		P(INC_eBX, "INC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), true);
-		P(INC_eSP, "INC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
-		P(INC_eBP, "INC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
-		P(INC_eSI, "INC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
-		P(INC_eDI, "INC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
+		P(INC_eAX, "INC", false, OP(eAX,v,"EAX","AX"), NOP_, NOP_);
+		P(INC_eCX, "INC", false, OP(eCX,v,"ECX","CX"), NOP_, NOP_);
+		P(INC_eDX, "INC", false, OP(eDX,v,"EDX","DX"), NOP_, NOP_);
+		P(INC_eBX, "INC", false, OP(eBX,v,"EBX","BX"), NOP_, NOP_);
+		P(INC_eSP, "INC", false, OP(eSP,v,"ESP","SP"), NOP_, NOP_);
+		P(INC_eBP, "INC", false, OP(eBP,v,"EBP","BP"), NOP_, NOP_);
+		P(INC_eSI, "INC", false, OP(eSI,v,"ESI","SI"), NOP_, NOP_);
+		P(INC_eDI, "INC", false, OP(eDI,v,"EDI","DI"), NOP_, NOP_);
 
-		P(DEC_eAX, "DEC eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
-		P(DEC_eCX, "DEC eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
-		P(DEC_eDX, "DEC eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
-		P(DEC_eBX, "DEC eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), true);
-		P(DEC_eSP, "DEC eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
-		P(DEC_eBP, "DEC eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
-		P(DEC_eSI, "DEC eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
-		P(DEC_eDI, "DEC eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
+		P(DEC_eAX, "DEC", false, OP(eAX,v,"EAX","AX"), NOP_, NOP_);
+		P(DEC_eCX, "DEC", false, OP(eCX,v,"ECX","CX"), NOP_, NOP_);
+		P(DEC_eDX, "DEC", false, OP(eDX,v,"EDX","DX"), NOP_, NOP_);
+		P(DEC_eBX, "DEC", false, OP(eBX,v,"EBX","BX"), NOP_, NOP_);
+		P(DEC_eSP, "DEC", false, OP(eSP,v,"ESP","SP"), NOP_, NOP_);
+		P(DEC_eBP, "DEC", false, OP(eBP,v,"EBP","BP"), NOP_, NOP_);
+		P(DEC_eSI, "DEC", false, OP(eSI,v,"ESI","SI"), NOP_, NOP_);
+		P(DEC_eDI, "DEC", false, OP(eDI,v,"EDI","DI"), NOP_, NOP_);
 
-		P(PUSH_eAX, "PUSH eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
-		P(PUSH_eCX, "PUSH eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
-		P(PUSH_eDX, "PUSH eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
-		P(PUSH_eBX, "PUSH eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), true);
-		P(PUSH_eSP, "PUSH eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
-		P(PUSH_eBP, "PUSH eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
-		P(PUSH_eSI, "PUSH eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
-		P(PUSH_eDI, "PUSH eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
+		P(PUSH_eAX, "PUSH", false, OP(eAX,v,"EAX","AX"), NOP_, NOP_);
+		P(PUSH_eCX, "PUSH", false, OP(eCX,v,"ECX","CX"), NOP_, NOP_);
+		P(PUSH_eDX, "PUSH", false, OP(eDX,v,"EDX","DX"), NOP_, NOP_);
+		P(PUSH_eBX, "PUSH", false, OP(eBX,v,"EBX","BX"), NOP_, NOP_);
+		P(PUSH_eSP, "PUSH", false, OP(eSP,v,"ESP","SP"), NOP_, NOP_);
+		P(PUSH_eBP, "PUSH", false, OP(eBP,v,"EBP","BP"), NOP_, NOP_);
+		P(PUSH_eSI, "PUSH", false, OP(eSI,v,"ESI","SI"), NOP_, NOP_);
+		P(PUSH_eDI, "PUSH", false, OP(eDI,v,"EDI","DI"), NOP_, NOP_);
 
-		P(POP_eAX, "POP eAX", false, false, a(eAX), s(v), a(None), s(None), a(None), s(None), true);
-		P(POP_eCX, "POP eCX", false, false, a(eCX), s(v), a(None), s(None), a(None), s(None), true);
-		P(POP_eDX, "POP eDX", false, false, a(eDX), s(v), a(None), s(None), a(None), s(None), true);
-		P(POP_eBX, "POP eBX", false, false, a(eBX), s(v), a(None), s(None), a(None), s(None), true);
-		P(POP_eSP, "POP eSP", false, false, a(eSP), s(v), a(None), s(None), a(None), s(None), true);
-		P(POP_eBP, "POP eBP", false, false, a(eBP), s(v), a(None), s(None), a(None), s(None), true);
-		P(POP_eSI, "POP eSI", false, false, a(eSI), s(v), a(None), s(None), a(None), s(None), true);
-		P(POP_eDI, "POP eDI", false, false, a(eDI), s(v), a(None), s(None), a(None), s(None), true);
+		P(POP_eAX, "POP", false, OP(eAX,v,"EAX","AX"), NOP_, NOP_);
+		P(POP_eCX, "POP", false, OP(eCX,v,"ECX","CX"), NOP_, NOP_);
+		P(POP_eDX, "POP", false, OP(eDX,v,"EDX","DX"), NOP_, NOP_);
+		P(POP_eBX, "POP", false, OP(eBX,v,"EBX","BX"), NOP_, NOP_);
+		P(POP_eSP, "POP", false, OP(eSP,v,"ESP","SP"), NOP_, NOP_);
+		P(POP_eBP, "POP", false, OP(eBP,v,"EBP","BP"), NOP_, NOP_);
+		P(POP_eSI, "POP", false, OP(eSI,v,"ESI","SI"), NOP_, NOP_);
+		P(POP_eDI, "POP", false, OP(eDI,v,"EDI","DI"), NOP_, NOP_);
 
-		P16(PUSHA, "PUSHAD", "PUSHA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P16(POPA, "POPAD", "POPA", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P16(PUSHA, "PUSHAD", "PUSHA", false, NOP_, NOP_, NOP_);
+		P16(POPA, "POPAD", "POPA", false, NOP_, NOP_, NOP_);
 
-		P(BOUND_GvMa, "BOUND", true, false, a(G), s(v), a(M), s(a), a(None), s(None), false);
-		P(ARPL_EwGw, "ARPL", true, false, a(E), s(w), a(G), s(w), a(None), s(None), false);
-		P(FS, "FS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(GS, "GS", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(OPSIZE, "OPSIZE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ADSIZE, "ADSIZE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(BOUND_GvMa, "BOUND", true, OP(G,v,"",""), OP(M,a,"",""), NOP_);
+		P(ARPL_EwGw, "ARPL", true, OP(E,w,"",""), OP(G,w,"",""), NOP_);
+		P(FS, "FS", false, NOP_, NOP_, NOP_);
+		P(GS, "GS", false, NOP_, NOP_, NOP_);
+		P(OPSIZE, "OPSIZE", false, NOP_, NOP_, NOP_);
+		P(ADSIZE, "ADSIZE", false, NOP_, NOP_, NOP_);
 
-		P(PUSH_Iv, "PUSH", false, true, a(I), s(v), a(None), s(None), a(None), s(None), false);
-		P(IMUL_GvEvIv, "IMUL", true, true, a(G), s(v), a(E), s(v), a(I), s(v), false);
-		P(PUSH_Ib, "PUSH", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
-		P(IMUL_GvEvIb, "IMUL", true, true, a(G), s(v), a(E), s(v), a(I), s(b), false);
+		P(PUSH_Iv, "PUSH", false, OP(I,v,"",""), NOP_, NOP_);
+		P(IMUL_GvEvIv, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,v,"",""));
+		P(PUSH_Ib, "PUSH", false, OP(I,b,"",""), NOP_, NOP_);
+		P(IMUL_GvEvIb, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,b,"",""));
 
-		P(INSB_YbDX, "INSB", false, false, a(Y), s(b), a(DX), s(None), a(None), s(None), false);
-		P16(INSW_YzDX, "INSD", "INSW", false, false, a(Y), s(z), a(DX), s(None), a(None), s(None), false);
-		P(OUTSB_DXXb, "OUTSB DX", false, false, a(DX), s(None), a(X), s(b), a(None), s(None), true);
-		P16(OUTSW_DXXv, "OUTSD DX", "OUTSW DX", false, false, a(DX), s(None), a(X), s(v), a(None), s(None), true);
+		P(INSB_YbDX, "INSB", false, OP(Y,b,"[EDI]","[EDI]"), OP(DX,None,"DX","DX"), NOP_);
+		P16(INSW_YzDX, "INSD", "INSW", false, OP(Y,z,"[EDI]","[EDI]"), OP(DX,None,"DX","DX"), NOP_);
+		P(OUTSB_DXXb, "OUTSB", false, OP(DX,None,"DX","DX"), OP(X,b,"[ESI]","[ESI]"), NOP_);
+		P16(OUTSW_DXXv, "OUTSD", "OUTSW", false, OP(DX,None,"DX","DX"), OP(X,v,"[ESI]","[ESI]"), NOP_);
 
-		P(JO, "JO", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JNO, "JNO", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JB, "JB", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JNB, "JNB", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JZ, "JZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JNZ, "JNZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JBE, "JBE", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JA, "JA", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JS, "JS", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JNS, "JNS", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JP, "JP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JNP, "JNP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JL, "JL", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JNL, "JNL", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JLE, "JLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JNLE, "JNLE", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+		P(JO, "JO", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JNO, "JNO", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JB, "JB", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JNB, "JNB", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JZ, "JZ", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JNZ, "JNZ", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JBE, "JBE", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JA, "JA", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JS, "JS", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JNS, "JNS", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JP, "JP", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JNP, "JNP", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JL, "JL", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JNL, "JNL", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JLE, "JLE", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JNLE, "JNLE", false, OP(J,b,"",""), NOP_, NOP_);
 
 		// Group 1 (0x80-0x83): ADD/OR/ADC/SBB/AND/SUB/XOR/CMP, selected by ModRM.reg
-		PG(GRP1_EbIb, "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false, 1);
-		PG(GRP1_EvIz, "GRP1", true, true, a(E), s(v), a(I), s(v), a(None), s(None), false, 1);
-		PG(GRP1_EbIb2, "GRP1", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false, 1);
-		PG(GRP1_EvIb, "GRP1", true, true, a(E), s(v), a(I), s(b), a(None), s(None), false, 1);
+		PG(GRP1_EbIb, "GRP1", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 1);
+		PG(GRP1_EvIz, "GRP1", true, OP(E,v,"",""), OP(I,v,"",""), NOP_, 1);
+		PG(GRP1_EbIb2, "GRP1", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 1);
+		PG(GRP1_EvIb, "GRP1", true, OP(E,v,"",""), OP(I,b,"",""), NOP_, 1);
 
-		P(TEST_EbGb, "TEST", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(TEST_EvGv, "TEST", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+		P(TEST_EbGb, "TEST", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(TEST_EvGv, "TEST", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
 
-		P(XCHG_EbGb, "XCHG", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(XCHG_EvGv, "XCHG", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
+		P(XCHG_EbGb, "XCHG", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(XCHG_EvGv, "XCHG", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
 
-		P(MOV_EbGb, "MOV", true, false, a(E), s(b), a(G), s(b), a(None), s(None), false);
-		P(MOV_EvGv, "MOV", true, false, a(E), s(v), a(G), s(v), a(None), s(None), false);
-		P(MOV_GbEb, "MOV", true, false, a(G), s(b), a(E), s(b), a(None), s(None), false);
-		P(MOV_GvEv, "MOV", true, false, a(G), s(v), a(E), s(v), a(None), s(None), false);
-		P(MOV_EwSw, "MOV", true, false, a(E), s(w), a(S), s(w), a(None), s(None), false);
+		P(MOV_EbGb, "MOV", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		P(MOV_EvGv, "MOV", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		P(MOV_GbEb, "MOV", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
+		P(MOV_GvEv, "MOV", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		P(MOV_EwSw, "MOV", true, OP(E,w,"",""), OP(S,w,"",""), NOP_);
 
-		P(LEA_GvM, "LEA", true, false, a(G), s(v), a(M), s(None), a(None), s(None), false);
+		P(LEA_GvM, "LEA", true, OP(G,v,"",""), OP(M,None,"",""), NOP_);
 
-		P(MOV_SwEw, "MOV", true, false, a(S), s(w), a(E), s(w), a(None), s(None), false);
+		P(MOV_SwEw, "MOV", true, OP(S,w,"",""), OP(E,w,"",""), NOP_);
 
-		P(POP_Ev, "POP", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false);
+		P(POP_Ev, "POP", true, OP(E,v,"",""), NOP_, NOP_);
 
-		P(NOP, "NOP", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(XCHG_eAXeCX, "XCHG eAX, eCX", false, false, a(eAX), s(v), a(eCX), s(v), a(None), s(None), true);
-		P(XCHG_eAXeDX, "XCHG eAX, eDX", false, false, a(eAX), s(v), a(eDX), s(v), a(None), s(None), true);
-		P(XCHG_eAXeBX, "XCHG eAX, eBX", false, false, a(eAX), s(v), a(eBX), s(v), a(None), s(None), true);
-		P(XCHG_eAXeSP, "XCHG eAX, eSP", false, false, a(eAX), s(v), a(eSP), s(v), a(None), s(None), true);
-		P(XCHG_eAXeBP, "XCHG eAX, eBP", false, false, a(eAX), s(v), a(eBP), s(v), a(None), s(None), true);
-		P(XCHG_eAXeSI, "XCHG eAX, eSI", false, false, a(eAX), s(v), a(eSI), s(v), a(None), s(None), true);
-		P(XCHG_eAXeDI, "XCHG eAX, eDI", false, false, a(eAX), s(v), a(eDI), s(v), a(None), s(None), true);
+		P(NOP, "NOP", false, NOP_, NOP_, NOP_);
+		P(XCHG_eAXeCX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eCX,v,"ECX","CX"), NOP_);
+		P(XCHG_eAXeDX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eDX,v,"EDX","DX"), NOP_);
+		P(XCHG_eAXeBX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eBX,v,"EBX","BX"), NOP_);
+		P(XCHG_eAXeSP, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eSP,v,"ESP","SP"), NOP_);
+		P(XCHG_eAXeBP, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eBP,v,"EBP","BP"), NOP_);
+		P(XCHG_eAXeSI, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eSI,v,"ESI","SI"), NOP_);
+		P(XCHG_eAXeDI, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eDI,v,"EDI","DI"), NOP_);
 
 		// 0x98/0x99 name their operands in silicon and take no operand slots, so the operand
 		// size can only show up in the mnemonic: CWDE sign-extends AX into EAX, CBW AL into AX;
 		// CDQ sign-extends EAX into EDX:EAX, CWD AX into DX:AX.
-		P16(CBW, "CWDE", "CBW", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P16(CWD, "CDQ", "CWD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(CALL_Ap, "CALL", false, true, a(A), s(p), a(None), s(None), a(None), s(None), false);
-		P(FWAIT, "FWAIT", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P16(PUSHF_Fv, "PUSHFD", "PUSHF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
-		P16(POPF_Fv, "POPFD", "POPF", false, false, a(F), s(v), a(None), s(None), a(None), s(None), false);
-		P(SAHF, "SAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(LAHF, "LAHF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P16(CBW, "CWDE", "CBW", false, NOP_, NOP_, NOP_);
+		P16(CWD, "CDQ", "CWD", false, NOP_, NOP_, NOP_);
+		P(CALL_Ap, "CALL", false, OP(A,p,"",""), NOP_, NOP_);
+		P(FWAIT, "FWAIT", false, NOP_, NOP_, NOP_);
+		P16(PUSHF_Fv, "PUSHFD", "PUSHF", false, OP(F,v,"",""), NOP_, NOP_);
+		P16(POPF_Fv, "POPFD", "POPF", false, OP(F,v,"",""), NOP_, NOP_);
+		P(SAHF, "SAHF", false, NOP_, NOP_, NOP_);
+		P(LAHF, "LAHF", false, NOP_, NOP_, NOP_);
 
-		P(MOV_ALOb, "MOV AL", false, true, a(AL), s(b), a(O), s(b), a(None), s(None), true);
-		P(MOV_eAXOv, "MOV eAX", false, true, a(eAX), s(v), a(O), s(v), a(None), s(None), true);
-		P(MOV_ObAL, "MOV", false, true, a(O), s(b), a(AL), s(b), a(None), s(None), false);
-		P(MOV_OveAX, "MOV", false, true, a(O), s(v), a(eAX), s(v), a(None), s(None), false);
+		// MOV to/from accumulator, direct memory offset (moffs). The offset is a memory
+		// reference, not an immediate - value is "" so the decoder builds [addr].
+		P(MOV_ALOb, "MOV", false, OP(AL,b,"AL","AL"), OP(O,b,"",""), NOP_);
+		P(MOV_eAXOv, "MOV", false, OP(eAX,v,"EAX","AX"), OP(O,v,"",""), NOP_);
+		P(MOV_ObAL, "MOV", false, OP(O,b,"",""), OP(AL,b,"AL","AL"), NOP_);
+		P(MOV_OveAX, "MOV", false, OP(O,v,"",""), OP(eAX,v,"EAX","AX"), NOP_);
 
-		P(MOVSB_XbYb, "MOVSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None), false);
+		P(MOVSB_XbYb, "MOVSB", false, OP(X,b,"[ESI]","[ESI]"), OP(Y,b,"[EDI]","[EDI]"), NOP_);
 		// Intel names the dword string ops MOVSD/CMPSD, which collide with the SSE2 scalar-double
 		// MOVSD/CMPSD (F2 0F 10, F2 0F C2). Same spelling, unrelated instructions - the operands
 		// tell them apart. AT&T sidesteps the clash by spelling these movsl/cmpsl instead.
-		P16(MOVSW_XvYv, "MOVSD", "MOVSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
-		P(CMPSB_XbYb, "CMPSB", false, false, a(X), s(b), a(Y), s(b), a(None), s(None), false);
-		P16(CMPSW_XvYv, "CMPSD", "CMPSW", false, false, a(X), s(v), a(Y), s(v), a(None), s(None), false);
-		P(TEST_ALIb, "TEST", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), false);
-		P(TEST_eAXIv, "TEST", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), false);
-		P(STOSB_YbAL, "STOSB", false, false, a(Y), s(b), a(AL), s(b), a(None), s(None), false);
-		P16(STOSW_YveAX, "STOSD", "STOSW", false, false, a(Y), s(v), a(eAX), s(v), a(None), s(None), false);
-		P(LODSB_ALXb, "LODSB", false, false, a(AL), s(b), a(X), s(b), a(None), s(None), false);
-		P16(LODSW_eAXXv, "LODSD", "LODSW", false, false, a(eAX), s(v), a(X), s(v), a(None), s(None), false);
-		P(SCASB_ALYb, "SCASB", false, false, a(AL), s(b), a(Y), s(b), a(None), s(None), false);
-		P16(SCASW_eAXYv, "SCASD", "SCASW", false, false, a(eAX), s(v), a(Y), s(v), a(None), s(None), false);
+		P16(MOVSW_XvYv, "MOVSD", "MOVSW", false, OP(X,v,"[ESI]","[ESI]"), OP(Y,v,"[EDI]","[EDI]"), NOP_);
+		P(CMPSB_XbYb, "CMPSB", false, OP(X,b,"[ESI]","[ESI]"), OP(Y,b,"[EDI]","[EDI]"), NOP_);
+		P16(CMPSW_XvYv, "CMPSD", "CMPSW", false, OP(X,v,"[ESI]","[ESI]"), OP(Y,v,"[EDI]","[EDI]"), NOP_);
+		P(TEST_ALIb, "TEST", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(TEST_eAXIv, "TEST", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(STOSB_YbAL, "STOSB", false, OP(Y,b,"[EDI]","[EDI]"), OP(AL,b,"AL","AL"), NOP_);
+		P16(STOSW_YveAX, "STOSD", "STOSW", false, OP(Y,v,"[EDI]","[EDI]"), OP(eAX,v,"EAX","AX"), NOP_);
+		P(LODSB_ALXb, "LODSB", false, OP(AL,b,"AL","AL"), OP(X,b,"[ESI]","[ESI]"), NOP_);
+		P16(LODSW_eAXXv, "LODSD", "LODSW", false, OP(eAX,v,"EAX","AX"), OP(X,v,"[ESI]","[ESI]"), NOP_);
+		P(SCASB_ALYb, "SCASB", false, OP(AL,b,"AL","AL"), OP(Y,b,"[EDI]","[EDI]"), NOP_);
+		P16(SCASW_eAXYv, "SCASD", "SCASW", false, OP(eAX,v,"EAX","AX"), OP(Y,v,"[EDI]","[EDI]"), NOP_);
 
-		P(MOV_ALIb, "MOV AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(MOV_CLIb, "MOV CL", false, true, a(CL), s(b), a(I), s(b), a(None), s(None), true);
-		P(MOV_DLIb, "MOV DL", false, true, a(DL), s(b), a(I), s(b), a(None), s(None), true);
-		P(MOV_BLIb, "MOV BL", false, true, a(BL), s(b), a(I), s(b), a(None), s(None), true);
-		P(MOV_AHIb, "MOV AH", false, true, a(AH), s(b), a(I), s(b), a(None), s(None), true);
-		P(MOV_CHIb, "MOV CH", false, true, a(CH), s(b), a(I), s(b), a(None), s(None), true);
-		P(MOV_DHIb, "MOV DH", false, true, a(DH), s(b), a(I), s(b), a(None), s(None), true);
-		P(MOV_BHIb, "MOV BH", false, true, a(BH), s(b), a(I), s(b), a(None), s(None), true);
+		P(MOV_ALIb, "MOV", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(MOV_CLIb, "MOV", false, OP(CL,b,"CL","CL"), OP(I,b,"",""), NOP_);
+		P(MOV_DLIb, "MOV", false, OP(DL,b,"DL","DL"), OP(I,b,"",""), NOP_);
+		P(MOV_BLIb, "MOV", false, OP(BL,b,"BL","BL"), OP(I,b,"",""), NOP_);
+		P(MOV_AHIb, "MOV", false, OP(AH,b,"AH","AH"), OP(I,b,"",""), NOP_);
+		P(MOV_CHIb, "MOV", false, OP(CH,b,"CH","CH"), OP(I,b,"",""), NOP_);
+		P(MOV_DHIb, "MOV", false, OP(DH,b,"DH","DH"), OP(I,b,"",""), NOP_);
+		P(MOV_BHIb, "MOV", false, OP(BH,b,"BH","BH"), OP(I,b,"",""), NOP_);
 
-		P(MOV_eAXIv, "MOV eAX", false, true, a(eAX), s(v), a(I), s(v), a(None), s(None), true);
-		P(MOV_eCXIv, "MOV eCX", false, true, a(eCX), s(v), a(I), s(v), a(None), s(None), true);
-		P(MOV_eDXIv, "MOV eDX", false, true, a(eDX), s(v), a(I), s(v), a(None), s(None), true);
-		P(MOV_eBXIv, "MOV eBX", false, true, a(eBX), s(v), a(I), s(v), a(None), s(None), true);
-		P(MOV_eSPIv, "MOV eSP", false, true, a(eSP), s(v), a(I), s(v), a(None), s(None), true);
-		P(MOV_eBPIv, "MOV eBP", false, true, a(eBP), s(v), a(I), s(v), a(None), s(None), true);
-		P(MOV_eSIIv, "MOV eSI", false, true, a(eSI), s(v), a(I), s(v), a(None), s(None), true);
-		P(MOV_eDIIv, "MOV eDI", false, true, a(eDI), s(v), a(I), s(v), a(None), s(None), true);
+		P(MOV_eAXIv, "MOV", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(MOV_eCXIv, "MOV", false, OP(eCX,v,"ECX","CX"), OP(I,v,"",""), NOP_);
+		P(MOV_eDXIv, "MOV", false, OP(eDX,v,"EDX","DX"), OP(I,v,"",""), NOP_);
+		P(MOV_eBXIv, "MOV", false, OP(eBX,v,"EBX","BX"), OP(I,v,"",""), NOP_);
+		P(MOV_eSPIv, "MOV", false, OP(eSP,v,"ESP","SP"), OP(I,v,"",""), NOP_);
+		P(MOV_eBPIv, "MOV", false, OP(eBP,v,"EBP","BP"), OP(I,v,"",""), NOP_);
+		P(MOV_eSIIv, "MOV", false, OP(eSI,v,"ESI","SI"), OP(I,v,"",""), NOP_);
+		P(MOV_eDIIv, "MOV", false, OP(eDI,v,"EDI","DI"), OP(I,v,"",""), NOP_);
 
 		// Group 2 (0xC0/0xC1, 0xD0-0xD3): ROL/ROR/RCL/RCR/SHL/SHR/SAL/SAR, selected by ModRM.reg
-		PG(GRP2_EbIb, "GRP2", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false, 2);
-		PG(GRP2_EvIb, "GRP2", true, true, a(E), s(v), a(I), s(b), a(None), s(None), false, 2);
-		P(RET_Iw, "RET", false, true, a(I), s(w), a(None), s(None), a(None), s(None), false);
-		P(RET, "RET", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(LES_GvMp, "LES", true, false, a(G), s(v), a(M), s(p), a(None), s(None), false);
-		P(LDS_GvMp, "LDS", true, false, a(G), s(v), a(M), s(p), a(None), s(None), false);
-		P(MOV_EbIb, "MOV", true, true, a(E), s(b), a(I), s(b), a(None), s(None), false);
-		P(MOV_EvIv, "MOV", true, true, a(E), s(v), a(I), s(v), a(None), s(None), false);
-		P(ENTER_IwIb, "ENTER", false, true, a(I), s(w), a(I), s(b), a(None), s(None), false);
-		P(LEAVE, "LEAVE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(RETF_Iw, "RETF", false, true, a(I), s(w), a(None), s(None), a(None), s(None), false);
-		P(RETF, "RETF", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(INT3, "INT3", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(INT_Ib, "INT", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
-		P(INTO, "INTO", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P16(IRET, "IRETD", "IRET", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		PG(GRP2_EbIb, "GRP2", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 2);
+		PG(GRP2_EvIb, "GRP2", true, OP(E,v,"",""), OP(I,b,"",""), NOP_, 2);
+		P(RET_Iw, "RET", false, OP(I,w,"",""), NOP_, NOP_);
+		P(RET, "RET", false, NOP_, NOP_, NOP_);
+		P(LES_GvMp, "LES", true, OP(G,v,"",""), OP(M,p,"",""), NOP_);
+		P(LDS_GvMp, "LDS", true, OP(G,v,"",""), OP(M,p,"",""), NOP_);
+		P(MOV_EbIb, "MOV", true, OP(E,b,"",""), OP(I,b,"",""), NOP_);
+		P(MOV_EvIv, "MOV", true, OP(E,v,"",""), OP(I,v,"",""), NOP_);
+		P(ENTER_IwIb, "ENTER", false, OP(I,w,"",""), OP(I,b,"",""), NOP_);
+		P(LEAVE, "LEAVE", false, NOP_, NOP_, NOP_);
+		P(RETF_Iw, "RETF", false, OP(I,w,"",""), NOP_, NOP_);
+		P(RETF, "RETF", false, NOP_, NOP_, NOP_);
+		P(INT3, "INT3", false, NOP_, NOP_, NOP_);
+		P(INT_Ib, "INT", false, OP(I,b,"",""), NOP_, NOP_);
+		P(INTO, "INTO", false, NOP_, NOP_, NOP_);
+		P16(IRET, "IRETD", "IRET", false, NOP_, NOP_, NOP_);
 
-		PG(GRP2_Eb1, "GRP2", true, false, a(E), s(b), a(One), s(None), a(None), s(None), false, 2);
-		PG(GRP2_Ev1, "GRP2", true, false, a(E), s(v), a(One), s(None), a(None), s(None), false, 2);
-		PG(GRP2_EbCL, "GRP2", true, false, a(E), s(b), a(CL), s(None), a(None), s(None), false, 2);
-		PG(GRP2_EvCL, "GRP2", true, false, a(E), s(v), a(CL), s(None), a(None), s(None), false, 2);
+		PG(GRP2_Eb1, "GRP2", true, OP(E,b,"",""), OP(One,None,"1","1"), NOP_, 2);
+		PG(GRP2_Ev1, "GRP2", true, OP(E,v,"",""), OP(One,None,"1","1"), NOP_, 2);
+		PG(GRP2_EbCL, "GRP2", true, OP(E,b,"",""), OP(CL,None,"CL","CL"), NOP_, 2);
+		PG(GRP2_EvCL, "GRP2", true, OP(E,v,"",""), OP(CL,None,"CL","CL"), NOP_, 2);
 
-		P(AAM_Ib, "AAM", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
-		P(AAD_Ib, "AAD", false, true, a(I), s(b), a(None), s(None), a(None), s(None), false);
-		P(SALC, "SALC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(XLAT, "XLAT", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(AAM_Ib, "AAM", false, OP(I,b,"",""), NOP_, NOP_);
+		P(AAD_Ib, "AAD", false, OP(I,b,"",""), NOP_, NOP_);
+		P(SALC, "SALC", false, NOP_, NOP_, NOP_);
+		P(XLAT, "XLAT", false, NOP_, NOP_, NOP_);
 
-		P(ESC0, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ESC1, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ESC2, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ESC3, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ESC4, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ESC5, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ESC6, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(ESC7, "ESC", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(ESC0, "ESC", true, NOP_, NOP_, NOP_);
+		P(ESC1, "ESC", true, NOP_, NOP_, NOP_);
+		P(ESC2, "ESC", true, NOP_, NOP_, NOP_);
+		P(ESC3, "ESC", true, NOP_, NOP_, NOP_);
+		P(ESC4, "ESC", true, NOP_, NOP_, NOP_);
+		P(ESC5, "ESC", true, NOP_, NOP_, NOP_);
+		P(ESC6, "ESC", true, NOP_, NOP_, NOP_);
+		P(ESC7, "ESC", true, NOP_, NOP_, NOP_);
 
-		P(LOOPNZ_Jb, "LOOPNZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(LOOPZ_Jb, "LOOPZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(LOOP_Jb, "LOOP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
-		P(JeCXZ_Jb, "JECXZ", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+		P(LOOPNZ_Jb, "LOOPNZ", false, OP(J,b,"",""), NOP_, NOP_);
+		P(LOOPZ_Jb, "LOOPZ", false, OP(J,b,"",""), NOP_, NOP_);
+		P(LOOP_Jb, "LOOP", false, OP(J,b,"",""), NOP_, NOP_);
+		P(JeCXZ_Jb, "JECXZ", false, OP(J,b,"",""), NOP_, NOP_);
 
-		P(IN_ALIb, "IN AL", false, true, a(AL), s(b), a(I), s(b), a(None), s(None), true);
-		P(IN_eAXIb, "IN eAX", false, true, a(eAX), s(v), a(I), s(b), a(None), s(None), true);
-		P(OUT_IbAL, "OUT", false, true, a(I), s(b), a(AL), s(b), a(None), s(None), false);
-		P(OUT_IbeAX, "OUT", false, true, a(I), s(b), a(eAX), s(v), a(None), s(None), false);
+		P(IN_ALIb, "IN", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
+		P(IN_eAXIb, "IN", false, OP(eAX,v,"EAX","AX"), OP(I,b,"",""), NOP_);
+		P(OUT_IbAL, "OUT", false, OP(I,b,"",""), OP(AL,b,"AL","AL"), NOP_);
+		P(OUT_IbeAX, "OUT", false, OP(I,b,"",""), OP(eAX,v,"EAX","AX"), NOP_);
 
-		P(CALL_Jv, "CALL", false, true, a(J), s(v), a(None), s(None), a(None), s(None), false);
-		P(JMP_Jv, "JMP", false, true, a(J), s(v), a(None), s(None), a(None), s(None), false);
-		P(JMP_Ap, "JMP", false, true, a(A), s(p), a(None), s(None), a(None), s(None), false);
-		P(JMP_Jb, "JMP", false, true, a(J), s(b), a(None), s(None), a(None), s(None), false);
+		P(CALL_Jv, "CALL", false, OP(J,v,"",""), NOP_, NOP_);
+		P(JMP_Jv, "JMP", false, OP(J,v,"",""), NOP_, NOP_);
+		P(JMP_Ap, "JMP", false, OP(A,p,"",""), NOP_, NOP_);
+		P(JMP_Jb, "JMP", false, OP(J,b,"",""), NOP_, NOP_);
 
-		P(IN_ALDX, "IN AL, DX", false, false, a(AL), s(b), a(DX), s(None), a(None), s(None), true);
-		P(IN_eAXDX, "IN eAX, DX", false, false, a(eAX), s(v), a(DX), s(None), a(None), s(None), true);
-		P(OUT_DXAL, "OUT DX, AL", false, false, a(DX), s(None), a(AL), s(b), a(None), s(None), true);
-		P(OUT_DXeAX, "OUT DX, eAX", false, false, a(DX), s(None), a(eAX), s(v), a(None), s(None), true);
+		P(IN_ALDX, "IN", false, OP(AL,b,"AL","AL"), OP(DX,None,"DX","DX"), NOP_);
+		P(IN_eAXDX, "IN", false, OP(eAX,v,"EAX","AX"), OP(DX,None,"DX","DX"), NOP_);
+		P(OUT_DXAL, "OUT", false, OP(DX,None,"DX","DX"), OP(AL,b,"AL","AL"), NOP_);
+		P(OUT_DXeAX, "OUT", false, OP(DX,None,"DX","DX"), OP(eAX,v,"EAX","AX"), NOP_);
 
-		P(LOCK, "LOCK", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(INT1, "INT1", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(REPNE, "REPNE", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(REP, "REP", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(LOCK, "LOCK", false, NOP_, NOP_, NOP_);
+		P(INT1, "INT1", false, NOP_, NOP_, NOP_);
+		P(REPNE, "REPNE", false, NOP_, NOP_, NOP_);
+		P(REP, "REP", false, NOP_, NOP_, NOP_);
 
-		P(HLT, "HLT", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(CMC, "CMC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(HLT, "HLT", false, NOP_, NOP_, NOP_);
+		P(CMC, "CMC", false, NOP_, NOP_, NOP_);
 
 		// Group 3 (0xF6/0xF7): TEST/NOT/NEG/MUL/IMUL/DIV/IDIV, selected by ModRM.reg
-		PG(GRP3_Eb, "GRP3", true, false, a(E), s(b), a(None), s(None), a(None), s(None), false, 3);
-		PG(GRP3_Ev, "GRP3", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false, 3);
+		PG(GRP3_Eb, "GRP3", true, OP(E,b,"",""), NOP_, NOP_, 3);
+		PG(GRP3_Ev, "GRP3", true, OP(E,v,"",""), NOP_, NOP_, 3);
 
-		P(CLC, "CLC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(STC, "STC", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(CLI, "CLI", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(STI, "STI", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(CLD, "CLD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
-		P(STD, "STD", false, false, a(None), s(None), a(None), s(None), a(None), s(None), false);
+		P(CLC, "CLC", false, NOP_, NOP_, NOP_);
+		P(STC, "STC", false, NOP_, NOP_, NOP_);
+		P(CLI, "CLI", false, NOP_, NOP_, NOP_);
+		P(STI, "STI", false, NOP_, NOP_, NOP_);
+		P(CLD, "CLD", false, NOP_, NOP_, NOP_);
+		P(STD, "STD", false, NOP_, NOP_, NOP_);
 
 		// Group 4 (0xFE): INC/DEC Eb.  Group 5 (0xFF): INC/DEC/CALL/JMP/PUSH Ev.
-		PG(GRP4, "GRP4", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false, 4);
-		PG(GRP5, "GRP5", true, false, a(None), s(None), a(None), s(None), a(None), s(None), false, 5);
+		PG(GRP4, "GRP4", true, NOP_, NOP_, NOP_, 4);
+		PG(GRP5, "GRP5", true, NOP_, NOP_, NOP_, 5);
 
 
 
+#undef NOP_
+#undef OP
 #undef s
 #undef a
 #undef P
@@ -479,13 +430,27 @@ public:
 	static int groupNoOf(uint32_t op) { return opcodeTable()[op].groupNo; }
 	static bool isGroup(uint32_t op) { return opcodeTable()[op].groupNo > 0; }
 
+	// An immediate is present iff some operand is decoded from the instruction stream:
+	// I (immediate), J (rel), A (far ptr), O (moffs). Replaces the old hasImmediateByte flag.
+	static bool hasImmediate(const Instruction::OpcodeInfo& info) {
+		auto isImm = [](uint8_t m) {
+			return m == static_cast<uint8_t>(ADDRESSING::I)
+			    || m == static_cast<uint8_t>(ADDRESSING::J)
+			    || m == static_cast<uint8_t>(ADDRESSING::A)
+			    || m == static_cast<uint8_t>(ADDRESSING::O);
+		};
+		return isImm(info.op[0].addressingMode) || isImm(info.op[1].addressingMode) || isImm(info.op[2].addressingMode);
+	}
+
 
 
 		// No group entry's mnemonic moves with the operand size, so the 16-bit name is always empty here.
-#define G(reg,text, hasRM, hasIMM, op1am, op1s, op2am, op2s, op3am, op3s, textNamesOperands, group) n[reg] = Instruction::OpcodeInfo{text,"", hasRM, hasIMM, op1am,op2am,op3am, op1s,op2s,op3s, textNamesOperands, group}
-#define GT(reg,text,group) G(reg, text, true, false, a(None), s(None), a(None), s(None), a(None), s(None), false, group)
+#define G(reg,text, hasRM, op1, op2, op3, group) n[reg] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, group}
+#define GT(reg,text,group) G(reg, text, true, NOP_, NOP_, NOP_, group)
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define NOP_ OP(None,None,"","")
 
 	// 0x80-0x83
 	static constexpr std::array<Instruction::OpcodeInfo, 8> buildGroup1() {
@@ -516,41 +481,44 @@ public:
 	}
 
 	// 0xF6 (Eb) / 0xF7 (Ev). Only /0 and /1 take an immediate; /1 is an undocumented
-	// alias of /0. /4../7 use AL/eAX implicitly - that is not encoded here.
+	// alias of /0. /4../7 use AL/eAX implicitly - that is not encoded here. A size of None
+	// on the operands means "the width the outer row records" (b for 0xF6, v for 0xF7).
 	static constexpr std::array<Instruction::OpcodeInfo, 8> buildGroup3() {
 		std::array<Instruction::OpcodeInfo, 8> n{};
-		G(0, "TEST", true, true, a(E), s(None), a(I), s(None), a(None), s(None), false, 3);
-		G(1, "TEST", true, true, a(E), s(None), a(I), s(None), a(None), s(None), false, 3);
-		G(2, "NOT", true, false, a(E), s(None), a(None), s(None), a(None), s(None), false, 3);
-		G(3, "NEG", true, false, a(E), s(None), a(None), s(None), a(None), s(None), false, 3);
-		G(4, "MUL", true, false, a(E), s(None), a(None), s(None), a(None), s(None), false, 3);
-		G(5, "IMUL", true, false, a(E), s(None), a(None), s(None), a(None), s(None), false, 3);
-		G(6, "DIV", true, false, a(E), s(None), a(None), s(None), a(None), s(None), false, 3);
-		G(7, "IDIV", true, false, a(E), s(None), a(None), s(None), a(None), s(None), false, 3);
+		G(0, "TEST", true, OP(E,None,"",""), OP(I,None,"",""), NOP_, 3);
+		G(1, "TEST", true, OP(E,None,"",""), OP(I,None,"",""), NOP_, 3);
+		G(2, "NOT", true, OP(E,None,"",""), NOP_, NOP_, 3);
+		G(3, "NEG", true, OP(E,None,"",""), NOP_, NOP_, 3);
+		G(4, "MUL", true, OP(E,None,"",""), NOP_, NOP_, 3);
+		G(5, "IMUL", true, OP(E,None,"",""), NOP_, NOP_, 3);
+		G(6, "DIV", true, OP(E,None,"",""), NOP_, NOP_, 3);
+		G(7, "IDIV", true, OP(E,None,"",""), NOP_, NOP_, 3);
 		return n;
 	}
 
 	// 0xFE. /2../7 are illegal.
 	static constexpr std::array<Instruction::OpcodeInfo, 8> buildGroup4() {
 		std::array<Instruction::OpcodeInfo, 8> n{};
-		G(0, "INC", true, false, a(E), s(b), a(None), s(None), a(None), s(None), false, 4);
-		G(1, "DEC", true, false, a(E), s(b), a(None), s(None), a(None), s(None), false, 4);
+		G(0, "INC", true, OP(E,b,"",""), NOP_, NOP_, 4);
+		G(1, "DEC", true, OP(E,b,"",""), NOP_, NOP_, 4);
 		return n;
 	}
 
 	// 0xFF. /3 and /5 are the far forms (m16:32); /7 is illegal.
 	static constexpr std::array<Instruction::OpcodeInfo, 8> buildGroup5() {
 		std::array<Instruction::OpcodeInfo, 8> n{};
-		G(0, "INC", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false, 5);
-		G(1, "DEC", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false, 5);
-		G(2, "CALL", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false, 5);
-		G(3, "CALLF", true, false, a(M), s(p), a(None), s(None), a(None), s(None), false, 5);
-		G(4, "JMP", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false, 5);
-		G(5, "JMPF", true, false, a(M), s(p), a(None), s(None), a(None), s(None), false, 5);
-		G(6, "PUSH", true, false, a(E), s(v), a(None), s(None), a(None), s(None), false, 5);
+		G(0, "INC", true, OP(E,v,"",""), NOP_, NOP_, 5);
+		G(1, "DEC", true, OP(E,v,"",""), NOP_, NOP_, 5);
+		G(2, "CALL", true, OP(E,v,"",""), NOP_, NOP_, 5);
+		G(3, "CALLF", true, OP(M,p,"",""), NOP_, NOP_, 5);
+		G(4, "JMP", true, OP(E,v,"",""), NOP_, NOP_, 5);
+		G(5, "JMPF", true, OP(M,p,"",""), NOP_, NOP_, 5);
+		G(6, "PUSH", true, OP(E,v,"",""), NOP_, NOP_, 5);
 		return n;
 	}
 
+#undef NOP_
+#undef OP
 #undef s
 #undef a
 #undef GT
@@ -590,28 +558,11 @@ public:
 		}
 	}
 
-	// Resolve a group opcode + ModRM.reg to the instruction it actually names. An illegal
-	// /reg (FF /7, FE /2..7) comes back with an empty text rather than throwing: a linear
-	// sweep of .text runs over data, so invalid encodings are routine and must not kill it.
 	static const Instruction::OpcodeInfo& groupEntryOf(uint32_t op, uint8_t reg) {
 		return groupTableOf(op)[reg & 0x07];
 	}
 
-	// The one row every caller should read: the 256-entry row for a plain opcode, and for a group
-	// opcode that row merged with the group entry ModRM.reg selects. Both the byte-eater and the
-	// printer must go through this, or they disagree on how long the instruction is and the next
-	// one decodes from the wrong offset.
-	//
-	// The two rows carry different halves of the truth, so neither can simply win:
-	//   groups 1 and 2 (0x80-0x83, 0xC0-0xD3) spell their operands out in the outer row and use
-	//     the group entry for the mnemonic alone - their entries name no operands at all;
-	//   groups 4 and 5 (0xFE, 0xFF) leave the outer row empty and carry operands in the entry;
-	//   group 3 (0xF6/0xF7) splits them - the outer row knows the operand width, and only the
-	//     entry knows that /0 and /1 (TEST) take an immediate the outer row never mentions.
-	// So: the entry wins wherever it names an operand, the outer row fills every blank, and a
-	// size of None on the entry means "the width this opcode works at" - which is what the outer
-	// row records in op1s. That is the only thing group 3's shared entries cannot know for
-	// themselves, since they are reached through both 0xF6 (byte) and 0xF7 (word/dword).
+
 	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t reg) {
 		const Instruction::OpcodeInfo& outer = opcodeTable()[op];
 		if (!isGroup(op)) return outer;
@@ -625,21 +576,221 @@ public:
 		Instruction::OpcodeInfo info = outer;
 		info.text = entry.text;
 		info.text16 = entry.text16;   // both names come from whichever row named the instruction
-		info.hasImmediateByte = outer.hasImmediateByte || entry.hasImmediateByte;
 
-		const uint8_t opSize = (outer.op1s != none) ? outer.op1s : entry.op1s;
+		const uint8_t opSize = (outer.op[0].size != none) ? outer.op[0].size : entry.op[0].size;
 
-		auto take = [&](uint8_t entryMode, uint8_t entrySize, uint8_t& mode, uint8_t& size) {
-			if (entryMode == noMode) return;                     // entry says nothing: keep the outer row's
-			mode = entryMode;
-			size = (entrySize != none) ? entrySize : opSize;
+		auto take = [&](const Instruction::TableOperand& e, Instruction::TableOperand& dst) {
+			if (e.addressingMode == noMode) return;              // entry says nothing: keep the outer row's
+			dst.addressingMode = e.addressingMode;
+			dst.size    = (e.size != none) ? e.size : opSize;
+			dst.value   = e.value;
+			dst.value16 = e.value16;
 		};
-		take(entry.op1am, entry.op1s, info.op1am, info.op1s);
-		take(entry.op2am, entry.op2s, info.op2am, info.op2s);
-		take(entry.op3am, entry.op3s, info.op3am, info.op3s);
+		take(entry.op[0], info.op[0]);
+		take(entry.op[1], info.op[1]);
+		take(entry.op[2], info.op[2]);
 
 		return info;
 	}
+
+
+	// Two-byte (0F-escape) opcode map. A SEPARATE 256-entry table keyed by the byte
+	// after 0F: 0F B6 is MOVZX, unrelated to one-byte B6. Never index opcodeTable()
+	// with an 0F pair - that array is 0x00-0xFF and 0x0Fxx runs off the end.
+	//
+	// First cut: the integer opcodes compilers actually emit. Unpopulated slots stay
+	// empty (rendered "(bad)") but still length-correct at 2 bytes, since they carry
+	// no ModRM/immediate here. Deferred: SSE / mandatory-prefix forms (66/F2/F3 0F xx),
+	// the three-byte 0F 38 / 0F 3A maps, and groups 6/7/9/15/16. Only group 8 (0F BA)
+	// is wired, because it carries an imm8 and so affects length.
+	static constexpr std::array<Instruction::OpcodeInfo, 256> buildTwoByteOpcodes() {
+		std::array<Instruction::OpcodeInfo, 256> n{};
+
+#define T16(idx,text,text16,hasRM,op1,op2,op3) n[idx] = Instruction::OpcodeInfo{text,text16, hasRM, op1, op2, op3, -1}
+#define T(idx,text,hasRM,op1,op2,op3)          n[idx] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, -1}
+#define TG(idx,text,hasRM,op1,op2,op3,group)   n[idx] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, group}
+#define a(name) static_cast<uint8_t>(ADDRESSING::name)
+#define s(name) static_cast<uint8_t>(SIZE::name)
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define NOP_ OP(None,None,"","")
+
+		T(0x0B, "UD2",   false, NOP_, NOP_, NOP_);
+		T(0x31, "RDTSC", false, NOP_, NOP_, NOP_);
+		T(0xA2, "CPUID", false, NOP_, NOP_, NOP_);
+
+		// Multi-byte NOP (0F 1F /0) - the padding between functions. Has a ModRM, so its
+		// addressed bytes must be eaten or every run of it desyncs the sweep.
+		T(0x1F, "NOP", true, OP(E,v,"",""), NOP_, NOP_);
+
+		// CMOVcc Gv, Ev  (0F 40-4F)
+		T(0x40,"CMOVO",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x41,"CMOVNO", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x42,"CMOVB",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x43,"CMOVNB", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x44,"CMOVZ",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x45,"CMOVNZ", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x46,"CMOVBE", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x47,"CMOVA",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x48,"CMOVS",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x49,"CMOVNS", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x4A,"CMOVP",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x4B,"CMOVNP", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x4C,"CMOVL",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x4D,"CMOVNL", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x4E,"CMOVLE", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0x4F,"CMOVNLE",true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+
+		// Jcc rel16/rel32  (0F 80-8F) - no ModRM; z immediate (rel16 under a 0x66)
+		T(0x80,"JO",  false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x81,"JNO", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x82,"JB",  false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x83,"JNB", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x84,"JZ",  false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x85,"JNZ", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x86,"JBE", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x87,"JA",  false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x88,"JS",  false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x89,"JNS", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x8A,"JP",  false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x8B,"JNP", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x8C,"JL",  false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x8D,"JNL", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x8E,"JLE", false, OP(J,z,"",""), NOP_, NOP_);
+		T(0x8F,"JNLE",false, OP(J,z,"",""), NOP_, NOP_);
+
+		// SETcc Eb  (0F 90-9F) - ModRM, no immediate
+		T(0x90,"SETO",  true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x91,"SETNO", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x92,"SETB",  true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x93,"SETNB", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x94,"SETZ",  true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x95,"SETNZ", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x96,"SETBE", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x97,"SETA",  true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x98,"SETS",  true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x99,"SETNS", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x9A,"SETP",  true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x9B,"SETNP", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x9C,"SETL",  true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x9D,"SETNL", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x9E,"SETLE", true, OP(E,b,"",""), NOP_, NOP_);
+		T(0x9F,"SETNLE",true, OP(E,b,"",""), NOP_, NOP_);
+
+		// Bit tests: reg forms Ev,Gv (no imm). 0F BA is the Ev,Ib group form (below).
+		T(0xA3,"BT",  true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		T(0xAB,"BTS", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		T(0xB3,"BTR", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		T(0xBB,"BTC", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+
+		T(0xAF,"IMUL", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+
+		// CMPXCHG / XADD (lock-prefixable read-modify-write)
+		T(0xB0,"CMPXCHG", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		T(0xB1,"CMPXCHG", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		T(0xC0,"XADD",    true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
+		T(0xC1,"XADD",    true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+
+		// MOVZX / MOVSX  Gv, Eb/Ew
+		T(0xB6,"MOVZX", true, OP(G,v,"",""), OP(E,b,"",""), NOP_);
+		T(0xB7,"MOVZX", true, OP(G,v,"",""), OP(E,w,"",""), NOP_);
+		T(0xBE,"MOVSX", true, OP(G,v,"",""), OP(E,b,"",""), NOP_);
+		T(0xBF,"MOVSX", true, OP(G,v,"",""), OP(E,w,"",""), NOP_);
+
+		// BSF / BSR  Gv, Ev
+		T(0xBC,"BSF", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+		T(0xBD,"BSR", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
+
+		// Group 8: BT/BTS/BTR/BTC  Ev, Ib  (0F BA) - ModRM + imm8, name from ModRM.reg
+		TG(0xBA,"GRP8", true, OP(E,v,"",""), OP(I,b,"",""), NOP_, 8);
+
+		// BSWAP +r  (0F C8-CF) - register in low 3 opcode bits, no ModRM/immediate
+		T(0xC8,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+		T(0xC9,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+		T(0xCA,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+		T(0xCB,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+		T(0xCC,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+		T(0xCD,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+		T(0xCE,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+		T(0xCF,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
+
+#undef NOP_
+#undef OP
+#undef s
+#undef a
+#undef TG
+#undef T
+#undef T16
+		return n;
+	}
+
+	static const std::array<Instruction::OpcodeInfo, 256>& twoByteTable() {
+		static constexpr std::array<Instruction::OpcodeInfo, 256> t = buildTwoByteOpcodes();
+		return t;
+	}
+
+	// 0F BA group 8: /4 BT /5 BTS /6 BTR /7 BTC (/0../3 illegal). Names only - the
+	// operands (Ev, Ib) come from the outer 0F BA row, like one-byte grp1/2.
+	static constexpr std::array<Instruction::OpcodeInfo, 8> buildTwoByteGroup8() {
+		std::array<Instruction::OpcodeInfo, 8> n{};
+#define a(name) static_cast<uint8_t>(ADDRESSING::name)
+#define s(name) static_cast<uint8_t>(SIZE::name)
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define NOP_ OP(None,None,"","")
+#define GT(reg,text) n[reg] = Instruction::OpcodeInfo{text,"", true, NOP_, NOP_, NOP_, 8}
+		GT(4,"BT"); GT(5,"BTS"); GT(6,"BTR"); GT(7,"BTC");
+#undef GT
+#undef NOP_
+#undef OP
+#undef s
+#undef a
+		return n;
+	}
+
+	static const std::array<Instruction::OpcodeInfo, 8>& twoByteGroup8Table() {
+		static constexpr std::array<Instruction::OpcodeInfo, 8> t = buildTwoByteGroup8();
+		return t;
+	}
+
+	static bool isTwoByteGroup(uint32_t op2) { return twoByteTable()[op2].groupNo > 0; }
+
+	static const std::array<Instruction::OpcodeInfo, 8>& twoByteGroupTableOf(uint32_t op2) {
+		switch (twoByteTable()[op2].groupNo) {
+		case 8: return twoByteGroup8Table();
+		default: throw std::runtime_error("Two-byte opcode is not an extension group..");
+		}
+	}
+
+	// Same contract as resolvedInfo(), for the 0F map: a plain row for a non-group
+	// opcode, or that row merged with the group entry ModRM.reg selects. Go through
+	// this from both the byte-eater and the printer so they agree on length.
+	static Instruction::OpcodeInfo twoByteResolvedInfo(uint32_t op2, uint8_t reg) {
+		const Instruction::OpcodeInfo& outer = twoByteTable()[op2];
+		if (outer.groupNo <= 0) return outer;
+
+		const Instruction::OpcodeInfo& entry = twoByteGroupTableOf(op2)[reg & 0x07];
+		if (entry.text.empty()) return entry;   // illegal /reg
+
+		constexpr uint8_t none   = static_cast<uint8_t>(SIZE::None);
+		constexpr uint8_t noMode = static_cast<uint8_t>(ADDRESSING::None);
+
+		Instruction::OpcodeInfo info = outer;
+		info.text   = entry.text;
+		info.text16 = entry.text16;
+
+		const uint8_t opSize = (outer.op[0].size != none) ? outer.op[0].size : entry.op[0].size;
+		auto take = [&](const Instruction::TableOperand& e, Instruction::TableOperand& dst) {
+			if (e.addressingMode == noMode) return;
+			dst.addressingMode = e.addressingMode;
+			dst.size    = (e.size != none) ? e.size : opSize;
+			dst.value   = e.value;
+			dst.value16 = e.value16;
+		};
+		take(entry.op[0], info.op[0]);
+		take(entry.op[1], info.op[1]);
+		take(entry.op[2], info.op[2]);
+		return info;
+	}
+
 
 //   E=modrm r/m, G=modrm reg, I=imm, J=rel offset, O=moffs, S=seg reg, M=memory,
 //   A=far ptr, Z=register in low 3 bits of opcode (+r), AL/eAX/DX/CL/One=implicit
@@ -668,7 +819,7 @@ enum class Prefix : uint16_t {
 	REPNE = 0xF2,
 	REP = 0xF3,
 
-	// segment override
+	// ---segment override
 
 	CS = 0x2E,
 	SS = 0x36,
@@ -677,27 +828,26 @@ enum class Prefix : uint16_t {
 	FS = 0x64,
 	GS = 0x65,
 
+	// ---
+
 	HLT = 0xF4,
 	CMC = 0xF5,
-
 	INT1 = 0xF1,
-
-
-	// operand-size prefix
-
 	OPSIZE = 0x66,
 
-	// branch hints
+	// ---branch hints
+
 	NT = 0x2E,
 	T = 0x3E,
 
-	// address-size override prefix
+	// ---
+
 	ADDRSIZE = 0x67
 
 
 };
 
-enum class OPCODE : uint32_t {
+enum class OPCODE : uint32_t { // value is orientative
 	ADD_EbGb = 0x00,
 	ADD_EvGv = 0x01,
 	ADD_GbEb = 0x02,

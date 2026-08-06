@@ -5,9 +5,6 @@
 #include "mnemonic/IA-32/IA-32-mnemonic.h"
 
 
-using ADDRESSING = IA_32::ADDRESSING;
-using SIZE = IA_32::SIZE;
-
 void Disassembler::decode() {
 	decodedInstructions.clear();
 	instructionAddresses.clear();
@@ -35,147 +32,200 @@ void Disassembler::decode() {
 
 uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
-	Instruction::Prefix field1; uint64_t field1_tmp;
-	uint64_t field2 = 0, field3 = 0, field4 = 0, field5 = 0, field6 = 0;
+	uint64_t instructionBytes[15]; // instr cap of 15 bytes
+	uint8_t tmp = 0x0;
+	uint8_t cnt = 0;
+	uint32_t width = 0, dispWidth = 0;   // bytes this immediate occupies in the stream
+
+
+
+	bool checks[8] = { false, false, false, false, false, false, false , false}; 
+
+	enum flags {
+		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize
+	};
+
+
+
+	int endPrefix = 0, endOpcode = 0, immBegin = 0;
 	uint64_t initAddress = address;
 
-	for (int i = 0; i < 4; ++i)
-		field1.byte[i] = 0x00;
+	while (cnt < 15)
+		instructionBytes[cnt++] = 0x0;
+	cnt = 0;
 
-	field1_tmp = contents.read_u8(address);
+	tmp = static_cast<uint64_t>(contents.read_u8(address++));
 
-	// The loop has to read one byte past the prefixes to know where they end, so on exit
-	// field1_tmp already holds the opcode and address already points at it. Reading the
-	// opcode again here would fetch the ModRM byte instead, and the ++address below is
-	// what steps past the opcode - both must happen exactly once.
-	//
-	// Only four prefixes fit in the field, but an instruction may carry more (it is legal
-	// up to a total of 15 bytes), and a prefix left unconsumed would be handed to the
-	// decoder as an opcode. So keep eating past the fourth, and stop at the length limit:
-	// a sweep of .text runs over data, and a run of 0x66 bytes there is not an instruction
-	// at all - without the bound it reads until it falls off the end of the file.
-	int index = 0;
-	for (int prefixBytes = 0; IA_32::isPrefix(field1_tmp) && prefixBytes < 14; ++prefixBytes) {
-		if (index < 4)
-			field1.byte[index++] = field1_tmp;
 
-		field1_tmp = contents.read_u8(++address);
+	while (IA_32::isPrefix(tmp) && cnt < 15) {
+		checks[hasPrefix] = true;
+		switch (tmp) {
+		case 0x66:
+			checks[hasOpsize] = true; break;
+
+		case 0x67:
+			checks[hasAddrSize] = true; break;
+		default:
+			break;
+		}
+
+		instructionBytes[cnt++] = tmp;
+		tmp = static_cast<uint64_t>(contents.read_u8(address++));
+
 	}
 
-	field2 = field1_tmp;
-	++address;
+	if (cnt < 15) {
+		endPrefix = cnt; // past the last prefix
 
-	field3 = 0x0;
+		if (tmp == 0x0f) checks[has2Byte] = true;
+
+		instructionBytes[cnt++] = tmp;
+		tmp = static_cast<uint64_t>(contents.read_u8(address));
+
+		if (checks[has2Byte] && cnt < 15) {
+			instructionBytes[cnt++] = tmp; address++; // reading the second byte
+		}
+		endOpcode = cnt; // past the last opcode byte
+	}
+
+	uint16_t opcode = static_cast<uint16_t>(instructionBytes[endPrefix]);
+
 	uint8_t mod = 0x0, reg_op = 0x0, rm = 0x0;
-	if (IA_32::hasRMbyte(field2)) {
-		field3 = contents.read_u8(address++); // getting ModR/M byte
+	if (IA_32::hasRMbyte(static_cast<uint32_t>(opcode)) && cnt < 15){
+		checks[hasModRM] = true;
+		instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // getting ModR/M byte
 
-		mod = ((field3 & 0b11000000) >> 6);
-		reg_op = ((field3 & 0b00111000) >> 3);
-		rm = (field3 & 0b00000111);
+		mod = ((instructionBytes[cnt-1] & 0b11000000) >> 6);
+		reg_op = ((instructionBytes[cnt-1] & 0b00111000) >> 3);
+		rm = (instructionBytes[cnt-1] & 0b00000111);
 
-		if (mod != 0b11 && rm == 0b100)
-			field4 = contents.read_u8(address++); // read sib;
+		if (mod != 0b11 && rm == 0b100 && cnt < 15) {
+			instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // read sib;
+			checks[hasSIB] = true;
 
-		// A displacement is an offset from a register, so it is signed: disp8 0xFC is -4,
-		// not +252. Widen it here - once it sits in an unsigned field the sign is gone
-		// for good, and no cast downstream can bring it back.
+		}
+
+		checks[hasDisp] = true;
 		switch (mod) {
 		case 0b01:
-			field5 = static_cast<uint32_t>(static_cast<int8_t>(contents.read_u8(address++)));
+			if (cnt < 15) {
+				instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int8_t>(contents.read_u8(address++)));
+				dispWidth = 1;
+			}
+			else checks[hasDisp] = false;
 			break;
 		case 0b10:
-			field5 = contents.read_u32(address);              // disp32: already the full width
-			address += 4;
+			if (cnt < 15) {
+				instructionBytes[cnt++] = contents.read_u32(address); // disp32: already the full width
+				dispWidth = 2;
+				if (!checks[hasAddrSize])
+					dispWidth += 2;				address += 4;
+			}
+			else checks[hasDisp] = false;
 			break;
 		case 0b00:
-			if (rm == 0b101 || (rm == 0b100 && (field4 & 0b00000111) == 0b101)) {
-				field5 = contents.read_u32(address);          // absolute address, no base register
-				address += 4;
-			}
-			else field5 = 0x0;
-			break;
+			if (cnt >= 15) checks[hasDisp] = false;
+			else if (rm == 0b101 || (rm == 0b100 && (instructionBytes[endOpcode+1] & 0b00000111) == 0b101)) {
+					instructionBytes[cnt++] = contents.read_u32(address);          // absolute address, no base register
+					
+					dispWidth = 2;
+					if(!checks[hasAddrSize])
+						dispWidth += 2;
+
+					address += 4;
+				break;
+				}
+		
 		default:
-			field5 = 0x0;
+			checks[hasDisp] = false;
 			break;
 		}
 	}
 
+	const Instruction::OpcodeInfo info = IA_32::resolvedInfo(static_cast<uint32_t>(opcode), reg_op);
 
-	// A group opcode (0x80-0x83, 0xC0/0xC1, 0xD0-0xD3, 0xF6/0xF7, 0xFE/0xFF) names its
-	// instruction in ModRM.reg, and the 256-entry row it sits behind is only a placeholder with
-	// empty operand fields - 0xF7's row claims no immediate at all, though F7 /0 is TEST Ev, Iz.
-	// Resolve against the group table before deciding how many bytes this instruction eats:
-	// read one too few and every instruction after this one starts on the wrong byte.
-	const Instruction::OpcodeInfo info = IA_32::resolvedInfo(field2, reg_op);
-
-	if (info.hasImmediateByte) { // set immediate field
-
-#define cast(name) static_cast<uint8_t>(name)
+	if (IA_32Mnemonic::hasImmediate(info) && cnt<15) { // set immediate field
+		checks[hasImm] = true;
+		immBegin = cnt;
 
 		uint8_t immSize = 0;
 		uint8_t immAddr = 0;
-		field6 = 0x0;
 
-		if (info.op1am == cast(ADDRESSING::I) || info.op1am == cast(ADDRESSING::J) || info.op1am == cast(ADDRESSING::A) || info.op1am == cast(ADDRESSING::O) ){
-			immSize = info.op1s;
-			immAddr = info.op1am;
-		}
-		else if (info.op2am == cast(ADDRESSING::I) || info.op2am == cast(ADDRESSING::J) || info.op2am == cast(ADDRESSING::A)
-			|| info.op2am == cast(ADDRESSING::O) ) {
-			immSize = info.op2s;
-			immAddr = info.op2am;
-		}
-		else {
-			immSize = info.op3s;
-			immAddr = info.op3am;
-		}
+		bool pick[] = { false, false, false };
+#define cast(name) static_cast<uint8_t>(name)
 
-		const bool sixteenBit = (field1.byte[0] == 0x66 || field1.byte[1] == 0x66 || field1.byte[2] == 0x66 || field1.byte[3] == 0x66);
-		const bool isRelative = (immAddr == static_cast<uint8_t>(ADDRESSING::J));
+		for (int i = 0; i < 3; ++i)
+			switch (info.op[i].addressingMode) {
+			case cast(IA_32::ADDRESSING::I):
+			case cast(IA_32::ADDRESSING::J):
+			case cast(IA_32::ADDRESSING::A):
+			case cast(IA_32::ADDRESSING::O):
+				pick[i] = true;
+				break;
 
-		uint32_t width = 0;   // bytes this immediate occupies in the stream
-		switch (immSize) {
-		case cast(SIZE::b): width = 1; break;
-		case cast(SIZE::w): width = 2; break;
-		case cast(SIZE::v):
-		case cast(SIZE::z): width = sixteenBit ? 2 : 4; break;
-		default:
-			fprintf(stderr, "Immediate size not implemented yet (opcode %#x)\n", field2);
-			break;
-		}
+			default:
+				break;
+			}
 
-		// A relative offset is signed - rel8 0xF0 is -16, a jump backwards. Every other
-		// immediate (a value, a port, an absolute address) is just bits, so read it plain.
-		int64_t value = 0;
-		switch (width) {
-		case 1:
-			value = isRelative ? static_cast<int8_t>(contents.read_u8(address))
-				: static_cast<int64_t>(contents.read_u8(address));
-			break;
-		case 2:
-			value = isRelative ? static_cast<int16_t>(contents.read_u16(address))
-				: static_cast<int64_t>(contents.read_u16(address));
-			break;
-		case 4:
-			value = isRelative ? static_cast<int32_t>(contents.read_u32(address))
-				: static_cast<int64_t>(contents.read_u32(address));
-			break;
-		}
-		address += width;
 
-		// rel is counted from the END of the instruction, so resolve the target only once
-		// every byte of it has been consumed - address - initAddress is now its full length.
-		field6 = isRelative
-			? static_cast<uint32_t>(vaddr + (address - initAddress) + value)
-			: static_cast<uint32_t>(value);
+		for (int i = 0; i < 3; ++i)
+			if (pick[i]) {
+
+				immSize = info.op[i].size;
+				immAddr = info.op[i].addressingMode;
+
+				const bool isRelative = (immAddr == static_cast<uint8_t>(IA_32::ADDRESSING::J));
+
+				switch (immSize) {
+				case cast(IA_32::SIZE::b): width = 1; break;
+				case cast(IA_32::SIZE::w): width = 2; break;
+				case cast(IA_32::SIZE::v):
+				case cast(IA_32::SIZE::z): width = checks[hasOpsize] ? 2 : 4; break;
+				case cast(IA_32::SIZE::p): width = checks[hasOpsize] ? 4 : 6; break;
+				default:
+					fprintf(stderr, "Immediate IA_32::SIZE not implemented yet (opcode %#x)\n", opcode);
+					break;
+				}
+
+				if (immAddr == cast(IA_32::ADDRESSING::O))
+					width = checks[hasAddrSize] ? 2 : 4;
+
+
+				int64_t value = 0;
+				switch (width) {
+				case 1:
+					value = isRelative ? static_cast<int8_t>(contents.read_u8(address))
+						: static_cast<uint64_t>(contents.read_u8(address));
+					break;
+				case 2:
+					value = isRelative ? static_cast<int16_t>(contents.read_u16(address))
+						: static_cast<uint64_t>(contents.read_u16(address));
+					break;
+				case 4:
+					value = isRelative ? static_cast<int32_t>(contents.read_u32(address))
+						: static_cast<uint64_t>(contents.read_u32(address));
+					break;
+				case 6: {
+					uint32_t off = contents.read_u32(address);
+					uint16_t seg = contents.read_u16(address + 4);
+					value = (static_cast<uint64_t>(seg) << 32) | off;
+					break;
+				}
+				}
+				address += width;
+
+				// rel is counted from the END of the instruction, so resolve the target only once
+				// every byte of it has been consumed - address - initAddress is now its full length.
+				instructionBytes[cnt++] = isRelative
+					? static_cast<uint64_t>(vaddr + (address - initAddress) + value)
+					: static_cast<uint64_t>(value);
+			}
 	}
-	else field6 = 0x0;
 
 #undef cast
 
 	auto instruction = std::make_unique<IA_32>();
-	instruction->decode(field1, field2, field3, field4, field5, field6);
+	instruction->decode(instructionBytes , checks, endPrefix, endOpcode, immBegin, width, dispWidth);
 	decodedInstructions.push_back(std::move(instruction));
 
 	return address; // address where next instruction begins

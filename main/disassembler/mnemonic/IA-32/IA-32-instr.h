@@ -9,10 +9,6 @@
 #include <stdexcept>
 #pragma once
 
-#define registerOf(field1,field2) IA_32Mnemonic::registerOf(field1,field2)
-
-
-
 // FORMAT:
 
 // prefix : 0-3 bytes
@@ -28,18 +24,9 @@
 #define OPCODE_MAX 255
 
 
-// in IA-32 -> default operand size : 32bits, change with 66f
+// in IA-32 -> default operand size : 32bits, change with 66f / 67f
 
 class IA_32: public Instruction{
-
-	
-private:
-
-	Instruction::Prefix prefix;
-	uint64_t  opcode, opcode2, scale, index, base, displacement, immediate;
-	Instruction::Operand op1, op2, op3;
-
-	std::string instructionStr;
 
 
 public:
@@ -51,122 +38,134 @@ public:
 	using OPCODE = IA_32Mnemonic::OPCODE;
 	using Prefix = IA_32Mnemonic::Prefix;
 
-	static const std::array<Instruction::OpcodeInfo, 256>& opcodeTable() { return IA_32Mnemonic::opcodeTable(); }
-	static const std::array<std::string_view, 256>& prefixTable() { return IA_32Mnemonic::prefixTable(); }
+static const std::array<Instruction::OpcodeInfo, 256>& opcodeTable()	{ return IA_32Mnemonic::opcodeTable(); }
+static const std::array<std::string_view, 256>& prefixTable()			{ return IA_32Mnemonic::prefixTable(); }
+static bool hasRMbyte(uint32_t op)										{ return opcodeTable()[op].hasRMByte; }
+static Instruction::OpcodeInfo resolvedInfo(uint64_t op, uint8_t reg)	{ return IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(op), reg); }
+static std::string_view opcodeStrOf(uint64_t op, uint8_t reg)			{ return resolvedInfo(op, reg).text; }
+static const std::array<Instruction::OpcodeInfo, 256>& twoByteTable()	{ return IA_32Mnemonic::twoByteTable(); }
+static bool hasRMbyte2(uint32_t op2)									{ return twoByteTable()[op2].hasRMByte; }
+static Instruction::OpcodeInfo twoByteResolvedInfo(uint64_t op2, uint8_t reg)	{ return IA_32Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(op2), reg); }
+static std::string_view twoByteStrOf(uint64_t op2, uint8_t reg)			{ return twoByteResolvedInfo(op2, reg).text; }
+static std::string_view prefixStrOf(uint8_t op)							{ if (isPrefix(op)) return prefixTable()[op];  else return ""; }
+static bool isPrefix(uint8_t op)										{ return !prefixTable()[op].empty(); }
 
 
-static bool hasRMbyte(uint32_t op)                { return opcodeTable()[op].hasRMByte; }
-// Group-aware row: the only one safe to read the mnemonic, operands and immediates from. Needs
-// ModRM.reg, so it can only be asked for after the ModRM byte has been read. For a group opcode
-// (0xF6/0xF7, 0x80-0x83, 0xFE/0xFF, ...) the flat 256-row is a placeholder, so the accessors
-// below all resolve through this instead of reading opcodeTable()[op] directly - reading the flat
-// row would e.g. name 0xF7 by its group placeholder and miss that /0 (TEST) takes an immediate,
-// desyncing the byte stream. Each accessor rebuilds the row, so call resolvedInfo() once if you
-// need several.
-static Instruction::OpcodeInfo resolvedInfo(uint64_t op, uint8_t reg) { return IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(op), reg); }
-static std::string_view opcodeStrOf(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).text; }
-static bool hasImmediateByte(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).hasImmediateByte; }
-static uint8_t op1AddressingMode(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op1am; }
-static uint8_t op2AddressingMode(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op2am; }
-static uint8_t op3AddressingMode(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op3am; }
-static uint8_t op1Size(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op1s; }
-static uint8_t op2Size(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op2s; }
-static uint8_t op3Size(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).op3s; }
+IA_32() {};
 
-
-static std::string_view prefixStrOf(uint8_t op) { if (isPrefix(op)) return prefixTable()[op];  else return ""; }
-static bool isPrefix(uint8_t op) { return !prefixTable()[op].empty(); }
-
-
-IA_32() :prefix({ PREFIX_UNINITIALIZED ,PREFIX_UNINITIALIZED,PREFIX_UNINITIALIZED,PREFIX_UNINITIALIZED }), opcode(UINT64_MAX), scale(UINT64_MAX), base(UINT64_MAX), index(UINT64_MAX), displacement(UINT64_MAX), immediate(UINT64_MAX), opcode2(UINT64_MAX){};
-
-inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint64_t sib, uint64_t disp, uint64_t imm) {
-
-
-	uint8_t mod = 0, reg_op = 0, rm = 0;
-	bool hasDisplacement = false;
-	bool hasSIB = false;
-	bool is16bit = false;
-
-	op1 = op2 = op3 = Instruction::Operand{ "", UINT_MAX,
-		static_cast<uint8_t>(ADDRESSING::None), static_cast<uint8_t>(SIZE::None) };
-
-	prefix = pfx;
-	bool hasPrefix = (pfx.byte[0] != PREFIX_UNINITIALIZED) ? true : false;
-	for (int i = 0; i < 4 && hasPrefix; i++) {
-		if (isPrefix(prefix.byte[i])) machineCode += std::format("{:#x}",prefix.byte[i]);
-		if (prefix.byte[i] == 0x66)
-			is16bit = true;
-	}
-
-	opcode = static_cast<uint32_t>(opc);
-	machineCode += std::format("{:#x}", opc);
-
+inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[8], const int& prefixEnd, const int& opcodeEnd, const int& immBegin, const uint32_t& immWidth, const uint32_t& dispWidth) {
 	
+	uint8_t mod = 0, reg_op = 0, rm = 0, scale = 0, index = 0, base = 0;
+	enum flags { 
+		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize
+	};
 
-	const Instruction::OpcodeInfo& outer = opcodeTable()[opcode];
+	std::string segment = "", fmt = "";
+	for (int i = 0; i < prefixEnd; ++i) {
 
+		switch (instructionBytes[i]) {
+		case 0x2e:
+			segment = "CS:";
+			break;
 
+		case 0x34:
+			segment = "SS:";	
+			break;
 
-	const bool isGroupOpcode = IA_32Mnemonic::isGroup(opcode);
+		case 0x3e:
+			segment = "DS:";
+			break;
 
-	if (outer.hasRMByte) {
-		machineCode += std::format("{:#x}", rmbyte);
+		case 0x26:
+			segment = "ES:";
+			break;
 
-		mod    = static_cast<uint8_t>((rmbyte & 0b11000000) >> 6);
-		reg_op = static_cast<uint8_t>((rmbyte & 0b00111000) >> 3);
-		rm     = static_cast<uint8_t>(rmbyte & 0b00000111);
+		case 0x64:
+			segment = "FS:";
+			break;
 
-		if (isGroupOpcode)
-			opcode2 = reg_op;
+		case 0x65:
+			segment = "GS:";
+			break;
 
-
-		hasSIB = (mod != 0b11 && rm == static_cast<uint8_t>(REGISTER::SP));         // rm 100 = SIB byte follows
-		hasDisplacement = (mod == 0b01 || mod == 0b10)                              // disp8 / disp32
-		               || (mod == 0b00 && rm == 0b101);                  // 00/101 = disp32, no base
+		default :
+			break;
+		}
+		machineCode += std::format("{:02x} ", instructionBytes[i]);
+		instructionStr += prefixStrOf(static_cast<uint8_t>(instructionBytes[i]));
+		instructionStr += " ";
 	}
 
-	// ModRM.reg is known now, so the placeholder row a group opcode sits behind ("GRP5", no
-	// operands, no immediate) can be swapped for the instruction it actually names. Every
-	// operand field below reads from this, never from the 256-entry row.
-	const Instruction::OpcodeInfo info = IA_32Mnemonic::resolvedInfo(opcode, reg_op);
+	Instruction::OpcodeInfo opcode;
+	if (checks[hasModRM]) {
 
-	op1.addressingMode = info.op1am; op1.size = info.op1s;
-	op2.addressingMode = info.op2am; op2.size = info.op2s;
-	op3.addressingMode = info.op3am; op3.size = info.op3s;
+		mod    = static_cast<uint8_t>((instructionBytes[opcodeEnd] & 0b11000000) >> 6);
+		reg_op = static_cast<uint8_t>((instructionBytes[opcodeEnd] & 0b00111000) >> 3);
+		rm     = static_cast<uint8_t>(instructionBytes[opcodeEnd] & 0b00000111);
+
+
+		if (checks[has2Byte]) opcode = twoByteResolvedInfo(instructionBytes[prefixEnd], reg_op);
+		else opcode = resolvedInfo(instructionBytes[prefixEnd], reg_op);
+		
+
+		machineCode += (checks[has2Byte]) ? "0f" : "" + std::format("{:02x} ", instructionBytes[opcodeEnd - 1])
+ 							+ std::format("{:02x} ", instructionBytes[opcodeEnd]); // append the  ModRM byte
+	} else {
+		opcode = resolvedInfo(instructionBytes[prefixEnd], 0); 
+		machineCode += std::format("{:02x} ", instructionBytes[opcodeEnd - 1]);
+	}
+
+	// add the opcode to the decode string
+	instructionStr += (checks[has2Byte]) ? twoByteStrOf(instructionBytes[opcodeEnd - 1], reg_op) 
+										 : opcodeStrOf(instructionBytes[opcodeEnd - 1], reg_op) ;
+	instructionStr += " ";
+
+
+
 
 	// The one memory operand, if any: [base + index*scale + disp]. Whichever operand asks
 	// for E or M takes this text; with mod 11 there is no memory and E is a plain register.
-	std::string memory;
-	if (outer.hasRMByte && mod != 0b11) {
 
-		if (hasSIB) {
-			machineCode += std::format("{:#x}", sib);
+	fmt = "";
+	std::string memory; uint64_t displacement = 0x0;
+	if (checks[hasModRM] && mod != 0b11) {
 
-			scale = 1u << ((sib & 0b11000000) >> 6);          // 00/01/10/11 -> *1/*2/*4/*8
-			index = static_cast<uint32_t>((sib & 0b00111000) >> 3);
-			base  = static_cast<uint32_t>(sib & 0b00000111);
+		if (checks[hasSIB]) {
+			machineCode += std::format("{:02x} ", instructionBytes[opcodeEnd + 2]);
+
+			scale = 1u << ((instructionBytes[opcodeEnd + 2] & 0b11000000) >> 6);          // 00/01/10/11 -> *1/*2/*4/*8
+			index = static_cast<uint32_t>((instructionBytes[opcodeEnd + 2] & 0b00111000) >> 3);
+			base  = static_cast<uint32_t>(instructionBytes[opcodeEnd + 2] & 0b00000111);
 		}
-		if (hasDisplacement) displacement = static_cast<uint32_t>(disp);
+		if (checks[hasDisp]) {
+			displacement = checks[hasSIB] ? instructionBytes[opcodeEnd + 2] : instructionBytes[opcodeEnd + 1];
+			uint64_t aux = displacement;
+			for (int k = 0; k < immWidth; ++k)
+				fmt += std::format("{:02x} ", (displacement >> (8 * k)) & 0xff);
+
+			displacement = aux;
+
+			machineCode += fmt;
+		}
 		
 
 		memory = "[";
-		if (hasSIB) {
-			memory += registerOf(base, is16bit);
+		if (checks[hasSIB]) {
+			memory += IA_32Mnemonic::registerOf(base, checks[hasOpsize]);
 			if (index != static_cast<uint32_t>(REGISTER::SP))                       // index 100 = no index
-				memory += " + " + registerOf(index, is16bit) + "*" + std::to_string(static_cast<int>(scale));
+				memory += " + " + IA_32Mnemonic::registerOf(index, checks[hasOpsize]) + "*" + std::to_string(static_cast<int>(scale));
 		}
 		else if (!(mod == 0b00 && rm == 0b101)) {                                    // that form has no base register
-			memory += registerOf(rm, is16bit);
+			memory += IA_32Mnemonic::registerOf(rm, checks[hasOpsize]);
 		}
-		if (hasDisplacement) {
+		if (checks[hasDisp]) {
 			// Nothing printed yet means there is no base register: the displacement is an
-			// absolute address, not an offset, so it stays unsigned. [0x40303c]
+			// absolute address, not an offset, so it stays unsigned.
 			if (memory.size() == 1) {
 				memory += std::format("{:#x}", displacement);
 			}
 			else {
-				const int32_t d = static_cast<int32_t>(displacement);   // offset from a register: signed
+				const int64_t d = static_cast<int64_t>(displacement);   // offset from a register: signed
 				memory += (d < 0)
 					? " - " + std::format("{:#x}", -static_cast<int64_t>(d))
 					: " + " + std::format("{:#x}", d);
@@ -175,69 +174,84 @@ inline void decode(Instruction::Prefix pfx, uint64_t opc, uint64_t rmbyte, uint6
 		memory += "]";
 	}
 
-	if (info.hasImmediateByte) immediate = static_cast<uint64_t>(imm);
+	uint64_t immediate[3] = { 0,0,0 };
+	int j = 0;
+	while (checks[hasImm] && j < 3) {
+		fmt = "";
+		immediate[j++] = instructionBytes[immBegin + j];
+		uint64_t aux = immediate[j - 1];
+		if (immediate[j - 1] != 0) {
+			for(int k=0; k<immWidth; ++k)
+				fmt+=std::format("{:02x} ", (immediate[j-1] >> (8 * k)) & 0xff);
+			machineCode += fmt;
+			immediate[j - 1] = aux;
+		}
+	}
 
+	j = 0;
 	// Every operand is built from its addressing mode. The ones the opcode names in
 	// silicon (AL, eAX, CL, DX, the constant 1, ...) come from the mode as well - unless
 	// the mnemonic text already spells them out, which would print them twice.
-	for (Instruction::Operand* op : { &op1, &op2, &op3 }) {
 
-		switch (static_cast<ADDRESSING>(op->addressingMode)) {
+
+	std::string operands[3];
+	Instruction::TableOperand op[3] = { opcode.op[0], opcode.op[1], opcode.op[2] };
+	for (int i = 0; i < 3; ++i) {
+
+		if (op[i].value != "") {
+			if (checks[hasOpsize])
+				operands[i] = op[i].value16;
+			else operands[i] = op[i].value;
+				continue;
+		};
+
+		switch (static_cast<ADDRESSING>(op[i].addressingMode)) {
 
 		case ADDRESSING::E:
-		case ADDRESSING::M:
-			op->value = rm;
-			op->text = (mod == 0b11) ? registerOf(rm, is16bit) : memory;
+		case ADDRESSING::M:		// memory
+			operands[i] = std::string( segment + ((mod == 0b11) ? IA_32Mnemonic::registerOf(rm, checks[hasOpsize]) : memory));
 			break;
 
 		case ADDRESSING::G:
-			op->value = reg_op;
-			op->text = registerOf(reg_op, is16bit);
+			operands[i] = IA_32Mnemonic::registerOf(reg_op, checks[hasOpsize]);
 			break;
 
-		case ADDRESSING::S:
-			op->value = reg_op;
-			op->text = IA_32Mnemonic::segmentOf(reg_op);
+		case ADDRESSING::S:		// segment
+			operands[i] = IA_32Mnemonic::segmentOf(reg_op);
 			break;
 
 		case ADDRESSING::I:      // immediate
 		case ADDRESSING::J:      // relative offset
 		case ADDRESSING::O:      // moffs
 		case ADDRESSING::A:      // far pointer
-			op->value = immediate;
-			op->text = std::format("{:#x}", immediate);
+			operands[i] = std::format("{:#x}", immediate[j++]);
+			break;
+
+		case ADDRESSING::None:
 			break;
 
 		default:
-			op->text = info.textNamesOperands
-				? ""
-				: IA_32Mnemonic::implicitOperandOf(op->addressingMode, is16bit);
+			// Implicit operand named by the table row (AL, EAX/AX, DX, 1, [ESI]...).
+			operands[i] = std::string(
+				checks[hasOpsize] && !op[i].value16.empty() ? op[i].value16 : op[i].value);
 			break;
 		}
 	}
 
-	instructionStr.clear();
-	if (hasPrefix) {
-		instructionStr += std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[0]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[1]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[2]))) + std::string(prefixStrOf(static_cast<uint8_t>(prefix.byte[3])));
-		instructionStr += " ";
+
+	if (instructionStr.empty()) {
+		instructionStr = "(bad)"; return;
 	}
 
-	// Empty text = an illegal /reg for this group (FF /7, FE /2..7), or an opcode the table
-	// never named at all. A non-empty text16 means the mnemonic itself moves with the operand
-	// size (CDQ/CWD, PUSHAD/PUSHA, ...), so a 0x66 prefix selects the other name.
-	instructionStr += info.text.empty()
-		? "(bad)"
-		: (is16bit && !info.text16.empty()) ? info.text16 : info.text;
-
-	std::string operands;
-	for (const Instruction::Operand* op : { &op1, &op2, &op3 }) {
-		if (op->addressingMode == static_cast<uint8_t>(ADDRESSING::None) || op->text.empty()) continue;
-		if (!operands.empty()) operands += ", ";
-		operands += op->text;
+	
+	instructionStr += "\t";
+	for (int i = 1; i < 3; ++i) {
+		if (op[i].addressingMode == static_cast<uint8_t>(ADDRESSING::None)) continue;
+		operands[0] += ", " + operands[i];
 	}
-	// "ADD AL" + ", 0x5"   vs   "ADD" + " EBX, EAX"
-	if (!operands.empty())
-		instructionStr += (info.textNamesOperands ? ", " : " ") + operands;
+
+	instructionStr += operands[0];
+
 };
 
 	inline std::string& decodeLineString()  {

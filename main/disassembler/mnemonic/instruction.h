@@ -9,12 +9,23 @@ class Instruction {
 
 protected:
 	std::string machineCode;
+	std::string instructionStr;
 	bool hasChanged;
 
 public:
 
-	struct Prefix {
-		uint64_t byte[4];// up to 4 bytes supported for prefixes
+
+
+	// One operand as the table describes it. addressingMode + size say how to decode it
+	// from the bytes; value/value16 carry the concrete name for operands the opcode fixes
+	// in silicon (AL, eAX, DX, the constant 1, a segment reg, a string pointer). value is
+	// "" for operands that come from the bytes (E/G/M/S/I/J/O/A) - the decoder builds those.
+	// value16 is the name a 0x66 prefix selects; duplicate value when the name does not move.
+	struct TableOperand {
+		uint8_t          addressingMode;
+		uint8_t          size;
+		std::string_view value;
+		std::string_view value16;
 	};
 
 	struct OpcodeInfo {
@@ -23,14 +34,10 @@ public:
 		// opcodes whose name does not move with the operand size, which is almost all of
 		// them - the decoder falls back to text. text always holds the name at the mode's
 		// default operand size (32-bit for IA-32), which is what an unprefixed byte means.
+		// This is the mnemonic itself flipping (CWDE/CBW, STOSD/STOSW), not an operand.
 		std::string_view text16;
 		bool hasRMByte;
-		bool hasImmediateByte;
-		uint8_t op1am, op2am, op3am;
-		uint8_t op1s, op2s, op3s;
-		// The mnemonic text already spells its operands out ("ADD AL", "XCHG eAX, eCX"),
-		// so the decoder must not render them a second time from the addressing modes.
-		bool textNamesOperands;
+		TableOperand op[3];
 		int groupNo;
 	};
 
@@ -40,7 +47,7 @@ public:
 		uint8_t addressingMode, size;
 	};
 
-	Instruction() : hasChanged(false), machineCode("") {};
+	Instruction() : hasChanged(false), machineCode(""), instructionStr("") {};
 	//void decode() {}
 	virtual std::string& decodeLineString() = 0;
 	virtual std::string& getMachineCode() = 0;
