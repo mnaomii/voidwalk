@@ -4,7 +4,7 @@ An **early-stage** C++ binary analysis tool targeting **ELF** and **PE** executa
 
 **Platforms** - Linux and Windows.
 
-> **Status:** Active development. ELF x86/x86_64 section parsing is functional. IA-32 architecture is functional* (still in active fixing, final touches).
+> **Status:** Active development. ELF x86/x86_64 section parsing is functional. IA-32 architecture is functional.
 
 ---
 
@@ -15,7 +15,7 @@ An **early-stage** C++ binary analysis tool targeting **ELF** and **PE** executa
 - **PE Section parsing** (x86 / x86_64)
 - **Architecture detection** - reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF header
 - **File-backed binary reader** - `AddressSpace` provides random-access reads (`read_u8/16/32/64`) directly from disk without loading the entire file into memory
-- **PE binary disassembly (x86)** - Decodes every machine code instruction in a subclass of *Instruction*.
+- **PE & ELF binary disassembly (x86)** - Decodes every machine code instruction in a subclass of *Instruction*.
 
 
 ### Not yet implemented
@@ -51,13 +51,11 @@ Instruction (abstract)
 - **Factory instantiation** - `make_disassembler()` inspects the first bytes of the file and returns the matching subclass. New formats are added by subclassing, not by branching inside existing code.
 - **`AddressSpace`** - all binary reads go through a single file-backed reader. No raw buffer slicing or `reinterpret_cast` off an in-memory `vector`.
 - **Parser dispatch** - bitness and architecture are handled by the ELF/PE disassemblers.
-- **`header` struct** - sections are represented as `{ uint64_t vaddr, offset, size }`, populated by the format-specific parsers onto the base class.
-
 ---
 
 ## Build
 
-Builds with **Visual Studio** (MSVC) via the `.vcxproj` in `.vs-project/`. No CMake or cross-platform build system yet.
+Builds with **Visual Studio** (MSVC) via the `.vcxproj` in `.vs-project/` or CMake via the `CMakeLists.txt`.
 
 ```
 exec/voidwalk-tui.exe <path-to-binary>
