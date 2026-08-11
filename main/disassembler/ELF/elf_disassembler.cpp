@@ -46,27 +46,24 @@ void ELF_Disassembler::setHeadersOffsets() {
 
 uint64_t ELF_Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 
+		switch (this->architecture) {
+		case 0x03: // x86 
 
-	switch (this->architecture) {
-	case 0x03: {// x86 
+			return decodeLine_IA_32(address, vaddr);
+		
+		case 0x3e:  // amd64
+			throw std::runtime_error("Not implemented yet.");
+		
+		case 0xb7:  //aarch64
+			throw std::runtime_error("Not implemented yet.");
+		
+		case 0x28: //arm32
+			throw std::runtime_error("Not implemented yet.");
+		default: 
+			throw std::runtime_error("Invalid architecture. Cannot parse.");
+		
+		}
 
-		return decodeLine_IA_32(address, vaddr);
-	}
-	case 0x3e: { // amd64
-		throw std::runtime_error("Not implemented yet.");
-	}
-	case 0xb7: { //aarch64
-		throw std::runtime_error("Not implemented yet.");
-	}
-	case 0x28: { //arm32
-		throw std::runtime_error("Not implemented yet.");
-
-		//return ;
-	}
-	default: {
-		throw std::runtime_error("Invalid architecture. Cannot parse.");
-	}
-	}
 
 }
 

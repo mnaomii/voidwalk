@@ -49,9 +49,9 @@ public:
 #define P(name, text) n[static_cast<uint16_t>(Prefix::name)] = text
 
 		P(LOCK, "LOCK"); P(REPNE, "REPNE"); P(REP, "REP");
-		P(CS, ""); P(SS, ""); P(DS, ""); P(ES, ""); P(FS, ""); P(GS, "");
-		P(OPSIZE, "");
-		P(ADDRSIZE, "");
+		P(CS, "CS:"); P(SS, "SS:"); P(DS, "DS:"); P(ES, "ES:"); P(FS, "FS:"); P(GS, "GS:");
+		P(OPSIZE, "OPSIZE");
+		P(ADDRSIZE, "ADDRSIZE");
 
 #undef P
 		return n;
