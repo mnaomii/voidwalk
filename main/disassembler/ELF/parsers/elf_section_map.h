@@ -59,6 +59,7 @@ void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
 		if (it != section_map.end()) {
 			it->second->setOffset(sh_offset);
 			it->second->setSize(sh_size);
+			it->second->setVaddr(sh_addr);
 		}
 
 	}
@@ -115,6 +116,7 @@ void setHeaders64bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
 		if (it != section_map.end()) {
 			it->second->setOffset(sh_offset);
 			it->second->setSize(sh_size);
+			it->second->setVaddr(sh_addr);
 		}
 
 	}
