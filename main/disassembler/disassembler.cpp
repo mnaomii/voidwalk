@@ -1,8 +1,8 @@
-#include "disassembler.h"
-#include "../address-space/address_space.h"
-#include "miscellaneous/sections/base/header.h"
-#include "mnemonic/IA-32/IA-32-instr.h"
-#include "mnemonic/IA-32/IA-32-mnemonic.h"
+#include "disassembler.hpp"
+#include "../address-space/address_space.hpp"
+#include "miscellaneous/sections/base/header.hpp"
+#include "mnemonic/x86_64/x86_64-instr.hpp"
+#include "mnemonic/x86_64/x86_64-mnemonic.hpp"
 
 
 void Disassembler::decode() {
@@ -105,17 +105,19 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 			checks[hasModRM] = true;
 			instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // getting ModR/M byte
 
-			mod = ((instructionBytes[cnt - 1] & 0b11000000) >> 6);
-			reg_op = ((instructionBytes[cnt - 1] & 0b00111000) >> 3);
-			rm = (instructionBytes[cnt - 1] & 0b00000111);
+			const uint8_t modrm = static_cast<uint8_t>(instructionBytes[cnt - 1]);
+			mod = ((modrm & 0b11000000) >> 6);
+			reg_op = ((modrm & 0b00111000) >> 3);
+			rm = (modrm & 0b00000111);
 
+			// Pass the whole ModRM byte: groups key on reg internally, x87 needs it all.
 			opcodeInfo = checks[has2Byte]
-				? IA_32Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(opcode), reg_op)
-				: IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(opcode), reg_op);
+				? IA_32Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(opcode), modrm)
+				: IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(opcode), modrm);
 
 
 			// --- SIB
-			if (mod != 0b11 && rm == 0b100 && cnt < 15) {
+			if (mod != 0b11 && rm == 0b100 && cnt < 15 && !checks[hasAddrSize]) {
 				instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // read sib;
 				checks[hasSIB] = true;
 
@@ -134,7 +136,9 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 				break;
 			case 0b10:
 				if (cnt < 15) {
-					instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int32_t>(contents.read_u32(address))); // disp32: already the full width
+					if (!checks[hasAddrSize])
+						instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int32_t>(contents.read_u32(address))); // disp32/16: already the full width
+					else instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int16_t>(contents.read_u16(address)));
 					dispWidth = 2;
 					if (!checks[hasAddrSize])
 						dispWidth += 2;				address += 4;
@@ -204,7 +208,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 					const bool isRelative = (immAddr == static_cast<uint8_t>(IA_32::ADDRESSING::J));
 
 					switch (immSize) {
-					case cast(IA_32::SIZE::b): width = 1; break;
+					case cast(IA_32::SIZE::b): case cast(IA_32::SIZE::bs): width = 1; break;   // bs occupies 1 byte too
 					case cast(IA_32::SIZE::w): width = 2; break;
 					case cast(IA_32::SIZE::v):
 					case cast(IA_32::SIZE::z): width = checks[hasOpsize] ? 2 : 4; break;
@@ -239,6 +243,14 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 						break;
 					}
 					}
+
+					// 83 /r ib, 6B, 6A: the imm8 is sign-extended to the operand width (16-bit
+					// under a 66h prefix, else 32-bit). Widen the byte just read; length stays 1,
+					// so this is display-only and cannot desync the sweep.
+					if (immSize == cast(IA_32::SIZE::bs))
+						value = checks[hasOpsize] ? static_cast<uint16_t>(static_cast<int8_t>(static_cast<uint8_t>(value)))
+							: static_cast<uint32_t>(static_cast<int8_t>(static_cast<uint8_t>(value)));
+
 					address += width;
 
 					// rel is counted from the END of the instruction, so resolve the target only once

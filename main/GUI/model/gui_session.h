@@ -1,8 +1,8 @@
 #ifndef GUI_SESSION_H
 #define GUI_SESSION_H
 
-#include "../../address-space/address_space.h"
-#include "../../disassembler/disassembler.h"
+#include "../../address-space/address_space.hpp"
+#include "../../disassembler/disassembler.hpp"
 
 #include <cstdint>
 #include <memory>

@@ -1,6 +1,6 @@
 #ifndef PE_DISASSEMBLER_H
 #define PE_DISASSEMBLER_H
-#include "../disassembler.h"
+#include "../disassembler.hpp"
 
 
 struct PE_Sections {

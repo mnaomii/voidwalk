@@ -6,9 +6,9 @@
 #include <vector>
 #include <string>
 #include <memory>
-#include "../address-space/address_space.h"
-#include "miscellaneous/sections/base/header.h"
-#include "mnemonic/instruction.h"
+#include "../address-space/address_space.hpp"
+#include "miscellaneous/sections/base/header.hpp"
+#include "mnemonic/instruction.hpp"
 
 
 struct Sections {

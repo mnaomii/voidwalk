@@ -1,6 +1,6 @@
 #include "gui_session.h"
 
-#include "../../miscellaneous/loader.h"
+#include "../../miscellaneous/loader.hpp"
 
 #include <cstdio>
 

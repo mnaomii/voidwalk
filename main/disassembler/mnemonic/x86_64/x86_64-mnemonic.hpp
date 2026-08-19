@@ -1,4 +1,4 @@
-#include "../instruction.h"
+#include "../instruction.hpp"
 #include <cstdint>
 #include <array>
 #include <string>
@@ -15,6 +15,13 @@ public:
 	// size v/z is 32-bit unless a 0x66 prefix (opsize16) drops it to 16-bit. Callers hand
 	// E/G registers the operand size and the memory base/index the address size, so the two
 	// no longer share one flag.
+
+	static std::string registerOf16(uint16_t r, bool hasAddrSize) {
+
+		static constexpr std::string_view addr16[] = {"BX + SI","BX + DI","BP + SI","BP + DI","SI","DI","BP","BX"}; 
+		return hasAddrSize ? std::string(addr16[r]) : "";
+	}
+
 	static std::string registerOf(uint16_t r, uint8_t size, bool opsize16) {
 		static constexpr std::string_view r8 [8] = { "AL","CL","DL","BL","AH","CH","DH","BH" };
 		static constexpr std::string_view r16[8] = { "AX","CX","DX","BX","SP","BP","SI","DI" };
@@ -214,8 +221,8 @@ public:
 
 		P(PUSH_Iv, "PUSH", false, OP(I,v,"",""), NOP_, NOP_);
 		P(IMUL_GvEvIv, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,v,"",""));
-		P(PUSH_Ib, "PUSH", false, OP(I,b,"",""), NOP_, NOP_);
-		P(IMUL_GvEvIb, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,b,"",""));
+		P(PUSH_Ib, "PUSH", false, OP(I,bs,"",""), NOP_, NOP_);            // imm8 sign-extended to opsize
+		P(IMUL_GvEvIb, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,bs,"",""));   // imm8 sign-extended
 
 		P(INSB_YbDX, "INSB", false, OP(Y,b,"[EDI]","[EDI]"), OP(DX,None,"DX","DX"), NOP_);
 		P16(INSW_YzDX, "INSD", "INSW", false, OP(Y,z,"[EDI]","[EDI]"), OP(DX,None,"DX","DX"), NOP_);
@@ -243,7 +250,7 @@ public:
 		PG(GRP1_EbIb, "GRP1", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 1);
 		PG(GRP1_EvIz, "GRP1", true, OP(E,v,"",""), OP(I,v,"",""), NOP_, 1);
 		PG(GRP1_EbIb2, "GRP1", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 1);
-		PG(GRP1_EvIb, "GRP1", true, OP(E,v,"",""), OP(I,b,"",""), NOP_, 1);
+		PG(GRP1_EvIb, "GRP1", true, OP(E,v,"",""), OP(I,bs,"",""), NOP_, 1);   // 83 /r ib: imm8 sign-extended to Ev width
 
 		P(TEST_EbGb, "TEST", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
 		P(TEST_EvGv, "TEST", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
@@ -563,7 +570,154 @@ public:
 	}
 
 
-	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t reg) {
+	// ---------------------------------------------------------------------------
+	// x87 FPU escape opcodes (0xD8-0xDF). These do NOT fit the reg-only group
+	// mechanism: the mnemonic depends on the WHOLE ModRM byte, not just reg.
+	//   * ModRM < 0xC0 (mod != 11): a memory form. reg picks the op; the r/m is a
+	//     memory operand (rendered through the existing M addressing mode).
+	//   * ModRM >= 0xC0 (mod == 11): a register form. The full reg:rm pair (64 slots
+	//     per opcode) names a specific ST-stack instruction; operands are ST / ST(i),
+	//     baked into the operand's value field so the renderer prints them verbatim.
+	// Both tables carry hasRMByte=true only for consistency - the byte-eater already
+	// decided to read the ModRM byte from the flat ESC row, and x87 has no immediate,
+	// so the resolved entry never changes the instruction length.
+
+	// Memory forms, indexed (op-0xD8)*8 + reg. Empty rows (invalid /reg) stay "(bad)".
+	static constexpr std::array<Instruction::OpcodeInfo, 64> buildX87Mem() {
+		std::array<Instruction::OpcodeInfo, 64> n{};
+#define a(name) static_cast<uint8_t>(ADDRESSING::name)
+#define s(name) static_cast<uint8_t>(SIZE::name)
+#define M_ Instruction::TableOperand{ a(M), s(None), "", "" }
+#define NO Instruction::TableOperand{ a(None), s(None), "", "" }
+#define FM(idx,text) n[idx] = Instruction::OpcodeInfo{ text, "", true, M_, NO, NO, -1 }
+		// D8 (o=0): m32fp   D9 (o=1): load/store/control   DA (o=2): m32int
+		FM(0,"FADD");   FM(1,"FMUL");   FM(2,"FCOM");    FM(3,"FCOMP");
+		FM(4,"FSUB");   FM(5,"FSUBR");  FM(6,"FDIV");    FM(7,"FDIVR");
+		FM(8,"FLD");                    FM(10,"FST");    FM(11,"FSTP");     // D9 /1 invalid
+		FM(12,"FLDENV");FM(13,"FLDCW"); FM(14,"FNSTENV");FM(15,"FNSTCW");
+		FM(16,"FIADD"); FM(17,"FIMUL"); FM(18,"FICOM");  FM(19,"FICOMP");
+		FM(20,"FISUB"); FM(21,"FISUBR");FM(22,"FIDIV");  FM(23,"FIDIVR");
+		// DB (o=3): m32int + m80fp     DC (o=4): m64fp
+		FM(24,"FILD");  FM(25,"FISTTP");FM(26,"FIST");   FM(27,"FISTP");
+		                FM(29,"FLD");                    FM(31,"FSTP");     // DB /4,/6 invalid
+		FM(32,"FADD");  FM(33,"FMUL");  FM(34,"FCOM");   FM(35,"FCOMP");
+		FM(36,"FSUB");  FM(37,"FSUBR"); FM(38,"FDIV");   FM(39,"FDIVR");
+		// DD (o=5): m64fp + state      DE (o=6): m16int
+		FM(40,"FLD");   FM(41,"FISTTP");FM(42,"FST");    FM(43,"FSTP");
+		FM(44,"FRSTOR");                FM(46,"FNSAVE"); FM(47,"FNSTSW");   // DD /5 invalid
+		FM(48,"FIADD"); FM(49,"FIMUL"); FM(50,"FICOM");  FM(51,"FICOMP");
+		FM(52,"FISUB"); FM(53,"FISUBR");FM(54,"FIDIV");  FM(55,"FIDIVR");
+		// DF (o=7): m16int/m64int + m80dec
+		FM(56,"FILD");  FM(57,"FISTTP");FM(58,"FIST");   FM(59,"FISTP");
+		FM(60,"FBLD");  FM(61,"FILD");  FM(62,"FBSTP");  FM(63,"FISTP");
+#undef FM
+#undef NO
+#undef M_
+#undef s
+#undef a
+		return n;
+	}
+
+	// Register forms (mod == 11), indexed (op-0xD8)*64 + (ModRM & 0x3F), i.e. reg*8+rm.
+	// Regular families (a reg selects the op, rm selects ST(i)) are filled by a loop;
+	// the E0-FF individuals (one mnemonic per rm, mostly no operand) are set explicitly.
+	static constexpr std::array<Instruction::OpcodeInfo, 512> buildX87Reg() {
+		std::array<Instruction::OpcodeInfo, 512> n{};
+		constexpr std::string_view st[8] =
+			{ "ST(0)","ST(1)","ST(2)","ST(3)","ST(4)","ST(5)","ST(6)","ST(7)" };
+#define a(name) static_cast<uint8_t>(ADDRESSING::name)
+#define s(name) static_cast<uint8_t>(SIZE::name)
+#define STv(v) Instruction::TableOperand{ a(ST), s(None), v, v }
+#define NO Instruction::TableOperand{ a(None), s(None), "", "" }
+		// op-relative base + reg row, one entry per rm.
+#define ROW2(o,reg,text,p0,p1)  for (uint8_t i=0;i<8;++i) n[(o)*64+(reg)*8+i] = Instruction::OpcodeInfo{ text, "", true, p0, p1, NO, -1 }
+#define ROW1(o,reg,text,p0)     for (uint8_t i=0;i<8;++i) n[(o)*64+(reg)*8+i] = Instruction::OpcodeInfo{ text, "", true, p0, NO, NO, -1 }
+#define ONE(o,reg,rm,text)      n[(o)*64+(reg)*8+(rm)] = Instruction::OpcodeInfo{ text, "", true, NO, NO, NO, -1 }
+
+		// D8 (o=0): "<op> ST, ST(i)" - reg is the op, same as its memory form.
+		ROW2(0,0,"FADD", STv("ST"),STv(st[i]));  ROW2(0,1,"FMUL", STv("ST"),STv(st[i]));
+		ROW1(0,2,"FCOM", STv(st[i]));            ROW1(0,3,"FCOMP",STv(st[i]));
+		ROW2(0,4,"FSUB", STv("ST"),STv(st[i]));  ROW2(0,5,"FSUBR",STv("ST"),STv(st[i]));
+		ROW2(0,6,"FDIV", STv("ST"),STv(st[i]));  ROW2(0,7,"FDIVR",STv("ST"),STv(st[i]));
+
+		// D9 (o=1): FLD/FXCH ST(i), then the constant/transcendental individuals.
+		ROW1(1,0,"FLD", STv(st[i]));  ROW1(1,1,"FXCH",STv(st[i]));
+		ONE(1,2,0,"FNOP");
+		ONE(1,4,0,"FCHS"); ONE(1,4,1,"FABS"); ONE(1,4,4,"FTST"); ONE(1,4,5,"FXAM");
+		ONE(1,5,0,"FLD1"); ONE(1,5,1,"FLDL2T");ONE(1,5,2,"FLDL2E");ONE(1,5,3,"FLDPI");
+		ONE(1,5,4,"FLDLG2");ONE(1,5,5,"FLDLN2");ONE(1,5,6,"FLDZ");
+		ONE(1,6,0,"F2XM1");ONE(1,6,1,"FYL2X"); ONE(1,6,2,"FPTAN"); ONE(1,6,3,"FPATAN");
+		ONE(1,6,4,"FXTRACT");ONE(1,6,5,"FPREM1");ONE(1,6,6,"FDECSTP");ONE(1,6,7,"FINCSTP");
+		ONE(1,7,0,"FPREM");ONE(1,7,1,"FYL2XP1");ONE(1,7,2,"FSQRT");ONE(1,7,3,"FSINCOS");
+		ONE(1,7,4,"FRNDINT");ONE(1,7,5,"FSCALE");ONE(1,7,6,"FSIN");ONE(1,7,7,"FCOS");
+
+		// DA (o=2): FCMOVcc ST, ST(i); DA E9 FUCOMPP.
+		ROW2(2,0,"FCMOVB", STv("ST"),STv(st[i])); ROW2(2,1,"FCMOVE", STv("ST"),STv(st[i]));
+		ROW2(2,2,"FCMOVBE",STv("ST"),STv(st[i])); ROW2(2,3,"FCMOVU", STv("ST"),STv(st[i]));
+		ONE(2,5,1,"FUCOMPP");
+
+		// DB (o=3): FCMOVNcc ST, ST(i); FNCLEX/FNINIT; FUCOMI/FCOMI ST, ST(i).
+		ROW2(3,0,"FCMOVNB", STv("ST"),STv(st[i])); ROW2(3,1,"FCMOVNE", STv("ST"),STv(st[i]));
+		ROW2(3,2,"FCMOVNBE",STv("ST"),STv(st[i])); ROW2(3,3,"FCMOVNU", STv("ST"),STv(st[i]));
+		ONE(3,4,2,"FNCLEX"); ONE(3,4,3,"FNINIT");
+		ROW2(3,5,"FUCOMI",STv("ST"),STv(st[i]));   ROW2(3,6,"FCOMI", STv("ST"),STv(st[i]));
+
+		// DC (o=4): "<op> ST(i), ST" - note reg4/5 and reg6/7 are the reversed forms.
+		ROW2(4,0,"FADD", STv(st[i]),STv("ST")); ROW2(4,1,"FMUL", STv(st[i]),STv("ST"));
+		ROW2(4,4,"FSUBR",STv(st[i]),STv("ST")); ROW2(4,5,"FSUB", STv(st[i]),STv("ST"));
+		ROW2(4,6,"FDIVR",STv(st[i]),STv("ST")); ROW2(4,7,"FDIV", STv(st[i]),STv("ST"));
+
+		// DD (o=5): FFREE / FST / FSTP / FUCOM / FUCOMP ST(i).
+		ROW1(5,0,"FFREE",STv(st[i]));  ROW1(5,2,"FST",  STv(st[i])); ROW1(5,3,"FSTP",STv(st[i]));
+		ROW1(5,4,"FUCOM",STv(st[i]));  ROW1(5,5,"FUCOMP",STv(st[i]));
+
+		// DE (o=6): the popping arithmetic "<op>P ST(i), ST"; DE D9 FCOMPP.
+		ROW2(6,0,"FADDP", STv(st[i]),STv("ST")); ROW2(6,1,"FMULP", STv(st[i]),STv("ST"));
+		ONE(6,3,1,"FCOMPP");
+		ROW2(6,4,"FSUBRP",STv(st[i]),STv("ST")); ROW2(6,5,"FSUBP", STv(st[i]),STv("ST"));
+		ROW2(6,6,"FDIVRP",STv(st[i]),STv("ST")); ROW2(6,7,"FDIVP", STv(st[i]),STv("ST"));
+
+		// DF (o=7): FNSTSW AX (the one x87 op that names a GP reg); FUCOMIP/FCOMIP ST, ST(i).
+		n[7*64+4*8+0] = Instruction::OpcodeInfo{ "FNSTSW","",true, STv("AX"), NO, NO, -1 };
+		ROW2(7,5,"FUCOMIP",STv("ST"),STv(st[i])); ROW2(7,6,"FCOMIP",STv("ST"),STv(st[i]));
+
+#undef ONE
+#undef ROW1
+#undef ROW2
+#undef NO
+#undef STv
+#undef s
+#undef a
+		return n;
+	}
+
+	static const std::array<Instruction::OpcodeInfo, 64>& x87MemTable() {
+		static constexpr std::array<Instruction::OpcodeInfo, 64> t = buildX87Mem();
+		return t;
+	}
+	static const std::array<Instruction::OpcodeInfo, 512>& x87RegTable() {
+		static constexpr std::array<Instruction::OpcodeInfo, 512> t = buildX87Reg();
+		return t;
+	}
+
+	static bool isX87(uint32_t op) { return op >= 0xD8 && op <= 0xDF; }
+
+	// Full-ModRM resolution for an x87 escape opcode: memory row by reg, or the
+	// register row by the whole reg:rm pair.
+	static Instruction::OpcodeInfo x87ResolvedInfo(uint32_t op, uint8_t modrm) {
+		const uint32_t o = op - 0xD8;                       // 0..7
+		if (modrm < 0xC0)                                    // mod != 11 -> memory form
+			return x87MemTable()[o * 8 + ((modrm >> 3) & 0x07)];
+		return x87RegTable()[o * 64 + (modrm & 0x3F)];       // mod == 11 -> register form
+	}
+
+	// Merge the flat one-byte row with the entry ModRM selects. Takes the WHOLE ModRM
+	// byte now: groups still key on reg (bits 3-5), but x87 needs the full byte, so the
+	// dispatch happens here rather than in the caller.
+	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t modrm) {
+		if (isX87(op)) return x87ResolvedInfo(op, modrm);
+
+		const uint8_t reg = (modrm >> 3) & 0x07;
 		const Instruction::OpcodeInfo& outer = opcodeTable()[op];
 		if (!isGroup(op)) return outer;
 
@@ -761,9 +915,12 @@ public:
 	}
 
 	// Same contract as resolvedInfo(), for the 0F map: a plain row for a non-group
-	// opcode, or that row merged with the group entry ModRM.reg selects. Go through
-	// this from both the byte-eater and the printer so they agree on length.
-	static Instruction::OpcodeInfo twoByteResolvedInfo(uint32_t op2, uint8_t reg) {
+	// opcode, or that row merged with the group entry ModRM.reg selects. Takes the
+	// whole ModRM byte to match resolvedInfo()'s shape; the 0F map has no x87, so it
+	// just extracts reg. Go through this from both the byte-eater and the printer so
+	// they agree on length.
+	static Instruction::OpcodeInfo twoByteResolvedInfo(uint32_t op2, uint8_t modrm) {
+		const uint8_t reg = (modrm >> 3) & 0x07;
 		const Instruction::OpcodeInfo& outer = twoByteTable()[op2];
 		if (outer.groupNo <= 0) return outer;
 
@@ -794,14 +951,18 @@ public:
 
 //   E=modrm r/m, G=modrm reg, I=imm, J=rel offset, O=moffs, S=seg reg, M=memory,
 //   A=far ptr, Z=register in low 3 bits of opcode (+r), AL/eAX/DX/CL/One=implicit
+//   ST=x87 operand whose text is baked into value (ST / ST(i) / AX): the renderer's
+//   value short-circuit prints it verbatim, so no operand-switch case is needed - the
+//   mode only has to be non-None (so it joins) and non-immediate (so it eats no bytes).
 enum class ADDRESSING : uint8_t {
 	None, E, G, I, J, O, S, M, A, Z, AL, eAX, DX, CL, One,
 	eCX, eDX, eBX, eSP, eBP, eSI, eDI,
 	ES, CS, SS, DS,
 	X, Y, F,
-	DL, BL, AH, CH, DH, BH
+	DL, BL, AH, CH, DH, BH,
+	ST
 };
-enum class SIZE : uint8_t { None, b, w, v, z, p, a };   // b=8 w=16 v=16/32 z=imm16/32 p=far a=bound
+enum class SIZE : uint8_t { None, b, w, v, z, p, a, bs };   // b=8 w=16 v=16/32 z=imm16/32 p=far a=bound; bs=imm8 sign-extended to operand size (83/6B/6A)
 
 enum class REGISTER : uint16_t {
 	AX = 0x00,

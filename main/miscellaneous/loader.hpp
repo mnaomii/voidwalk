@@ -1,10 +1,10 @@
 #ifndef LOADER_H
 #define LOADER_H
 
-#include "../address-space/address_space.h"
-#include "../disassembler/disassembler.h"
-#include "../disassembler/ELF/elf_disassembler.h"
-#include "../disassembler/PE/pe_disassembler.h"
+#include "../address-space/address_space.hpp"
+#include "../disassembler/disassembler.hpp"
+#include "../disassembler/ELF/elf_disassembler.hpp"
+#include "../disassembler/PE/pe_disassembler.hpp"
 
 #include <memory>
 #include <stdexcept>

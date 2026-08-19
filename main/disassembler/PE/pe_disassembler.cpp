@@ -1,10 +1,9 @@
-#include "pe_disassembler.h"
-#include "../../address-space/address_space.h"
-#include "parsers/pe_section_map.h"
-#include "../mnemonic/IA-32/IA-32-instr.h"
-#include "../mnemonic/AArch64/AArch64-instr.h"
-#include "../mnemonic/AMD64/AMD64-instr.h"
-#include "../mnemonic/ARM32/ARM32-instr.h"
+#include "pe_disassembler.hpp"
+#include "../../address-space/address_space.hpp"
+#include "parsers/pe_section_map.hpp"
+#include "../mnemonic/x86_64/x86_64-instr.hpp"
+#include "../mnemonic/AArch64/AArch64-instr.hpp"
+#include "../mnemonic/ARM32/ARM32-instr.hpp"
 #include <stdexcept>
 
 

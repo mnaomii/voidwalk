@@ -1,9 +1,9 @@
 #ifndef ELF_DISASSEMBLER_H
 #define ELF_DISASSEMBLER_H
-#include "../disassembler.h"
-#include "../miscellaneous/sections/base/header.h"
-#include "../../address-space/address_space.h"
-#include "../mnemonic/instruction.h"
+#include "../disassembler.hpp"
+#include "../miscellaneous/sections/base/header.hpp"
+#include "../../address-space/address_space.hpp"
+#include "../mnemonic/instruction.hpp"
 
 #pragma once
 

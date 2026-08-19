@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <string>
 #include <stdexcept>
-#include "../../disassembler.h"
+#include "../../disassembler.hpp"
 
 enum SectionKind { CODE, DATA, RODATA, BSS, NONE };
 

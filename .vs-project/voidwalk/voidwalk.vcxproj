@@ -132,24 +132,25 @@
     <QtRcc Include="..\..\main\GUI\rsrc\mainWindow.qrc" />
   </ItemGroup>
   <ItemGroup>
+    <ResourceCompile Include="..\..\main\app.rc" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- core / disassembler -->
-    <ClInclude Include="..\..\main\address-space\address_space.h" />
-    <ClInclude Include="..\..\main\disassembler\disassembler.h" />
-    <ClInclude Include="..\..\main\disassembler\ELF\elf_disassembler.h" />
-    <ClInclude Include="..\..\main\disassembler\ELF\parsers\elf_section_map.h" />
-    <ClInclude Include="..\..\main\disassembler\miscellaneous\sections\base\header.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-instr.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-mnemonic.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AMD64\AMD64-instr.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AMD64\AMD64-mnemonic.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-instr.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-mnemonic.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\IA-32\IA-32-instr.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\IA-32\IA-32-mnemonic.h" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\instruction.h" />
-    <ClInclude Include="..\..\main\disassembler\PE\parsers\pe_section_map.h" />
-    <ClInclude Include="..\..\main\disassembler\PE\pe_disassembler.h" />
-    <ClInclude Include="..\..\main\miscellaneous\loader.h" />
+    <ClInclude Include="..\..\main\address-space\address_space.hpp" />
+    <ClInclude Include="..\..\main\disassembler\disassembler.hpp" />
+    <ClInclude Include="..\..\main\disassembler\ELF\elf_disassembler.hpp" />
+    <ClInclude Include="..\..\main\disassembler\ELF\parsers\elf_section_map.hpp" />
+    <ClInclude Include="..\..\main\disassembler\miscellaneous\sections\base\header.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-instr.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-mnemonic.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-instr.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-mnemonic.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\instruction.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-instr.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-mnemonic.hpp" />
+    <ClInclude Include="..\..\main\disassembler\PE\parsers\pe_section_map.hpp" />
+    <ClInclude Include="..\..\main\disassembler\PE\pe_disassembler.hpp" />
+    <ClInclude Include="..\..\main\miscellaneous\loader.hpp" />
     <!-- TUI -->
     <ClInclude Include="..\..\main\TUI\model\session.h" />
     <ClInclude Include="..\..\main\TUI\panes\panes.h" />

@@ -19,77 +19,204 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\main\address-space\address_space.cpp"><Filter>Core</Filter></ClCompile>
-    <ClCompile Include="..\..\main\disassembler\disassembler.cpp"><Filter>Core</Filter></ClCompile>
-    <ClCompile Include="..\..\main\disassembler\ELF\elf_disassembler.cpp"><Filter>Core</Filter></ClCompile>
-    <ClCompile Include="..\..\main\disassembler\PE\pe_disassembler.cpp"><Filter>Core</Filter></ClCompile>
-    <ClCompile Include="..\..\main\main.cpp"><Filter>Core</Filter></ClCompile>
-    <ClCompile Include="..\..\tests\runner.cpp"><Filter>Tests</Filter></ClCompile>
-    <ClCompile Include="..\..\main\TUI\model\session.cpp"><Filter>TUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\TUI\panes\disassembly_pane.cpp"><Filter>TUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\TUI\panes\memory_pane.cpp"><Filter>TUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\TUI\panes\registers_pane.cpp"><Filter>TUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\TUI\panes\stack_pane.cpp"><Filter>TUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\TUI\runner\mainUI.cpp"><Filter>TUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\TUI\ui\ui.cpp"><Filter>TUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\model\gui_session.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\ai\ai_client.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\dialogs\settings_dialog.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\panes\disassembly_pane.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\panes\registers_pane.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\panes\stack_pane.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\panes\memory_pane.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\panes\ai_chat_pane.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\panes\disasm_delegate.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\theme\theme.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\theme\theme_manager.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\theme\icons.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\widgets\main_window.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\widgets\welcome_widget.cpp"><Filter>GUI</Filter></ClCompile>
-    <ClCompile Include="..\..\main\GUI\runner\gui_main.cpp"><Filter>GUI</Filter></ClCompile>
+    <ClCompile Include="..\..\main\address-space\address_space.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\disassembler\disassembler.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\disassembler\ELF\elf_disassembler.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\disassembler\PE\pe_disassembler.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\main.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\tests\runner.cpp">
+      <Filter>Tests</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\TUI\model\session.cpp">
+      <Filter>TUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\TUI\panes\disassembly_pane.cpp">
+      <Filter>TUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\TUI\panes\memory_pane.cpp">
+      <Filter>TUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\TUI\panes\registers_pane.cpp">
+      <Filter>TUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\TUI\panes\stack_pane.cpp">
+      <Filter>TUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\TUI\runner\mainUI.cpp">
+      <Filter>TUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\TUI\ui\ui.cpp">
+      <Filter>TUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\model\gui_session.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\ai\ai_client.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\dialogs\settings_dialog.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\disassembly_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\registers_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\stack_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\memory_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\ai_chat_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\panes\disasm_delegate.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\theme\theme.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\theme\theme_manager.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\theme\icons.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\widgets\main_window.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\widgets\welcome_widget.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\main\GUI\runner\gui_main.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\main\address-space\address_space.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\disassembler.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\ELF\elf_disassembler.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\ELF\parsers\elf_section_map.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\miscellaneous\sections\base\header.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-instr.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-mnemonic.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AMD64\AMD64-instr.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\AMD64\AMD64-mnemonic.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-instr.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-mnemonic.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\IA-32\IA-32-instr.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\IA-32\IA-32-mnemonic.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\instruction.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\PE\parsers\pe_section_map.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\disassembler\PE\pe_disassembler.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\miscellaneous\loader.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="..\..\main\TUI\model\session.h"><Filter>TUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\TUI\panes\panes.h"><Filter>TUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\TUI\runner\mainUI.h"><Filter>TUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\TUI\ui\ui.h"><Filter>TUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\GUI\dialogs\settings.h"><Filter>GUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\GUI\model\gui_session.h"><Filter>GUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\GUI\runner\gui_main.h"><Filter>GUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\GUI\theme\theme.h"><Filter>GUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\GUI\theme\theme_manager.h"><Filter>GUI</Filter></ClInclude>
-    <ClInclude Include="..\..\main\GUI\theme\icons.h"><Filter>GUI</Filter></ClInclude>
+    <ClInclude Include="..\..\main\address-space\address_space.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\disassembler.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\ELF\elf_disassembler.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\ELF\parsers\elf_section_map.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\miscellaneous\sections\base\header.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-instr.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\mnemonic\AArch64\AArch64-mnemonic.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-instr.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\mnemonic\ARM32\ARM32-mnemonic.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\mnemonic\instruction.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\PE\parsers\pe_section_map.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\PE\pe_disassembler.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\miscellaneous\loader.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\TUI\model\session.h">
+      <Filter>TUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\TUI\panes\panes.h">
+      <Filter>TUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\TUI\runner\mainUI.h">
+      <Filter>TUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\TUI\ui\ui.h">
+      <Filter>TUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\GUI\dialogs\settings.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\GUI\model\gui_session.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\GUI\runner\gui_main.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\GUI\theme\theme.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\GUI\theme\theme_manager.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\GUI\theme\icons.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-instr.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-mnemonic.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="..\..\main\GUI\ai\ai_client.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\dialogs\settings_dialog.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\panes\disassembly_pane.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\panes\registers_pane.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\panes\stack_pane.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\panes\memory_pane.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\panes\ai_chat_pane.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\panes\disasm_delegate.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\widgets\main_window.h"><Filter>GUI</Filter></QtMoc>
-    <QtMoc Include="..\..\main\GUI\widgets\welcome_widget.h"><Filter>GUI</Filter></QtMoc>
+    <QtMoc Include="..\..\main\GUI\ai\ai_client.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\dialogs\settings_dialog.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\panes\disassembly_pane.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\panes\registers_pane.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\panes\stack_pane.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\panes\memory_pane.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\panes\ai_chat_pane.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\panes\disasm_delegate.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\widgets\main_window.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\..\main\GUI\widgets\welcome_widget.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
   </ItemGroup>
   <ItemGroup>
-    <QtRcc Include="..\..\main\GUI\rsrc\mainWindow.qrc"><Filter>Resource Files</Filter></QtRcc>
+    <QtRcc Include="..\..\main\GUI\rsrc\mainWindow.qrc">
+      <Filter>Resource Files</Filter>
+    </QtRcc>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\..\main\app.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

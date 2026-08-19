@@ -1,6 +1,6 @@
-#include "../../../address-space/address_space.h"
-#include "../instruction.h"
-#include "IA-32-mnemonic.h"
+#include "../../../address-space/address_space.hpp"
+#include "../instruction.hpp"
+#include "x86_64-mnemonic.hpp"
 #include <string>
 #include <string_view>
 #include <array>
@@ -41,14 +41,14 @@ public:
 static const std::array<Instruction::OpcodeInfo, 256>& opcodeTable()	{ return IA_32Mnemonic::opcodeTable(); }
 static const std::array<std::string_view, 256>& prefixTable()			{ return IA_32Mnemonic::prefixTable(); }
 static bool hasRMbyte(uint32_t op)										{ return opcodeTable()[op].hasRMByte; }
-static Instruction::OpcodeInfo resolvedInfo(uint64_t op, uint8_t reg)	{ return IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(op), reg); }
-static std::string_view opcodeStrOf(uint64_t op, uint8_t reg)			{ return resolvedInfo(op, reg).text; }
-static std::string_view opcodeStr16Of(uint64_t op, uint8_t reg) { return resolvedInfo(op, reg).text16; }
+static Instruction::OpcodeInfo resolvedInfo(uint64_t op, uint8_t modrm)	{ return IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(op), modrm); }
+static std::string_view opcodeStrOf(uint64_t op, uint8_t modrm)			{ return resolvedInfo(op, modrm).text; }
+static std::string_view opcodeStr16Of(uint64_t op, uint8_t modrm) { return resolvedInfo(op, modrm).text16; }
 static const std::array<Instruction::OpcodeInfo, 256>& twoByteTable()	{ return IA_32Mnemonic::twoByteTable(); }
 static bool hasRMbyte2(uint32_t op2)									{ return twoByteTable()[op2].hasRMByte; }
-static Instruction::OpcodeInfo twoByteResolvedInfo(uint64_t op2, uint8_t reg)	{ return IA_32Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(op2), reg); }
-static std::string_view twoByteStrOf(uint64_t op2, uint8_t reg)			{ return twoByteResolvedInfo(op2, reg).text; }
-static std::string_view twoByteStr16Of(uint64_t op2, uint8_t reg) { return twoByteResolvedInfo(op2, reg).text16; }
+static Instruction::OpcodeInfo twoByteResolvedInfo(uint64_t op2, uint8_t modrm)	{ return IA_32Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(op2), modrm); }
+static std::string_view twoByteStrOf(uint64_t op2, uint8_t modrm)			{ return twoByteResolvedInfo(op2, modrm).text; }
+static std::string_view twoByteStr16Of(uint64_t op2, uint8_t modrm) { return twoByteResolvedInfo(op2, modrm).text16; }
 
 static std::string_view prefixStrOf(uint8_t op)							{ if (isPrefix(op)) return prefixTable()[op];  else return ""; }
 static bool isPrefix(uint8_t op)										{ return !prefixTable()[op].empty(); }
@@ -112,8 +112,11 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[8], c
 		rm = static_cast<uint8_t>(instructionBytes[opcodeEnd] & 0b00000111);
 
 	}
-	if (checks[has2Byte]) opcode = twoByteResolvedInfo(instructionBytes[opcodeEnd-1], reg_op);
-	else opcode = resolvedInfo(instructionBytes[opcodeEnd-1], reg_op);
+	// Hand the resolver the whole ModRM byte (reg for groups, full byte for x87);
+	// when there is no ModRM the value is unused (the opcode is neither a group nor x87).
+	const uint8_t modrm = checks[hasModRM] ? static_cast<uint8_t>(instructionBytes[opcodeEnd]) : 0;
+	if (checks[has2Byte]) opcode = twoByteResolvedInfo(instructionBytes[opcodeEnd-1], modrm);
+	else opcode = resolvedInfo(instructionBytes[opcodeEnd-1], modrm);
 		
 
 	machineCode += (checks[has2Byte]) ? "0f " : "";
@@ -153,13 +156,15 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[8], c
 			machineCode += fmt;
 		}
 		
-		if(hasAddrSize)
+		//if(checks[hasAddrSize])
 		memory += "[";
 		if (checks[hasSIB]) {
 			if(! (base == 5 && mod == 0))
 			memory += IA_32Mnemonic::registerOf(base, checks[hasAddrSize]);
-			if (index != static_cast<uint32_t>(REGISTER::SP))                       // index 100 = no index
-				memory +=  " + " + IA_32Mnemonic::registerOf(index, checks[hasAddrSize]) + "*" + std::to_string(static_cast<int>(scale));
+			if (index != static_cast<uint32_t>(REGISTER::SP)) {                      // index 100 = no index
+				memory += (!(base == 5 && mod == 0)) ? " + " : "";
+				memory += IA_32Mnemonic::registerOf(index, checks[hasAddrSize]) + "*" + std::to_string(static_cast<int>(scale));
+			}
 		}
 		else if (!(mod == 0b00 && rm == 0b101)) {                                    // that form has no base register
 			memory += IA_32Mnemonic::registerOf(rm, checks[hasAddrSize]);
@@ -205,10 +210,6 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[8], c
 	}
 
 	j = 0;
-	// Every operand is built from its addressing mode. The ones the opcode names in
-	// silicon (AL, eAX, CL, DX, the constant 1, ...) come from the mode as well - unless
-	// the mnemonic text already spells them out, which would print them twice.
-
 
 	for (int i = 0; i < 3; ++i) {
 
