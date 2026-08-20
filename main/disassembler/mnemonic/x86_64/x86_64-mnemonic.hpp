@@ -7,7 +7,7 @@
 #pragma once
 
 
-class IA_32Mnemonic{
+class x86_64_Mnemonic{
 public:
 
 	// Reg number -> name at a given operand size. size b picks the 8-bit set (AL..BH),
@@ -25,6 +25,7 @@ public:
 	static std::string registerOf(uint16_t r, uint8_t size, bool opsize16) {
 		static constexpr std::string_view r8 [8] = { "AL","CL","DL","BL","AH","CH","DH","BH" };
 		static constexpr std::string_view r16[8] = { "AX","CX","DX","BX","SP","BP","SI","DI" };
+
 		if (r > 7)
 			throw std::runtime_error("Malformed expression detected..");
 		switch (static_cast<SIZE>(size)) {

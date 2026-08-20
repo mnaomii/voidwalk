@@ -55,7 +55,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
 
 		// --- PREFIXES
-		while (IA_32::isPrefix(tmp) && cnt < 15) {
+		while (x86_64::isPrefix(tmp) && cnt < 15) {
 			checks[hasPrefix] = true;
 			switch (tmp) {
 			case 0x66:
@@ -92,8 +92,8 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 		uint64_t opcode = instructionBytes[endOpcode - 1];
 
 		const Instruction::OpcodeInfo& outer = checks[has2Byte]
-			? IA_32Mnemonic::twoByteTable()[opcode]
-			: IA_32Mnemonic::opcodeTable()[opcode];
+			? x86_64_Mnemonic::twoByteTable()[opcode]
+			: x86_64_Mnemonic::opcodeTable()[opcode];
 
 		Instruction::OpcodeInfo opcodeInfo = outer;
 
@@ -112,8 +112,8 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
 			// Pass the whole ModRM byte: groups key on reg internally, x87 needs it all.
 			opcodeInfo = checks[has2Byte]
-				? IA_32Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(opcode), modrm)
-				: IA_32Mnemonic::resolvedInfo(static_cast<uint32_t>(opcode), modrm);
+				? x86_64_Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(opcode), modrm)
+				: x86_64_Mnemonic::resolvedInfo(static_cast<uint32_t>(opcode), modrm);
 
 
 			// --- SIB
@@ -136,18 +136,23 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 				break;
 			case 0b10:
 				if (cnt < 15) {
-					if (!checks[hasAddrSize])
-						instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int32_t>(contents.read_u32(address))); // disp32/16: already the full width
+					if (!checks[hasAddrSize]) { // disp32/16: already the full width
+						instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int32_t>(contents.read_u32(address)));
+						address += 2;
+					}	
 					else instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int16_t>(contents.read_u16(address)));
+
 					dispWidth = 2;
 					if (!checks[hasAddrSize])
-						dispWidth += 2;				address += 4;
+						dispWidth += 2;				
+					address += 2;
 				}
 				else checks[hasDisp] = false;
 				break;
 			case 0b00:
 				if (cnt >= 15) checks[hasDisp] = false;
-				else if (rm == 0b101 || (rm == 0b100 && (instructionBytes[endOpcode + 1] & 0b00000111) == 0b101)) {
+				else if (rm == (checks[hasAddrSize] ? 0b110 : 0b101)
+					|| (!checks[hasAddrSize] && rm == 0b100 && (instructionBytes[endOpcode + 1] & 0b00000111) == 0b101)) {
 
 					dispWidth = 2;
 					if (!checks[hasAddrSize])
@@ -175,7 +180,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
 		uint64_t rawImmediates[] = { 0,0,0 };
 		// --- IMMEDIATE(s)
-		if (IA_32Mnemonic::hasImmediate(opcodeInfo) && cnt < 15) { // set immediate field
+		if (x86_64_Mnemonic::hasImmediate(opcodeInfo) && cnt < 15) { // set immediate field
 			checks[hasImm] = true;
 			immBegin = cnt;
 
@@ -187,10 +192,10 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
 			for (int i = 0; i < 3; ++i)
 				switch (opcodeInfo.op[i].addressingMode) {
-				case cast(IA_32::ADDRESSING::I):
-				case cast(IA_32::ADDRESSING::J):
-				case cast(IA_32::ADDRESSING::A):
-				case cast(IA_32::ADDRESSING::O):
+				case cast(x86_64::ADDRESSING::I):
+				case cast(x86_64::ADDRESSING::J):
+				case cast(x86_64::ADDRESSING::A):
+				case cast(x86_64::ADDRESSING::O):
 					pick[i] = true;
 					break;
 
@@ -205,20 +210,20 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 					immSize = opcodeInfo.op[i].size;
 					immAddr = opcodeInfo.op[i].addressingMode;
 
-					const bool isRelative = (immAddr == static_cast<uint8_t>(IA_32::ADDRESSING::J));
+					const bool isRelative = (immAddr == static_cast<uint8_t>(x86_64::ADDRESSING::J));
 
 					switch (immSize) {
-					case cast(IA_32::SIZE::b): case cast(IA_32::SIZE::bs): width = 1; break;   // bs occupies 1 byte too
-					case cast(IA_32::SIZE::w): width = 2; break;
-					case cast(IA_32::SIZE::v):
-					case cast(IA_32::SIZE::z): width = checks[hasOpsize] ? 2 : 4; break;
-					case cast(IA_32::SIZE::p): width = checks[hasOpsize] ? 4 : 6; break;
+					case cast(x86_64::SIZE::b): case cast(x86_64::SIZE::bs): width = 1; break;   // bs occupies 1 byte too
+					case cast(x86_64::SIZE::w): width = 2; break;
+					case cast(x86_64::SIZE::v):
+					case cast(x86_64::SIZE::z): width = checks[hasOpsize] ? 2 : 4; break;
+					case cast(x86_64::SIZE::p): width = checks[hasOpsize] ? 4 : 6; break;
 					default:
 						fprintf(stderr, "Immediate IA_32::SIZE not implemented yet (opcode %#x)\n", opcode);
 						break;
 					}
 
-					if (immAddr == cast(IA_32::ADDRESSING::O))
+					if (immAddr == cast(x86_64::ADDRESSING::O))
 						width = checks[hasAddrSize] ? 2 : 4;
 
 
@@ -247,7 +252,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 					// 83 /r ib, 6B, 6A: the imm8 is sign-extended to the operand width (16-bit
 					// under a 66h prefix, else 32-bit). Widen the byte just read; length stays 1,
 					// so this is display-only and cannot desync the sweep.
-					if (immSize == cast(IA_32::SIZE::bs))
+					if (immSize == cast(x86_64::SIZE::bs))
 						value = checks[hasOpsize] ? static_cast<uint16_t>(static_cast<int8_t>(static_cast<uint8_t>(value)))
 							: static_cast<uint32_t>(static_cast<int8_t>(static_cast<uint8_t>(value)));
 
@@ -264,7 +269,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 				}
 		}
 
-		auto instruction = std::make_unique<IA_32>();
+		auto instruction = std::make_unique<x86_64>();
 		instruction->decode(instructionBytes, checks, endPrefix, endOpcode, immBegin, width, dispWidth, rawImmediates);
 		decodedInstructions.push_back(std::move(instruction));
 

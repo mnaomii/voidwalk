@@ -1,6 +1,6 @@
 #pragma once
-#include "../../address-space/address_space.h"
-#include "../../disassembler/disassembler.h"
+#include "../../address-space/address_space.hpp"
+#include "../../disassembler/disassembler.hpp"
 #include <memory>
 #include <string>
 

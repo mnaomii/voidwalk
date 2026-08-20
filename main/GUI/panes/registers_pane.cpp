@@ -2,58 +2,89 @@
 
 #include "../theme/theme.h"
 
+#include <QAbstractItemView>
 #include <QHeaderView>
-#include <QTableWidget>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
+#include <array>
 #include <utility>
 
 namespace gui {
 
 RegistersPane::RegistersPane(QWidget* parent) : QWidget(parent) {
-	table_ = new QTableWidget(0, 2, this);
-	table_->setHorizontalHeaderLabels({tr("Register"), tr("Value")});
-	table_->verticalHeader()->setVisible(false);
-	table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-	table_->horizontalHeader()->setStretchLastSection(true);
-	table_->setAlternatingRowColors(true);
+	tree_ = new QTreeWidget(this);
+	tree_->setColumnCount(2);
+	tree_->setHeaderLabels({tr("Register"), tr("Value")});
+	tree_->setRootIsDecorated(true);       // expand arrows on the category rows
+	tree_->setUniformRowHeights(true);
+	tree_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	tree_->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+	tree_->header()->setStretchLastSection(true);
 
 	auto* layout = new QVBoxLayout(this);
-	layout->addWidget(table_);
+	layout->addWidget(tree_);
 }
 
 void RegistersPane::refresh() {
 	if (!session_) return;
 
 	const Registers& r = session_->registers();
+	const bool is64 = session_->is64bit();
 	const QFont mono = monoFont();
+	const int gpDigits = is64 ? 16 : 8; // 64- vs 32-bit value width
 
-	// General-purpose set + eip, then the segment registers. Order matches the
-	// pane's contract: eax..esp, eip, then cs/ds/ss/es/fs/gs, then flags.
-	const std::pair<const char*, uint64_t> gpRows[] = {
+	tree_->clear();
+
+	// A bold, non-value header row that spans both columns.
+	auto addCategory = [this](const QString& title) {
+		auto* cat = new QTreeWidgetItem(tree_, {title});
+		QFont f = cat->font(0);
+		f.setBold(true);
+		cat->setFont(0, f);
+		cat->setFirstColumnSpanned(true);
+		cat->setFlags(Qt::ItemIsEnabled); // not selectable/editable
+		return cat;
+	};
+
+	auto addReg = [&mono](QTreeWidgetItem* cat, const QString& name, uint64_t value, int digits) {
+		auto* item = new QTreeWidgetItem(cat);
+		item->setText(0, name);
+		item->setText(1, QString("0x%1").arg(value, digits, 16, QLatin1Char('0')));
+		item->setFont(1, mono);
+	};
+
+	// General purpose — renamed to the 64-bit set when a 64-bit target is loaded.
+	auto* gp = addCategory(tr("General Purpose"));
+	const std::array<std::pair<const char*, uint64_t>, 8> gp32 = {{
 		{"eax", r.eax}, {"ebx", r.ebx}, {"ecx", r.ecx}, {"edx", r.edx},
 		{"esi", r.esi}, {"edi", r.edi}, {"ebp", r.ebp}, {"esp", r.esp},
-		{"eip", r.eip},
-		{"cs", r.cs}, {"ds", r.ds}, {"ss", r.ss}, {"es", r.es},
-		{"fs", r.fs}, {"gs", r.gs},
+	}};
+	static constexpr std::array<const char*, 8> gp64 = {
+		"rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp",
 	};
-	const int gpCount = static_cast<int>(sizeof(gpRows) / sizeof(gpRows[0]));
+	for (int i = 0; i < 8; ++i)
+		addReg(gp, QString::fromLatin1(is64 ? gp64[i] : gp32[i].first), gp32[i].second, gpDigits);
 
-	table_->setRowCount(gpCount + 1); // + flags row
+	// Instruction pointer.
+	auto* ip = addCategory(tr("Instruction Pointer"));
+	addReg(ip, is64 ? QStringLiteral("rip") : QStringLiteral("eip"), r.eip, gpDigits);
 
-	int row = 0;
-	for (const auto& [name, value] : gpRows) {
-		table_->setItem(row, 0, new QTableWidgetItem(QString::fromLatin1(name)));
-		auto* valueItem = new QTableWidgetItem(QString("0x%1").arg(value, 16, 16, QLatin1Char('0')));
-		valueItem->setFont(mono);
-		table_->setItem(row, 1, valueItem);
-		++row;
-	}
+	// Segment registers (16-bit selectors).
+	auto* seg = addCategory(tr("Segment"));
+	const std::pair<const char*, uint64_t> segs[] = {
+		{"cs", r.cs}, {"ds", r.ds}, {"ss", r.ss},
+		{"es", r.es}, {"fs", r.fs}, {"gs", r.gs},
+	};
+	for (const auto& [name, value] : segs)
+		addReg(seg, QString::fromLatin1(name), value, 4);
 
-	table_->setItem(row, 0, new QTableWidgetItem(QStringLiteral("flags")));
-	auto* flagsItem = new QTableWidgetItem(QString("0x%1").arg(r.flags, 2, 16, QLatin1Char('0')));
-	flagsItem->setFont(mono);
-	table_->setItem(row, 1, flagsItem);
+	// Flags.
+	auto* fl = addCategory(tr("Flags"));
+	addReg(fl, QStringLiteral("flags"), r.flags, 2);
+
+	tree_->expandAll();
 }
 
 } // namespace gui

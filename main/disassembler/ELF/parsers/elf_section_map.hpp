@@ -1,8 +1,8 @@
 #ifndef ELF_PARSER_H
 #define ELF_PARSER_H
 
-#include "../../disassembler.h"
-#include "../../../address-space/address_space.h"
+#include "../../disassembler.hpp"
+#include "../../../address-space/address_space.hpp"
 #include <unordered_map>
 #include <string>
 #include <stdexcept>
@@ -10,7 +10,7 @@
 
 
 
-void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
+inline void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
 
 
 	uint32_t e_shoff = data.read_u32(0x20);
@@ -67,7 +67,7 @@ void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
 
 }
 
-void setHeaders64bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
+inline void setHeaders64bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
 
 	uint64_t e_shoff = data.read_u64(0x28); // section header offset
 	uint16_t e_shentsize = data.read_u16(0x3A); // size of one section header entry

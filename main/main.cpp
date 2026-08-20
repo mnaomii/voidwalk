@@ -1,6 +1,6 @@
-  #include "address-space/address_space.h"
-#include "disassembler/disassembler.h"
-#include "miscellaneous/loader.h"
+  #include "address-space/address_space.hpp"
+#include "disassembler/disassembler.hpp"
+#include "miscellaneous/loader.hpp"
 
 #include "../tests/runner.h"
 
@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
     try {
         data = std::make_shared<AddressSpace>(argv[argc - 1]);
     }
-    catch (std::runtime_error&) {
+    catch (std::exception&) {
         std::cerr << "File could not be opened.\n";
         return 1;
     }

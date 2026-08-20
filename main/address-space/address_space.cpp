@@ -1,4 +1,4 @@
-#include "address_space.h"
+#include "address_space.hpp"
 #include <stdexcept>
 
 AddressSpace::AddressSpace(std::string filename) {
@@ -27,16 +27,7 @@ AddressSpace::AddressSpace(const AddressSpace& other) {
 	if (!this->f.is_open()) throw std::runtime_error("Executable cannot be read.");
 
 }
-AddressSpace AddressSpace::operator=(const AddressSpace& other) {
 
-	this->binary = other.binary;
-	this->maxOffset = other.maxOffset;
-	this->f.open(this->binary, std::ios::binary);
-	if (!this->f.is_open()) throw std::runtime_error("Executable cannot be read.");
-
-	return *this;
-
-}
 
 const size_t AddressSpace::size() noexcept {
 	return this->maxOffset;

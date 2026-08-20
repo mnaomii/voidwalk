@@ -174,8 +174,12 @@
     <ClInclude Include="..\..\main\GUI\theme\icons.h">
       <Filter>GUI</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-instr.hpp" />
-    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-mnemonic.hpp" />
+    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-instr.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\main\disassembler\mnemonic\x86_64\x86_64-mnemonic.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="..\..\main\GUI\ai\ai_client.h">

@@ -1,11 +1,10 @@
-#include "elf_disassembler.h"
-#include "parsers/elf_section_map.h"
+#include "elf_disassembler.hpp"
+#include "parsers/elf_section_map.hpp"
 #include <stdexcept>
-#include "../mnemonic/instruction.h"
-#include "../mnemonic/IA-32/IA-32-instr.h"
-#include "../mnemonic/AArch64/AArch64-instr.h"
-#include "../mnemonic/AMD64/AMD64-instr.h"
-#include "../mnemonic/ARM32/ARM32-instr.h"
+#include "../mnemonic/instruction.hpp"
+#include "../mnemonic/x86_64/x86_64-instr.hpp"
+#include "../mnemonic/AArch64/AArch64-instr.hpp"
+#include "../mnemonic/ARM32/ARM32-instr.hpp"
 
 
 ELF_Disassembler::ELF_Disassembler(AddressSpace& data) : Disassembler(data) { // constructor

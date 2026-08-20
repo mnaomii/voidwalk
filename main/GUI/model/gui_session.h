@@ -21,6 +21,17 @@ struct DisasmRow {
 	std::string text;
 };
 
+// One section the core registered, as the memory pane needs it: a name plus the
+// file offset (where the memory pane seeks) and the size. Handed out by
+// Session::sections() so the pane can offer a jump target per section without
+// touching the Disassembler.
+struct SectionInfo {
+	std::string name;
+	uint64_t offset = 0;
+	uint64_t vaddr = 0;
+	uint64_t size = 0;
+};
+
 // View-model between the analysis core and the Qt panes — same seam as
 // tui::Session, but with structured rows instead of preformatted strings so
 // the item models can put address/bytes/mnemonic in separate columns.
@@ -40,6 +51,9 @@ public:
 	const std::string& filePath() const { return filePath_; }
 	const std::string& format() const { return format_; } // "ELF" / "PE" / ""
 	std::string architecture() const;
+	// True when the loaded target is 64-bit (x86_64 / AArch64). The registers pane
+	// uses it to show the 64-bit register names (rax/rbx…/rip).
+	bool is64bit() const;
 
 	const std::string& status() const { return status_; }
 	void setStatus(std::string s) { status_ = std::move(s); }
@@ -66,6 +80,11 @@ public:
 	size_t binarySize() const;
 	uint64_t textOffset() const;
 	uint64_t textVaddr() const;
+
+	// The sections the core populated (.text/.data/.rodata/.bss), in file order,
+	// for the memory pane's section-jump list. Empty when not loaded; unpopulated
+	// sections (all-zero) are dropped so the pane offers no dead targets.
+	std::vector<SectionInfo> sections() const;
 
 	// "Recompile" seam. `edits` pairs a disassembly() row index with the new
 	// instruction text typed into the pane. The assembler backend does not

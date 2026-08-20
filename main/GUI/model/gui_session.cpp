@@ -14,6 +14,44 @@ std::string hexByte(uint8_t b) {
 	return buf;
 }
 
+// The core renders a decoded line as "<MNEMONIC> \t<operands>" — a literal space
+// followed by a tab (see x86_64::decode). The tab draws unevenly in the Qt
+// delegate (QPainter gives it a font-dependent, near-random advance) and leaves
+// trailing whitespace on operand-less rows like RET. We can't touch the decoder,
+// so tidy the string here: split on the tab, trim both halves, and re-join with
+// the mnemonic left-padded to a fixed column so operands line up down the pane.
+std::string formatDisasmText(const std::string& raw) {
+	std::string mnemonic, operands;
+	const auto tab = raw.find('\t');
+	if (tab == std::string::npos) {
+		mnemonic = raw; // "(bad)" and the like never reach the tab-append
+	}
+	else {
+		mnemonic = raw.substr(0, tab);
+		operands = raw.substr(tab + 1);
+	}
+
+	auto trim = [](std::string& s) {
+		const auto first = s.find_first_not_of(" \t");
+		if (first == std::string::npos) { s.clear(); return; }
+		const auto last = s.find_last_not_of(" \t");
+		s = s.substr(first, last - first + 1);
+	};
+	trim(mnemonic);
+	trim(operands);
+
+	if (operands.empty()) return mnemonic;
+
+	// Pad the mnemonic (possibly "REP MOVSB", prefix included) to a fixed width so
+	// the operand columns align; longer fields just get a single separating space.
+	constexpr std::size_t kColumn = 7;
+	if (mnemonic.size() < kColumn)
+		mnemonic.append(kColumn - mnemonic.size(), ' ');
+	else
+		mnemonic.push_back(' ');
+	return mnemonic + operands;
+}
+
 // Registers to hand out when nothing is loaded, so panes can render a
 // zeroed register file without null-checking the disassembler.
 const Registers kZeroRegisters{};
@@ -65,6 +103,12 @@ std::string Session::architecture() const {
 	return loaded() ? disassembler_->getArchitecture() : "";
 }
 
+bool Session::is64bit() const {
+	// The core's arch strings are "x86" / "ARM32" / "x86_64" / "AArch64"; the
+	// 64-bit ones are exactly the two carrying "64". Format-agnostic.
+	return architecture().find("64") != std::string::npos;
+}
+
 const Registers& Session::registers() const {
 	return loaded() ? disassembler_->getRegisters() : kZeroRegisters;
 }
@@ -97,6 +141,23 @@ uint64_t Session::textVaddr() const {
 	return loaded() ? disassembler_->getSections()._text.getVaddr() : 0;
 }
 
+std::vector<SectionInfo> Session::sections() const {
+	std::vector<SectionInfo> out;
+	if (!loaded()) return out;
+	const Sections& s = disassembler_->getSections();
+	auto add = [&out](const char* name, const Header& h) {
+		// Drop sections the parser never filled in (offset and size both zero) so
+		// the pane doesn't list a jump target that goes nowhere.
+		if (h.getOffset() == 0 && h.getSize() == 0) return;
+		out.push_back({name, h.getOffset(), h.getVaddr(), h.getSize()});
+	};
+	add(".text", s._text);
+	add(".data", s._data);
+	add(".rodata", s._ronly);
+	add(".bss", s._bss);
+	return out;
+}
+
 std::string Session::applyPatches(const std::vector<std::pair<size_t, std::string>>& edits) {
 	if (!loaded())
 		return "Recompile: no binary loaded.";
@@ -127,7 +188,7 @@ void Session::refresh() {
 			// addresses is parallel to decoded, but stay defensive: a
 			// decodeLine that throws mid-push could leave it short.
 			row.vaddr = (i < addresses.size()) ? addresses[i] : 0;
-			row.text = decoded[i]->decodeLineString();
+			row.text = formatDisasmText(decoded[i]->decodeLineString());
 
 			// Instruction length = distance to the next instruction (the core
 			// records start addresses only). Last one is clamped to .text end.

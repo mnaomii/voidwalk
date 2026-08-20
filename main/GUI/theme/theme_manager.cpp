@@ -1,13 +1,55 @@
 #include "theme_manager.h"
 
 #include <QApplication>
+#include <QDir>
+#include <QPainter>
 #include <QPalette>
+#include <QPixmap>
 #include <QStyleFactory>
+#include <QSvgRenderer>
 
 namespace gui {
 
 namespace {
 Theme g_current = Theme::dark();
+
+// Glyphs the QSS needs but Fusion stops drawing once we style the widgets: the
+// checkbox tick and the spin/combo arrows. Drawn with #000000 so we can recolor
+// per theme exactly like the toolbar icons (Icons::icon). Rendered to a PNG (a
+// built-in format — no SVG image plugin needed) and referenced from the QSS by
+// file path, so a styled checkbox/spinbox gets a real, theme-colored glyph.
+const char kCheckSvg[] =
+	R"SVG(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M3.5 8.6 L6.6 11.5 L12.5 4.8" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>)SVG";
+const char kChevronUpSvg[] =
+	R"SVG(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 9.8 L8 5.8 L12 9.8" fill="none" stroke="#000000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>)SVG";
+const char kChevronDownSvg[] =
+	R"SVG(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4 6.2 L8 10.2 L12 6.2" fill="none" stroke="#000000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>)SVG";
+
+// Recolor a glyph to `color`, cache it as a PNG under the temp dir, and return a
+// QSS-friendly (forward-slash) path. Rendered at exactly `px` — the size the QSS
+// draws it at — so it fills its sub-control whether Qt scales the image to the
+// sub-control or centers it unscaled. The filename keys on glyph + size + color
+// so a theme switch reuses files. On failure returns an empty string; the QSS
+// url() then simply draws nothing (no worse than the missing glyph before).
+QString makeGlyph(const char* svg, const QColor& color, const QString& name, int px) {
+	QByteArray data(svg);
+	data.replace("#000000", color.name(QColor::HexRgb).toLatin1());
+
+	QSvgRenderer renderer(data);
+	QPixmap pm(px, px);
+	pm.fill(Qt::transparent);
+	QPainter painter(&pm);
+	renderer.render(&painter);
+	painter.end();
+
+	const QString dir = QDir::tempPath() + QStringLiteral("/voidwalk-glyphs");
+	QDir().mkpath(dir);
+	const QString path = QStringLiteral("%1/%2-%3-%4.png")
+		.arg(dir, name).arg(px).arg(color.name(QColor::HexRgb).mid(1)); // drop the '#'
+	if (!pm.save(path, "PNG"))
+		return QString();
+	return QDir::fromNativeSeparators(path);
+}
 
 // The whole app skin, written against the Fusion style. %tokens% are replaced
 // from Theme::placeholderMap(). Keep every color a token — no literals here.
@@ -52,7 +94,7 @@ QTabBar::tab:selected { background: %bgBase%; color: %textBright%; border-color:
 QTabBar::tab:hover:!selected { color: %textBright%; }
 
 /* ---- item views ---- */
-QTableWidget, QTableView {
+QTableWidget, QTableView, QTreeWidget, QTreeView {
 	background: %bgBase%;
 	alternate-background-color: %bgBase%;
 	border: none;
@@ -60,7 +102,7 @@ QTableWidget, QTableView {
 	selection-background-color: %accentBg%;
 	selection-color: %textBright%;
 }
-QTableView::item { padding: 2px 8px; }
+QTableView::item, QTreeView::item { padding: 2px 8px; }
 QHeaderView::section {
 	background: %bgBase%; color: %textDim%;
 	border: none; border-bottom: 1px solid %border%;
@@ -74,7 +116,22 @@ QLineEdit, QSpinBox, QComboBox { background: %bgBase%; border: 1px solid %contro
 QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus { border-color: %accent%; }
 QLineEdit:disabled, QSpinBox:disabled, QComboBox:disabled { color: %textFaint%; background: %bgPanel%; }
 QComboBox::drop-down { border: none; width: 22px; }
+QComboBox::down-arrow { image: url("%downGlyph%"); width: 12px; height: 12px; }
 QComboBox QAbstractItemView { background: %bgPanel%; border: 1px solid %controlBorder%; border-radius: 6px; selection-background-color: %accentBg%; selection-color: %textBright%; }
+
+/* Spin buttons: Fusion stops drawing the arrows once the box is styled, so give
+   them explicit sub-control geometry and glyph images. */
+QSpinBox::up-button, QSpinBox::down-button {
+	subcontrol-origin: border; width: 17px; background: transparent;
+	border-left: 1px solid %controlBorder%;
+}
+QSpinBox::up-button { subcontrol-position: top right; border-top-right-radius: 5px; }
+QSpinBox::down-button { subcontrol-position: bottom right; border-top: 1px solid %controlBorder%; border-bottom-right-radius: 5px; }
+QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: %control%; }
+QSpinBox::up-button:pressed, QSpinBox::down-button:pressed { background: %accentBg%; }
+QSpinBox::up-arrow { image: url("%upGlyph%"); width: 12px; height: 12px; }
+QSpinBox::down-arrow { image: url("%downGlyph%"); width: 12px; height: 12px; }
+QSpinBox::up-button:disabled, QSpinBox::down-button:disabled { border-color: %border%; }
 
 /* ---- buttons / checkboxes / group boxes ---- */
 QPushButton { background: %control%; border: 1px solid %controlBorder%; border-radius: 6px; padding: 6px 16px; color: %text%; }
@@ -84,7 +141,8 @@ QPushButton:default { background: %runBg%; border-color: %accent%; color: %accen
 QPushButton:disabled { color: %textFaint%; background: transparent; }
 QCheckBox { spacing: 8px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid %controlBorder%; border-radius: 4px; background: %bgBase%; }
-QCheckBox::indicator:checked { background: %accent%; border-color: %accent%; }
+QCheckBox::indicator:hover { border-color: %accent%; }
+QCheckBox::indicator:checked { background: %accentBg%; border-color: %accent%; image: url("%checkGlyph%"); }
 QGroupBox { border: 1px solid %border%; border-radius: 8px; margin-top: 12px; padding-top: 8px; }
 QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: %textMuted%; }
 
@@ -148,6 +206,13 @@ QString ThemeManager::buildStylesheet(const Theme& theme) {
 	const auto map = theme.placeholderMap();
 	for (auto it = map.constBegin(); it != map.constEnd(); ++it)
 		qss.replace(QLatin1Char('%') + it.key() + QLatin1Char('%'), it.value());
+
+	// Glyph images can't come from the color map (they're recolored PNGs, not hex
+	// strings), so splice their paths in after: the tick in the accent color, the
+	// arrows in the body text color.
+	qss.replace(QStringLiteral("%checkGlyph%"), makeGlyph(kCheckSvg, theme.accent, QStringLiteral("check"), 16));
+	qss.replace(QStringLiteral("%upGlyph%"), makeGlyph(kChevronUpSvg, theme.text, QStringLiteral("up"), 12));
+	qss.replace(QStringLiteral("%downGlyph%"), makeGlyph(kChevronDownSvg, theme.text, QStringLiteral("down"), 12));
 	return qss;
 }
 

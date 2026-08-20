@@ -30,8 +30,6 @@ public:
 	T readType(uint64_t offset);
 
 	AddressSpace(const AddressSpace& other);
-	AddressSpace operator=(const AddressSpace& other);
-
 	~AddressSpace();
 };
 #endif

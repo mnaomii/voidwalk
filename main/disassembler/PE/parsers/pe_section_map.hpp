@@ -8,14 +8,14 @@
 
 enum SectionKind { CODE, DATA, RODATA, BSS, NONE };
 
-int classify(uint32_t c) {
+inline int classify(uint32_t c) {
 	if (c & 0x20000000 || c & 0x20) return CODE;          // EXECUTE or CNT_CODE
 	if (c & 0x80)                    return BSS;           // CNT_UNINIT_DATA
 	if (c & 0x40) return (c & 0x80000000) ? DATA : RODATA; // INIT_DATA, WRITE?
 	return NONE;
 }
 
-void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& data, uint32_t e_lfanew) {
+inline void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& data, uint32_t e_lfanew) {
 
 	uint16_t NumberOfSections = data.read_u16(e_lfanew + 6);
 	uint16_t SizeOfOptionalHeader = data.read_u16(e_lfanew + 20);
@@ -46,7 +46,7 @@ void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& data, uin
 }
 
 
-void setHeaders64bit(Sections& base, PE_Sections extra, AddressSpace& data, uint32_t e_lfanew) {
+inline void setHeaders64bit(Sections& base, PE_Sections extra, AddressSpace& data, uint32_t e_lfanew) {
 
 	uint16_t NumberOfSections = data.read_u16(e_lfanew + 6);
 	uint16_t SizeOfOptionalHeader = data.read_u16(e_lfanew + 20);
