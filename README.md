@@ -38,8 +38,7 @@ Disassembler (abstract base)
 
 Instruction (abstract)
 ├── AArch64
-└── IA-32
-└── AMD64
+└── x86_64
 └── ARM32
 
 
@@ -86,7 +85,8 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 
 **Near-term**
 - [x] PE parser implementation (32-bit and 64-bit)
-- [x] x86 instruction decoder
+- [x] IA-32 instruction decoding support
+- [ ] AMD64 instruction decoding support
 - [x] TUI
 - [ ] Tests
 - [x] GUI
