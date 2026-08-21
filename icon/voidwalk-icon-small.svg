@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Voidwalk small icon: ghost gripping a lantern that lights up code">
+  <defs>
+    <linearGradient id="s-body" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#c9cdf7"></stop>
+      <stop offset="0.55" stop-color="#8482d0"></stop>
+      <stop offset="1" stop-color="#484394"></stop>
+    </linearGradient>
+    <linearGradient id="s-core" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#f2fffc"></stop>
+      <stop offset="0.55" stop-color="#7fe9dd"></stop>
+      <stop offset="1" stop-color="#35aab6"></stop>
+    </linearGradient>
+    <linearGradient id="s-beam" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#a9f6ec" stop-opacity="0.4"></stop>
+      <stop offset="1" stop-color="#4fb6c0" stop-opacity="0.05"></stop>
+    </linearGradient>
+  </defs>
+
+  <path d="M 164 214 L 116 250 L 250 250 L 208 214 Z" fill="url(#s-beam)"></path>
+
+  <path d="M 156 152 C 156 104 210 104 210 152" fill="none" stroke="#2c3563" stroke-width="10" stroke-linecap="round"></path>
+  <path d="M 156 152 C 156 104 210 104 210 152" fill="none" stroke="#9ba0e4" stroke-width="4" stroke-linecap="round" opacity="0.6"></path>
+
+  <path d="M 30 116 C 26 56 52 20 88 20 C 124 20 148 56 148 94 C 162 82 184 90 194 104 C 205 118 199 135 182 135 C 167 135 157 122 168 107 C 162 99 154 98 148 104 C 148 146 144 170 138 186 Q 124 202 112 184 Q 98 202 86 184 Q 72 202 60 184 Q 44 200 36 180 C 30 164 30 138 30 116 Z" fill="url(#s-body)"></path>
+  <ellipse cx="70" cy="96" rx="11" ry="18" fill="#0d0a20"></ellipse>
+  <ellipse cx="112" cy="96" rx="11" ry="18" fill="#0d0a20"></ellipse>
+
+  <rect x="156" y="146" width="54" height="16" rx="4" fill="#2c3563" stroke="#9ba0e4" stroke-width="3" stroke-opacity="0.55"></rect>
+  <rect x="162" y="160" width="42" height="46" rx="6" fill="url(#s-core)" stroke="#2c3563" stroke-width="9"></rect>
+  <rect x="162" y="160" width="42" height="46" rx="6" fill="none" stroke="#9ba0e4" stroke-width="3.5" stroke-opacity="0.6"></rect>
+  <rect x="154" y="202" width="58" height="16" rx="4" fill="#2c3563" stroke="#9ba0e4" stroke-width="3" stroke-opacity="0.55"></rect>
+
+  <g fill="#5a58a8">
+    <rect x="12" y="228" width="46" height="14" rx="7"></rect>
+    <rect x="66" y="228" width="28" height="14" rx="7"></rect>
+  </g>
+  <g fill="#8fedde">
+    <rect x="126" y="228" width="52" height="14" rx="7"></rect>
+    <rect x="188" y="228" width="46" height="14" rx="7"></rect>
+  </g>
+</svg>

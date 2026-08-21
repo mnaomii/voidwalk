@@ -51,6 +51,7 @@ target_include_directories(voidwalk-core PUBLIC
 
 add_executable(voidwalk
     main/main.cpp
+    main/app.rc
     tests/runner.cpp)
 target_link_libraries(voidwalk PRIVATE voidwalk-core)
 

@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Voidwalk icon: a spectral ghost carrying a lantern whose light reveals a line of code in the void">
+  <defs>
+    <linearGradient id="vw-body" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#c6cbf6" stop-opacity="0.9"></stop>
+      <stop offset="0.34" stop-color="#7b7ace" stop-opacity="0.68"></stop>
+      <stop offset="0.66" stop-color="#4d489e" stop-opacity="0.46"></stop>
+      <stop offset="1" stop-color="#221d58" stop-opacity="0.08"></stop>
+    </linearGradient>
+    <linearGradient id="vw-rim" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#f0f2ff" stop-opacity="0.8"></stop>
+      <stop offset="0.5" stop-color="#8f8ada" stop-opacity="0.34"></stop>
+      <stop offset="1" stop-color="#4a3f96" stop-opacity="0"></stop>
+    </linearGradient>
+    <radialGradient id="vw-cast" gradientUnits="userSpaceOnUse" cx="720" cy="620" r="430">
+      <stop offset="0" stop-color="#8ff3e6" stop-opacity="0.42"></stop>
+      <stop offset="0.45" stop-color="#63d9d2" stop-opacity="0.12"></stop>
+      <stop offset="1" stop-color="#3fb5bd" stop-opacity="0"></stop>
+    </radialGradient>
+    <radialGradient id="vw-core" gradientUnits="userSpaceOnUse" cx="720" cy="690" r="110">
+      <stop offset="0" stop-color="#f6fffd"></stop>
+      <stop offset="0.3" stop-color="#a6f6ea"></stop>
+      <stop offset="0.68" stop-color="#43bcc6" stop-opacity="0.5"></stop>
+      <stop offset="1" stop-color="#2a6fa0" stop-opacity="0.1"></stop>
+    </radialGradient>
+    <radialGradient id="vw-halo" gradientUnits="userSpaceOnUse" cx="720" cy="686" r="330">
+      <stop offset="0" stop-color="#b9fff4" stop-opacity="0.5"></stop>
+      <stop offset="0.28" stop-color="#5fd6d6" stop-opacity="0.17"></stop>
+      <stop offset="0.66" stop-color="#5a63cc" stop-opacity="0.07"></stop>
+      <stop offset="1" stop-color="#40358c" stop-opacity="0"></stop>
+    </radialGradient>
+    <linearGradient id="vw-beam" gradientUnits="userSpaceOnUse" x1="726" y1="756" x2="640" y2="1000">
+      <stop offset="0" stop-color="#c6fff5" stop-opacity="0.3"></stop>
+      <stop offset="0.5" stop-color="#7fe0da" stop-opacity="0.1"></stop>
+      <stop offset="1" stop-color="#5ec3cc" stop-opacity="0.02"></stop>
+    </linearGradient>
+    <filter id="vw-soft" x="-90%" y="-90%" width="280%" height="280%">
+      <feGaussianBlur stdDeviation="16"></feGaussianBlur>
+    </filter>
+    <filter id="vw-mist" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="34"></feGaussianBlur>
+    </filter>
+
+    <clipPath id="vw-cone">
+      <path d="M 662 742 L 366 996 L 1004 996 L 796 742 Z"></path>
+    </clipPath>
+    <clipPath id="vw-glass">
+      <path d="M 660 616 L 786 616 L 776 762 L 670 762 Z"></path>
+    </clipPath>
+
+    <g id="vw-code">
+      <rect x="70" y="798" width="132" height="24" rx="12"></rect>
+      <rect x="228" y="798" width="66" height="24" rx="12"></rect>
+      <rect x="320" y="798" width="176" height="24" rx="12"></rect>
+      <rect x="522" y="798" width="52" height="24" rx="12"></rect>
+      <rect x="600" y="798" width="118" height="24" rx="12"></rect>
+      <rect x="744" y="798" width="82" height="24" rx="12"></rect>
+      <rect x="852" y="798" width="102" height="24" rx="12"></rect>
+
+      <rect x="118" y="872" width="88" height="24" rx="12"></rect>
+      <rect x="232" y="872" width="152" height="24" rx="12"></rect>
+      <rect x="410" y="872" width="56" height="24" rx="12"></rect>
+      <rect x="492" y="872" width="120" height="24" rx="12"></rect>
+      <rect x="638" y="872" width="70" height="24" rx="12"></rect>
+      <rect x="734" y="872" width="100" height="24" rx="12"></rect>
+      <rect x="860" y="872" width="94" height="24" rx="12"></rect>
+
+      <rect x="70" y="946" width="104" height="24" rx="12"></rect>
+      <rect x="200" y="946" width="166" height="24" rx="12"></rect>
+      <rect x="392" y="946" width="62" height="24" rx="12"></rect>
+      <rect x="480" y="946" width="94" height="24" rx="12"></rect>
+      <rect x="600" y="946" width="136" height="24" rx="12"></rect>
+      <rect x="762" y="946" width="54" height="24" rx="12"></rect>
+      <rect x="842" y="946" width="112" height="24" rx="12"></rect>
+    </g>
+  </defs>
+
+  <use href="#vw-code" fill="#54549e" opacity="0.4"></use>
+
+  <path d="M 662 742 L 366 996 L 1004 996 L 796 742 Z" fill="url(#vw-beam)"></path>
+
+  <g clip-path="url(#vw-cone)">
+    <use href="#vw-code" fill="#7fecdf" opacity="0.45" filter="url(#vw-soft)"></use>
+    <use href="#vw-code" fill="#86e9dc"></use>
+  </g>
+
+  <circle cx="720" cy="686" r="290" fill="url(#vw-halo)"></circle>
+
+  <g opacity="0.26" filter="url(#vw-mist)">
+    <path d="M 150 480 C 150 268 214 140 330 140 C 446 140 512 268 512 480 C 512 596 450 660 330 660 C 210 660 150 596 150 480 Z" fill="#6f6ed6"></path>
+  </g>
+
+
+  <path d="M 680 596 C 676 468 756 468 752 596" fill="none" stroke="#2c3563" stroke-width="16" stroke-linecap="round"></path>
+  <path d="M 680 596 C 676 468 756 468 752 596" fill="none" stroke="#9ba0e4" stroke-width="5" stroke-linecap="round" opacity="0.5"></path>
+
+  <g>
+    <path id="vw-ghost" d="M 120 508 C 112 272 188 112 330 112 C 472 112 544 272 544 396 C 600 382 680 398 716 440 C 752 470 750 516 714 528 C 684 538 660 520 666 492 C 636 462 592 460 546 472 C 542 546 534 620 520 672 C 508 718 484 752 460 740 C 440 730 446 702 446 676 C 428 720 392 748 366 736 C 344 726 350 698 346 672 C 324 716 286 736 260 722 C 240 710 244 684 238 662 C 210 700 162 692 140 646 C 122 606 120 552 120 508 Z" fill="url(#vw-body)"></path>
+    <use href="#vw-ghost" fill="none" stroke="url(#vw-rim)" stroke-width="9" stroke-linejoin="round"></use>
+    <use href="#vw-ghost" fill="url(#vw-cast)"></use>
+  </g>
+
+  <ellipse cx="284" cy="358" rx="25" ry="43" fill="#0d0a20" opacity="0.93" transform="rotate(-13 284 358)"></ellipse>
+  <ellipse cx="398" cy="358" rx="25" ry="43" fill="#0d0a20" opacity="0.93" transform="rotate(13 398 358)"></ellipse>
+  <ellipse cx="292" cy="384" rx="10" ry="14" fill="#a4f0e6" opacity="0.4" filter="url(#vw-soft)"></ellipse>
+  <ellipse cx="406" cy="384" rx="10" ry="14" fill="#a4f0e6" opacity="0.45" filter="url(#vw-soft)"></ellipse>
+
+  <path d="M 648 578 L 798 578 Q 810 578 805 590 L 788 616 L 658 616 L 641 590 Q 636 578 648 578 Z" fill="#2c3563" stroke="#9ba0e4" stroke-width="5" stroke-opacity="0.5" stroke-linejoin="round"></path>
+  <g clip-path="url(#vw-glass)">
+    <rect x="640" y="600" width="170" height="180" fill="#0f1630" fill-opacity="0.5"></rect>
+    <circle cx="720" cy="690" r="112" fill="url(#vw-core)"></circle>
+    <path d="M 720 632 Q 696 668 708 694 Q 720 716 717 736 Q 702 722 697 700 Q 684 720 690 738 Q 670 720 675 690 Q 682 654 720 632 Z" fill="#eefffc" opacity="0.9"></path>
+  </g>
+  <path d="M 660 616 L 786 616 L 776 762 L 670 762 Z" fill="none" stroke="#2c3563" stroke-width="15" stroke-linejoin="round"></path>
+  <path d="M 660 616 L 786 616 L 776 762 L 670 762 Z" fill="none" stroke="#9ba0e4" stroke-width="5" stroke-opacity="0.5" stroke-linejoin="round"></path>
+  <path d="M 686 616 L 682 762" stroke="#8ee9e2" stroke-width="5" opacity="0.22"></path>
+  <path d="M 760 616 L 764 762" stroke="#8ee9e2" stroke-width="5" opacity="0.22"></path>
+  <path d="M 664 762 L 782 762 Q 793 762 790 772 L 780 796 Q 777 802 768 802 L 678 802 Q 669 802 666 796 L 656 772 Q 653 762 664 762 Z" fill="#2c3563" stroke="#9ba0e4" stroke-width="5" stroke-opacity="0.5" stroke-linejoin="round"></path>
+</svg>
