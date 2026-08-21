@@ -1,7 +1,7 @@
 #pragma once
-#include "../../../main/disassembler/disassembler.h"
-#include "../../../main/disassembler/mnemonic/IA-32/IA-32-instr.h"
-#include "../../../main/disassembler/mnemonic/instruction.h"
+#include "../../../main/disassembler/disassembler.hpp"
+#include "../../../main/disassembler/mnemonic/x86_64/x86_64-instr.hpp"
+#include "../../../main/disassembler/mnemonic/instruction.hpp"
 #include <memory>
 #include <iostream>
 #include <cassert>

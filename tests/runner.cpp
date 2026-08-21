@@ -3,7 +3,7 @@
 #include "disassembler/IA-32/tests.h"
 #include "disassembler/elf-sections.h"
 #include "disassembler/pe-sections.h"
-#include "../main/disassembler/disassembler.h"
+#include "../main/disassembler/disassembler.hpp"
 #include "base.h"
 #include "console.h"
 
