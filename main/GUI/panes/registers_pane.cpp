@@ -30,7 +30,7 @@ RegistersPane::RegistersPane(QWidget* parent) : QWidget(parent) {
 void RegistersPane::refresh() {
 	if (!session_) return;
 
-	const Registers& r = session_->registers();
+	const Registers_x86_64& r = session_->registers();
 	const bool is64 = session_->is64bit();
 	const QFont mono = monoFont();
 	const int gpDigits = is64 ? 16 : 8; // 64- vs 32-bit value width
@@ -58,8 +58,8 @@ void RegistersPane::refresh() {
 	// General purpose — renamed to the 64-bit set when a 64-bit target is loaded.
 	auto* gp = addCategory(tr("General Purpose"));
 	const std::array<std::pair<const char*, uint64_t>, 8> gp32 = {{
-		{"eax", r.eax}, {"ebx", r.ebx}, {"ecx", r.ecx}, {"edx", r.edx},
-		{"esi", r.esi}, {"edi", r.edi}, {"ebp", r.ebp}, {"esp", r.esp},
+		{"eax", r.rax}, {"ebx", r.rbx}, {"ecx", r.rcx}, {"edx", r.rdx},
+		{"esi", r.rsi}, {"edi", r.rdi}, {"ebp", r.rbp}, {"esp", r.rsp},
 	}};
 	static constexpr std::array<const char*, 8> gp64 = {
 		"rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp",
@@ -69,7 +69,7 @@ void RegistersPane::refresh() {
 
 	// Instruction pointer.
 	auto* ip = addCategory(tr("Instruction Pointer"));
-	addReg(ip, is64 ? QStringLiteral("rip") : QStringLiteral("eip"), r.eip, gpDigits);
+	addReg(ip, is64 ? QStringLiteral("rip") : QStringLiteral("eip"), r.rip, gpDigits);
 
 	// Segment registers (16-bit selectors).
 	auto* seg = addCategory(tr("Segment"));

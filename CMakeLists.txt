@@ -113,6 +113,7 @@ if(VOIDWALK_BUILD_GUI)
     target_sources(voidwalk PRIVATE
         main/GUI/runner/gui_main.cpp
         main/GUI/model/gui_session.cpp
+        main/GUI/model/symbols.cpp
         main/GUI/ai/ai_client.cpp
         main/GUI/dialogs/settings_dialog.cpp
         main/GUI/panes/ai_chat_pane.cpp
@@ -121,6 +122,7 @@ if(VOIDWALK_BUILD_GUI)
         main/GUI/panes/memory_pane.cpp
         main/GUI/panes/registers_pane.cpp
         main/GUI/panes/stack_pane.cpp
+        main/GUI/panes/symbols_pane.cpp
         main/GUI/theme/icons.cpp
         main/GUI/theme/theme.cpp
         main/GUI/theme/theme_manager.cpp

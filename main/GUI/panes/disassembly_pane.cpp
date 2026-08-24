@@ -3,14 +3,42 @@
 #include "disasm_delegate.h"
 
 #include <QAbstractItemView>
-#include <QFontDatabase>
 #include <QHeaderView>
 #include <QLabel>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
+#include <algorithm>
+#include <cctype>
+#include <sstream>
 
 namespace gui {
+
+namespace {
+// 25px at a 13px mono is a 1.9 line-height: enough that a wall of instructions
+// has horizontal air, tight enough that a screen still holds ~28 rows. The old
+// 24px with an unhinted 13px font left descenders touching the next row's caps.
+constexpr int kRowHeight = 25;
+constexpr int kGutterWidth = 26;
+constexpr int kNotesWidth = 150;
+
+// Parses "call 0x00401160" / "jb 0x401014" into mnemonic + numeric target.
+bool staticTarget(const std::string& text, std::string* mnemonic, uint64_t* target) {
+	std::istringstream is(text);
+	std::string op, arg;
+	if (!(is >> op >> arg)) return false;
+	std::transform(op.begin(), op.end(), op.begin(),
+		[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+	*mnemonic = op;
+	if (arg.rfind("0x", 0) != 0) return false;
+	try {
+		*target = std::stoull(arg.substr(2), nullptr, 16);
+	} catch (...) {
+		return false;
+	}
+	return true;
+}
+} // namespace
 
 DisassemblyPane::DisassemblyPane(QWidget* parent)
 	: QWidget(parent) {
@@ -25,22 +53,37 @@ DisassemblyPane::DisassemblyPane(QWidget* parent)
 	layout->addWidget(banner_);
 
 	table_ = new QTableWidget(this);
-	table_->setColumnCount(3);
-	table_->setHorizontalHeaderLabels({tr("ADDRESS"), tr("BYTES"), tr("INSTRUCTION")});
+	table_->setColumnCount(ColCount);
+	// The gutter header stays blank: a caption over a 26px marker column would
+	// be noise, and the column's meaning is obvious the moment a marker appears.
+	table_->setHorizontalHeaderLabels({
+		QString(), tr("ADDRESS"), tr("BYTES"), tr("INSTRUCTION"), tr("NOTES")});
 	table_->setFont(monoFont());
 	table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-	// Only the Instruction column is meant to be edited; columns 0/1 are made
+	table_->setSelectionMode(QAbstractItemView::SingleSelection);
+	// Only the Instruction column is meant to be edited; the others are made
 	// non-editable per-item in refresh() via item flags.
 	table_->setEditTriggers(QAbstractItemView::DoubleClicked
 		| QAbstractItemView::SelectedClicked
 		| QAbstractItemView::EditKeyPressed);
 	table_->verticalHeader()->setVisible(false);
-	table_->verticalHeader()->setDefaultSectionSize(24);
-	table_->horizontalHeader()->setStretchLastSection(true);
-	table_->horizontalHeader()->setHighlightSections(false);
+	table_->verticalHeader()->setDefaultSectionSize(kRowHeight);
+	table_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
 	table_->setShowGrid(false);
 	table_->setFrameShape(QFrame::NoFrame);
 	table_->setAlternatingRowColors(false); // flat rows; the delegate carries the color
+	table_->setWordWrap(false);
+	table_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+
+	QHeaderView* head = table_->horizontalHeader();
+	head->setHighlightSections(false);
+	head->setSectionResizeMode(ColGutter, QHeaderView::Fixed);
+	head->setSectionResizeMode(ColAddress, QHeaderView::ResizeToContents);
+	head->setSectionResizeMode(ColBytes, QHeaderView::ResizeToContents);
+	head->setSectionResizeMode(ColInstruction, QHeaderView::Stretch);
+	head->setSectionResizeMode(ColNotes, QHeaderView::Fixed);
+	table_->setColumnWidth(ColGutter, kGutterWidth);
+	table_->setColumnWidth(ColNotes, kNotesWidth);
 
 	delegate_ = new DisasmDelegate(table_);
 	table_->setItemDelegate(delegate_);
@@ -48,7 +91,7 @@ DisassemblyPane::DisassemblyPane(QWidget* parent)
 
 	connect(table_, &QTableWidget::cellChanged, this, [this](int row, int col) {
 		if (populating_) return; // programmatic fill in refresh(), not a user edit
-		if (col != 2) return; // only the Instruction column is editable
+		if (col != ColInstruction) return;
 
 		QTableWidgetItem* item = table_->item(row, col);
 		if (!item) return;
@@ -70,6 +113,26 @@ DisassemblyPane::DisassemblyPane(QWidget* parent)
 void DisassemblyPane::setTheme(const Theme& theme) {
 	delegate_->setTheme(theme);
 	table_->viewport()->update();
+}
+
+QString DisassemblyPane::noteFor(std::size_t i) const {
+	if (!session_) return {};
+	const auto& rows = session_->disassembly();
+	if (i >= rows.size()) return {};
+
+	std::string mnemonic;
+	uint64_t target = 0;
+	if (!staticTarget(rows[i].text, &mnemonic, &target)) return {};
+
+	if (mnemonic == "call")
+		return QStringLiteral("sub_%1").arg(target, 6, 16, QLatin1Char('0')).toLower();
+	// Jumps: say which way, which is the thing you actually scan for when
+	// reading a loop. Backwards to an address already on screen = a loop.
+	if (mnemonic.size() > 1 && mnemonic.front() == 'j') {
+		if (target < rows[i].vaddr) return tr("loop");
+		return QString();
+	}
+	return {};
 }
 
 void DisassemblyPane::refresh() {
@@ -99,22 +162,55 @@ void DisassemblyPane::refresh() {
 	table_->setRowCount(static_cast<int>(rows.size()));
 	for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
 		const DisasmRow& r = rows[static_cast<std::size_t>(i)];
+		const auto nonEditable = [](QTableWidgetItem* item) {
+			item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+			return item;
+		};
 
-		auto* addrItem = new QTableWidgetItem(QString("0x%1").arg(r.vaddr, 8, 16, QLatin1Char('0')));
-		addrItem->setFlags(addrItem->flags() & ~Qt::ItemIsEditable);
-		table_->setItem(i, 0, addrItem);
+		// Gutter: empty item so the column still hit-tests for a future
+		// click-to-toggle-breakpoint; the delegate paints the marker.
+		table_->setItem(i, ColGutter, nonEditable(new QTableWidgetItem));
 
-		auto* bytesItem = new QTableWidgetItem(QString::fromStdString(r.bytes));
-		bytesItem->setFlags(bytesItem->flags() & ~Qt::ItemIsEditable);
-		table_->setItem(i, 1, bytesItem);
+		table_->setItem(i, ColAddress, nonEditable(new QTableWidgetItem(
+			QString("0x%1").arg(r.vaddr, 8, 16, QLatin1Char('0')))));
+		table_->setItem(i, ColBytes, nonEditable(new QTableWidgetItem(
+			QString::fromStdString(r.bytes))));
 
 		// Instruction column keeps Qt::ItemIsEditable (the default flag).
-		auto* textItem = new QTableWidgetItem(QString::fromStdString(r.text));
-		table_->setItem(i, 2, textItem);
+		table_->setItem(i, ColInstruction, new QTableWidgetItem(
+			QString::fromStdString(r.text)));
+
+		auto* notes = nonEditable(new QTableWidgetItem(
+			noteFor(static_cast<std::size_t>(i))));
+		notes->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+		table_->setItem(i, ColNotes, notes);
 	}
 
-	table_->resizeColumnsToContents();
+	// Address/Bytes size to content; Instruction stretches; the fixed columns
+	// keep their widths — so no resizeColumnsToContents() call here, which would
+	// override the header's resize modes and make the gutter collapse.
 	populating_ = false;
+}
+
+void DisassemblyPane::navigateTo(uint64_t vaddr) {
+	if (!session_) return;
+	const auto& rows = session_->disassembly();
+	if (rows.empty()) return;
+
+	// Closest row at or below vaddr: a symbol address that falls mid-instruction
+	// (or between rows in the raw-bytes fallback) should still land somewhere
+	// sensible rather than doing nothing.
+	int best = -1;
+	for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+		if (rows[static_cast<std::size_t>(i)].vaddr <= vaddr) best = i;
+		else break;
+	}
+	if (best < 0) best = 0;
+
+	table_->selectRow(best);
+	table_->scrollToItem(table_->item(best, ColInstruction),
+	                     QAbstractItemView::PositionAtCenter);
+	table_->setFocus(Qt::OtherFocusReason);
 }
 
 std::vector<std::pair<std::size_t, std::string>> DisassemblyPane::pendingEdits() const {

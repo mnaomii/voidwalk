@@ -9,7 +9,7 @@
 
 
 
-PE_Disassembler::PE_Disassembler(AddressSpace& data) : Disassembler(data) {
+PE_Disassembler::PE_Disassembler(AddressSpace& data, const std::vector<std::ostream*>& outputs) : Disassembler(data, outputs) {
 
 	this->e_lfanew = contents.read_u32(0x3C);
 
@@ -22,16 +22,16 @@ void PE_Disassembler::setHeadersOffsets() {
 
 	switch (this->architecture) {
 	case 0x14c: // 32bit
-		setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew); break;
+		setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
 
 	case 0x8664: // 64bit
-		setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew); break;
+		setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
 
 	case 0xAA64: // AARCH64
-		setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew); break;
+		setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
 
 	case 0x1c0: // ARM32
-		setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew); break;
+		setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
 	}
 }
 
@@ -59,15 +59,15 @@ uint64_t PE_Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 		switch (this->architecture) {
 		case 0x14c:// x86 
 
-			return decodeLine_IA_32(address, vaddr);
+			return decodeLine_x86_64(address, vaddr, false);
 		
-		case 0x8664: 
+		case 0x8664: // AMD64
+			return decodeLine_x86_64(address, vaddr, true);
+
+		case 0xAA64: // AARCH64
 			throw std::runtime_error("Not implemented yet.");
 		
-		case 0xAA64: 
-			throw std::runtime_error("Not implemented yet.");
-		
-		case 0x1c0: 
+		case 0x1c0: // ARM32
 			throw std::runtime_error("Not implemented yet.");
 
 			//return ;

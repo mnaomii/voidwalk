@@ -6,8 +6,8 @@
 #include <iostream>
 #include <cassert>
 #include <string>
-#include "../../base.h"
-#include "../../console.h"
+#include "../../base.hpp"
+#include "../../console.hpp"
 
 class IA_32_Tests: public Tests{
 private:
@@ -23,16 +23,18 @@ private:
     }
 
     void printOutput(){
-        FILE* tmpOut;
+        /*FILE* tmpOut;
 #ifdef _WIN32
         fopen_s(&tmpOut, "tmpOut.txt", "w");
 #else
         tmpOut = fopen("tmpOut.txt", "w");
 #endif
 
-        disassembler->decodeCS(stdout);
-        disassembler->decodeCS(tmpOut);
+        disassembler->decode();
+        disassembler->decode();
         fclose(tmpOut);
+
+        */
     }
 
     void runAll(){

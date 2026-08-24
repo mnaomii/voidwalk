@@ -7,7 +7,7 @@
 #include "../mnemonic/ARM32/ARM32-instr.hpp"
 
 
-ELF_Disassembler::ELF_Disassembler(AddressSpace& data) : Disassembler(data) { // constructor
+ELF_Disassembler::ELF_Disassembler(AddressSpace& data, const std::vector<std::ostream*>& outputs) : Disassembler(data, outputs) { // constructor
 	this->architecture = this->contents.read_u16(0x12);
 
 
@@ -48,11 +48,11 @@ uint64_t ELF_Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 		switch (this->architecture) {
 		case 0x03: // x86 
 
-			return decodeLine_IA_32(address, vaddr);
+			return decodeLine_x86_64(address, vaddr, false);
 		
 		case 0x3e:  // amd64
-			throw std::runtime_error("Not implemented yet.");
-		
+			return decodeLine_x86_64(address, vaddr, true);
+
 		case 0xb7:  //aarch64
 			throw std::runtime_error("Not implemented yet.");
 		

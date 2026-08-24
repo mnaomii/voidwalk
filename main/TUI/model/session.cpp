@@ -164,16 +164,16 @@ void Session::refresh() {
 	// --- registers ------------------------------------------------------
 	// Values are the core's emulated Registers struct (all zero until the
 	// debugger/emulator exists) - real plumbing, placeholder semantics.
-	const Registers& r = disassembler_->getRegisters();
-	regRows_.push_back("eax " + hex64(r.eax));
-	regRows_.push_back("ebx " + hex64(r.ebx));
-	regRows_.push_back("ecx " + hex64(r.ecx));
-	regRows_.push_back("edx " + hex64(r.edx));
-	regRows_.push_back("esi " + hex64(r.esi));
-	regRows_.push_back("edi " + hex64(r.edi));
-	regRows_.push_back("ebp " + hex64(r.ebp));
-	regRows_.push_back("esp " + hex64(r.esp));
-	regRows_.push_back("eip " + hex64(r.eip));
+	const Registers_x86_64& r = disassembler_->getRegisters();
+	regRows_.push_back("eax " + hex64(r.rax));
+	regRows_.push_back("ebx " + hex64(r.rbx));
+	regRows_.push_back("ecx " + hex64(r.rcx));
+	regRows_.push_back("edx " + hex64(r.rdx));
+	regRows_.push_back("esi " + hex64(r.rsi));
+	regRows_.push_back("edi " + hex64(r.rdi));
+	regRows_.push_back("ebp " + hex64(r.rbp));
+	regRows_.push_back("esp " + hex64(r.rsp));
+	regRows_.push_back("eip " + hex64(r.rip));
 	regRows_.push_back("");
 	regRows_.push_back("cs  " + hex64(r.cs) + "   ds  " + hex64(r.ds));
 	regRows_.push_back("ss  " + hex64(r.ss) + "   es  " + hex64(r.es));

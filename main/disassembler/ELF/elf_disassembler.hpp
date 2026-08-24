@@ -22,7 +22,7 @@ private:
 
 public:
     std::string getArchitecture() override;
-    ELF_Disassembler(AddressSpace& data);
+    ELF_Disassembler(AddressSpace& data , const std::vector<std::ostream*>& outputs);
      uint64_t decodeLine(uint64_t address, uint64_t vaddr) ;
 
 

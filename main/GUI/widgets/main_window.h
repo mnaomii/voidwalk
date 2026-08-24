@@ -5,10 +5,12 @@
 #include "../model/gui_session.h"
 
 #include <QMainWindow>
+#include <cstdint>
 
 class QAction;
 class QDockWidget;
 class QLabel;
+class QLineEdit;
 class QStackedWidget;
 
 namespace gui {
@@ -18,6 +20,7 @@ class RegistersPane;
 class StackPane;
 class MemoryPane;
 class AiChatPane;
+class SymbolsPane;
 class WelcomeWidget;
 
 // Top-level window for voidwalk-gui. Owns the Session view-model and the panes,
@@ -29,10 +32,15 @@ class WelcomeWidget;
 // recolorable SVG set in :/icons (theme/icons.h). The central widget is a
 // stack: WelcomeWidget until a binary loads, DisassemblyPane after.
 //
-// Action reality check: Open, Recompile, Settings, and the AI-pane toggle are
-// real. The debugger transport (Run/Step/Step Over/Continue/Pause/Reset) does
-// not exist yet, so those actions report "not implemented yet" in the status
-// bar — they're wired and discoverable, waiting on the execution engine.
+// Layout: the symbol sidebar is a left dock (toggle at the head of the toolbar
+// and in the View menu, Ctrl+B), so navigation is a visible list rather than a
+// dialog; the toolbar keeps a narrow field for raw addresses only. Registers /
+// Stack / AI stay tabbed on the right, Memory across the bottom.
+//
+// Action reality check: Open, Recompile, Settings, symbol navigation and the
+// AI-pane toggle are real. The debugger transport (Run/Step/Step Over/Continue/
+// Pause/Reset) does not exist yet, so those actions report "not implemented
+// yet" in the status bar — wired and discoverable, waiting on the engine.
 class MainWindow : public QMainWindow {
 	Q_OBJECT
 public:
@@ -48,6 +56,7 @@ private slots:
 	void onSettings();
 	void onDebugStub();       // shared handler for the not-yet-implemented actions
 	void onEditsChanged();
+	void onGotoSubmitted();   // toolbar address field -> disasm_->navigateTo()
 
 private:
 	void buildActions();
@@ -58,6 +67,7 @@ private:
 	void applyAiVisibility(); // show/hide the AI dock per settings_.aiEnabled
 	void refreshAll();
 	void setStatus(const QString& msg);
+	void setCounts();         // status-bar symbol/instruction counters
 
 	Session session_;
 	AppSettings settings_;
@@ -69,7 +79,9 @@ private:
 	StackPane* stack_ = nullptr;
 	MemoryPane* memory_ = nullptr;
 	AiChatPane* chat_ = nullptr;
+	SymbolsPane* symbols_ = nullptr;
 
+	QDockWidget* symbolsDock_ = nullptr;
 	QDockWidget* registersDock_ = nullptr;
 	QDockWidget* stackDock_ = nullptr;
 	QDockWidget* memoryDock_ = nullptr;
@@ -84,8 +96,11 @@ private:
 	QAction* resetAct_ = nullptr;
 	QAction* recompileAct_ = nullptr;
 	QAction* settingsAct_ = nullptr;
+	QAction* sidebarAct_ = nullptr; // checkable: shows/hides symbolsDock_
 
-	QLabel* archLabel_ = nullptr; // permanent status-bar widget: format/arch
+	QLineEdit* gotoField_ = nullptr;
+	QLabel* countLabel_ = nullptr; // "N instr"
+	QLabel* archLabel_ = nullptr;  // format/arch
 };
 
 } // namespace gui

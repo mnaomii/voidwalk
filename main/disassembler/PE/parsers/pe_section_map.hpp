@@ -15,12 +15,12 @@ inline int classify(uint32_t c) {
 	return NONE;
 }
 
-inline void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& data, uint32_t e_lfanew) {
+inline void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& data, uint32_t e_lfanew, uint64_t& imageBase) {
 
 	uint16_t NumberOfSections = data.read_u16(e_lfanew + 6);
 	uint16_t SizeOfOptionalHeader = data.read_u16(e_lfanew + 20);
 	uint64_t SectionTable = e_lfanew + 24 + SizeOfOptionalHeader;
-	uint64_t ImageBase = data.read_u32(e_lfanew + 52);
+	imageBase = data.read_u32(e_lfanew + 52);
 
 
 
@@ -37,7 +37,7 @@ inline void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& da
 
 		auto it = section_map.find(classify(chars));   // <-- lookup by category
 		if (it != section_map.end()) {
-			it->second->setVaddr(ImageBase + data.read_u32(b + 12));
+			it->second->setVaddr(imageBase + data.read_u32(b + 12));
 			it->second->setSize(data.read_u32(b + 16));
 			it->second->setOffset(data.read_u32(b + 20));
 		}
@@ -46,12 +46,12 @@ inline void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& da
 }
 
 
-inline void setHeaders64bit(Sections& base, PE_Sections extra, AddressSpace& data, uint32_t e_lfanew) {
+inline void setHeaders64bit(Sections& base, PE_Sections extra, AddressSpace& data, uint32_t e_lfanew, uint64_t& imageBase) {
 
 	uint16_t NumberOfSections = data.read_u16(e_lfanew + 6);
 	uint16_t SizeOfOptionalHeader = data.read_u16(e_lfanew + 20);
 	uint64_t SectionTable = e_lfanew + 24 + SizeOfOptionalHeader; // size of raw data, not virtual
-	uint64_t ImageBase = data.read_u8(e_lfanew + 48);
+	imageBase = data.read_u64(e_lfanew + 48);
 
 
 	std::unordered_map<int, Header*> section_map = {   
@@ -67,7 +67,7 @@ inline void setHeaders64bit(Sections& base, PE_Sections extra, AddressSpace& dat
 
 		auto it = section_map.find(classify(chars));   
 		if (it != section_map.end()) {
-			it->second->setVaddr(ImageBase + data.read_u32(b + 12));
+			it->second->setVaddr(imageBase + data.read_u32(b + 12));
 			it->second->setSize(data.read_u32(b + 16));
 			it->second->setOffset(data.read_u32(b + 20));
 		}

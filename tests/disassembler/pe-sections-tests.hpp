@@ -1,5 +1,5 @@
-#include "../base.h"
-#include "../console.h"
+#include "../base.hpp"
+#include "../console.hpp"
 
 
 class PE_Sections_Tests : public Tests {

@@ -25,19 +25,21 @@ inline void determine_filetype(AddressSpace& contents, bool& is_elf, bool& is_pe
 
 }
 
-inline std::string make_disassembler(AddressSpace& data, std::shared_ptr<Disassembler>* d) {
+inline std::string make_disassembler(AddressSpace& data, std::shared_ptr<Disassembler>* d, std::vector<std::ostream*> outputs = {}) {
     bool is_elf = false, is_pe = false;
 
     determine_filetype(data, is_elf, is_pe);
 
+    //if (outputs.empty()) outputs = std::vector<std::ostream*>{ &std::cout };
+
     if (is_elf) {
 
-        *d = std::make_shared<ELF_Disassembler>(data);
+        *d = std::make_shared<ELF_Disassembler>(data, outputs);
         return  "\nELF Binary detected..\n";
     }
     if (is_pe) {
 
-        *d = std::make_shared<PE_Disassembler>(data);
+        *d = std::make_shared<PE_Disassembler>(data, outputs);
         return  "\nPE Binary detected..\n";
     }
     throw std::runtime_error("Not an ELF or PE binary.");

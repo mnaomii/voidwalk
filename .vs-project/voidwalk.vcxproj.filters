@@ -13,6 +13,9 @@
     <Filter Include="Tests">
       <UniqueIdentifier>{11111111-1111-1111-1111-111111111104}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Console-utils">
+      <UniqueIdentifier>{11111111-1111-1111-1111-111111111105}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>qrc;rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;svg</Extensions>
@@ -61,6 +64,9 @@
     <ClCompile Include="..\main\GUI\model\gui_session.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="..\main\GUI\model\symbols.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
     <ClCompile Include="..\main\GUI\ai\ai_client.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
@@ -103,6 +109,7 @@
     <ClCompile Include="..\main\GUI\runner\gui_main.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="..\main\GUI\panes\symbols_pane.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\main\address-space\address_space.hpp">
@@ -162,6 +169,9 @@
     <ClInclude Include="..\main\GUI\model\gui_session.h">
       <Filter>GUI</Filter>
     </ClInclude>
+    <ClInclude Include="..\main\GUI\model\symbols.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
     <ClInclude Include="..\main\GUI\runner\gui_main.h">
       <Filter>GUI</Filter>
     </ClInclude>
@@ -179,6 +189,15 @@
     </ClInclude>
     <ClInclude Include="..\main\disassembler\mnemonic\x86_64\x86_64-mnemonic.hpp">
       <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\console-utils\delegate.hpp">
+      <Filter>Console-utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\console-utils\printToConsole.hpp">
+      <Filter>Console-utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\console-utils\hexReader.hpp">
+      <Filter>Console-utils</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -204,6 +223,9 @@
       <Filter>GUI</Filter>
     </QtMoc>
     <QtMoc Include="..\main\GUI\panes\disasm_delegate.h">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\main\GUI\panes\symbols_pane.h">
       <Filter>GUI</Filter>
     </QtMoc>
     <QtMoc Include="..\main\GUI\widgets\main_window.h">

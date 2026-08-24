@@ -69,7 +69,7 @@ public:
 
 	// Core's emulated register file (all zero until the debugger exists) and
 	// simulated stack (empty until execution exists). Valid only when loaded().
-	const Registers& registers() const;
+	const Registers_x86_64& registers() const;
 	const std::vector<uint64_t>& stack() const;
 
 	// Raw file bytes for the memory pane (clamped at EOF; empty if not loaded).

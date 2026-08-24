@@ -4,14 +4,22 @@
 #include "../theme/theme.h"
 
 #include <QStyledItemDelegate>
+#include <cstdint>
+#include <vector>
 
 namespace gui {
 
 // Paints the disassembly table with syntax coloring:
-//   col 0 (Address)     -> faint
-//   col 1 (Bytes)       -> dim
-//   col 2 (Instruction) -> tokenized: mnemonic / jump / register / immediate /
+//   col 0 (Gutter)      -> execution marker / breakpoint dot
+//   col 1 (Address)     -> dim
+//   col 2 (Bytes)       -> faint
+//   col 3 (Instruction) -> tokenized: mnemonic / jump / register / immediate /
 //                          jump target / punctuation, colors from the Theme.
+//   col 4 (Notes)       -> ghosted, right-aligned
+//
+// The current instruction gets a full-row band (accentBg + a 2px accent rule in
+// the gutter) drawn under the text, so it stays visible when the selection is
+// somewhere else — that pairing is the whole point of the gutter column.
 // Editing is untouched — the default QStyledItemDelegate editor still handles
 // the Instruction column.
 class DisasmDelegate : public QStyledItemDelegate {
@@ -20,6 +28,13 @@ public:
 	explicit DisasmDelegate(QObject* parent = nullptr);
 
 	void setTheme(const Theme& theme); // call on theme switch, then viewport()->update()
+
+	// Row that holds the instruction pointer, or -1 for none (no debugger yet,
+	// so this stays -1 until MainWindow has a step event to report).
+	void setCurrentRow(int row) { currentRow_ = row; }
+	// Rows carrying a breakpoint. Set from the pane's gutter click handler when
+	// breakpoints land; empty today.
+	void setBreakpointRows(std::vector<int> rows) { breakpoints_ = std::move(rows); }
 
 	void paint(QPainter* painter, const QStyleOptionViewItem& option,
 	           const QModelIndex& index) const override;
@@ -30,8 +45,11 @@ private:
 		QColor color;
 	};
 	std::vector<Token> tokenize(const QString& instruction) const;
+	bool isBreakpoint(int row) const;
 
 	Theme theme_;
+	int currentRow_ = -1;
+	std::vector<int> breakpoints_;
 };
 
 } // namespace gui

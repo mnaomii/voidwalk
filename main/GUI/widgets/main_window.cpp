@@ -6,6 +6,7 @@
 #include "../panes/memory_pane.h"
 #include "../panes/registers_pane.h"
 #include "../panes/stack_pane.h"
+#include "../panes/symbols_pane.h"
 #include "../theme/icons.h"
 #include "../theme/theme_manager.h"
 #include "welcome_widget.h"
@@ -15,6 +16,7 @@
 #include <QFileDialog>
 #include <QKeySequence>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenuBar>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -26,6 +28,7 @@ namespace gui {
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	setWindowTitle(tr("voidwalk"));
 	resize(1200, 800);
+	setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowTabbedDocks);
 
 	settings_ = AppSettings::load();
 	applyTheme(); // style/palette/QSS + icon colors, before any widget paints
@@ -48,10 +51,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	buildMenus();
 	buildDocks();
 
+	countLabel_ = new QLabel(this);
 	archLabel_ = new QLabel(this);
+	archLabel_->setObjectName(QStringLiteral("archLabel"));
+	statusBar()->addPermanentWidget(countLabel_);
 	statusBar()->addPermanentWidget(archLabel_);
+	statusBar()->setSizeGripEnabled(false);
 
 	disasm_->setTheme(ThemeManager::current()); // delegate colors (created after applyTheme)
+	symbols_->setTheme(ThemeManager::current());
 
 	applyAiVisibility();
 	refreshAll();
@@ -92,6 +100,16 @@ void MainWindow::buildActions() {
 
 	settingsAct_ = new QAction(Icons::icon(QStringLiteral("settings")), tr("&Settings…"), this);
 	connect(settingsAct_, &QAction::triggered, this, &MainWindow::onSettings);
+
+	// Sidebar toggle. Checkable so the flat toolbar button can show state — with
+	// no box at rest, "checked" is the only affordance telling you the pane is
+	// open. Wired to the dock in buildDocks().
+	sidebarAct_ = new QAction(ThemeManager::sidebarIcon(ThemeManager::current()),
+	                          tr("Symbol &Sidebar"), this);
+	sidebarAct_->setCheckable(true);
+	sidebarAct_->setChecked(true);
+	sidebarAct_->setShortcut(QKeySequence(QStringLiteral("Ctrl+B")));
+	sidebarAct_->setToolTip(tr("Symbol sidebar — Ctrl+B"));
 }
 
 void MainWindow::buildToolBar() {
@@ -103,6 +121,8 @@ void MainWindow::buildToolBar() {
 	// Open and Run carry text; the rest are compact icon buttons with tooltips
 	// (the shortcut shows in the tooltip and the Debug menu spells them out).
 	tb->setToolButtonStyle(Qt::ToolButtonIconOnly);
+	tb->addAction(sidebarAct_);
+	tb->addSeparator();
 	tb->addAction(openAct_);
 	tb->addSeparator();
 	tb->addAction(runAct_);
@@ -114,10 +134,20 @@ void MainWindow::buildToolBar() {
 	tb->addSeparator();
 	tb->addAction(recompileAct_);
 
-	// Right-aligned settings gear.
 	auto* spacer = new QWidget(tb);
 	spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	tb->addWidget(spacer);
+
+	// Raw addresses only — symbol lookup is the sidebar's filter box, so this
+	// field no longer has to be a general-purpose search and can stay narrow.
+	gotoField_ = new QLineEdit(tb);
+	gotoField_->setObjectName(QStringLiteral("gotoField"));
+	gotoField_->setPlaceholderText(tr("Go to address"));
+	gotoField_->setClearButtonEnabled(true);
+	gotoField_->setMaximumWidth(200);
+	connect(gotoField_, &QLineEdit::returnPressed, this, &MainWindow::onGotoSubmitted);
+	tb->addWidget(gotoField_);
+
 	tb->addAction(settingsAct_);
 
 	// Text on the two primary actions; QSS objectNames pick up the emphasis.
@@ -129,6 +159,8 @@ void MainWindow::buildToolBar() {
 	}
 	if (auto* gear = qobject_cast<QToolButton*>(tb->widgetForAction(settingsAct_)))
 		gear->setObjectName(QStringLiteral("settingsButton"));
+	if (auto* side = qobject_cast<QToolButton*>(tb->widgetForAction(sidebarAct_)))
+		side->setObjectName(QStringLiteral("sidebarButton"));
 }
 
 void MainWindow::buildMenus() {
@@ -158,6 +190,31 @@ void MainWindow::buildMenus() {
 }
 
 void MainWindow::buildDocks() {
+	// --- left: symbol sidebar ------------------------------------------------
+	symbols_ = new SymbolsPane(this);
+	symbols_->setSession(&session_);
+	symbolsDock_ = new QDockWidget(tr("Symbols"), this);
+	symbolsDock_->setObjectName(QStringLiteral("SymbolsDock"));
+	symbolsDock_->setWidget(symbols_);
+	// The pane draws its own header, so the dock title bar would repeat it.
+	symbolsDock_->setTitleBarWidget(new QWidget(symbolsDock_));
+	symbolsDock_->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
+	addDockWidget(Qt::LeftDockWidgetArea, symbolsDock_);
+	resizeDocks({symbolsDock_}, {208}, Qt::Horizontal);
+
+	connect(symbols_, &SymbolsPane::navigateRequested, this, [this](uint64_t vaddr) {
+		disasm_->navigateTo(vaddr);
+		setStatus(tr("Jumped to 0x%1").arg(vaddr, 8, 16, QLatin1Char('0')));
+	});
+	// Two-way binding: the toolbar button drives the dock, closing the dock (or
+	// the View-menu entry) un-checks the button.
+	connect(sidebarAct_, &QAction::toggled, symbolsDock_, &QWidget::setVisible);
+	connect(symbolsDock_, &QDockWidget::visibilityChanged, sidebarAct_, [this](bool visible) {
+		if (sidebarAct_->isChecked() != visible)
+			sidebarAct_->setChecked(visible);
+	});
+
+	// --- right: registers / stack / AI, tabbed -------------------------------
 	registers_ = new RegistersPane(this);
 	registers_->setSession(&session_);
 	registersDock_ = new QDockWidget(tr("Registers"), this);
@@ -182,7 +239,7 @@ void MainWindow::buildDocks() {
 	chat_ = new AiChatPane(this);
 	chat_->setSession(&session_);
 	chat_->setSettings(settings_);
-	chatDock_ = new QDockWidget(tr("AI Assistant"), this);
+	chatDock_ = new QDockWidget(tr("Assistant"), this);
 	chatDock_->setObjectName(QStringLiteral("ChatDock"));
 	chatDock_->setWidget(chat_);
 	addDockWidget(Qt::RightDockWidgetArea, chatDock_);
@@ -192,6 +249,8 @@ void MainWindow::buildDocks() {
 	tabifyDockWidget(registersDock_, stackDock_);
 	tabifyDockWidget(stackDock_, chatDock_);
 	registersDock_->raise();
+	resizeDocks({registersDock_}, {300}, Qt::Horizontal);
+	resizeDocks({memoryDock_}, {214}, Qt::Vertical);
 
 	// The tab bar already names the active pane, so the dock title bar would
 	// repeat it in a redundant strip right underneath. Drop that strip by giving
@@ -204,6 +263,8 @@ void MainWindow::buildDocks() {
 	// Populate the View menu with the docks' toggle actions.
 	for (QMenu* m : menuBar()->findChildren<QMenu*>()) {
 		if (m->title() == tr("&View")) {
+			m->addAction(sidebarAct_);
+			m->addSeparator();
 			m->addAction(registersDock_->toggleViewAction());
 			m->addAction(stackDock_->toggleViewAction());
 			m->addAction(memoryDock_->toggleViewAction());
@@ -216,7 +277,7 @@ void MainWindow::buildDocks() {
 void MainWindow::applyTheme() {
 	const Theme theme = Theme::byId(settings_.theme);
 	ThemeManager::apply(theme);
-	Icons::setColors(theme.text, theme.textFaint);
+	Icons::setColors(theme.textMuted, theme.textGhost);
 
 	// Re-fetch icons: the cache was invalidated with the new colors.
 	if (openAct_) {
@@ -229,9 +290,12 @@ void MainWindow::applyTheme() {
 		resetAct_->setIcon(Icons::icon(QStringLiteral("reset")));
 		recompileAct_->setIcon(Icons::icon(QStringLiteral("recompile")));
 		settingsAct_->setIcon(Icons::icon(QStringLiteral("settings")));
+		sidebarAct_->setIcon(ThemeManager::sidebarIcon(theme));
 	}
 	if (disasm_)
 		disasm_->setTheme(theme);
+	if (symbols_)
+		symbols_->setTheme(theme);
 }
 
 void MainWindow::applyAiVisibility() {
@@ -258,6 +322,23 @@ void MainWindow::onOpen() {
 		this, tr("Open binary"), QString(),
 		tr("Executables (*.exe *.dll *.so *.elf *.bin);;All files (*)"));
 	openPath(path);
+}
+
+void MainWindow::onGotoSubmitted() {
+	const QString raw = gotoField_->text().trimmed();
+	if (raw.isEmpty()) return;
+	bool ok = false;
+	// Accept "401000", "0x401000" and "0X401000" — hex either way; a decimal
+	// address is never what someone types into a disassembler.
+	const QString digits = raw.startsWith(QLatin1String("0x"), Qt::CaseInsensitive)
+		? raw.mid(2) : raw;
+	const qulonglong vaddr = digits.toULongLong(&ok, 16);
+	if (!ok) {
+		setStatus(tr("\"%1\" is not a hex address.").arg(raw));
+		return;
+	}
+	disasm_->navigateTo(vaddr);
+	gotoField_->clearFocus();
 }
 
 void MainWindow::onRecompile() {
@@ -290,8 +371,17 @@ void MainWindow::onEditsChanged() {
 	recompileAct_->setEnabled(disasm_->hasPendingEdits());
 }
 
+void MainWindow::setCounts() {
+	if (!session_.loaded()) {
+		countLabel_->clear();
+		return;
+	}
+	countLabel_->setText(tr("%n instr", "", static_cast<int>(session_.disassembly().size())));
+}
+
 void MainWindow::refreshAll() {
 	disasm_->refresh();
+	symbols_->refresh();
 	registers_->refresh();
 	stack_->refresh();
 	memory_->refresh();
@@ -299,7 +389,19 @@ void MainWindow::refreshAll() {
 	central_->setCurrentWidget(session_.loaded()
 		? static_cast<QWidget*>(disasm_) : static_cast<QWidget*>(welcome_));
 
-	if (session_.loaded()) {
+	// Nothing to navigate before a binary loads: hide the sidebar and disable the
+	// address field rather than presenting two empty controls on the welcome
+	// screen. Both come back on their own when a file opens.
+	const bool loaded = session_.loaded();
+	gotoField_->setEnabled(loaded);
+	if (!loaded && symbolsDock_->isVisible())
+		symbolsDock_->setVisible(false);
+	else if (loaded && sidebarAct_->isChecked())
+		symbolsDock_->setVisible(true);
+
+	setCounts();
+
+	if (loaded) {
 		archLabel_->setText(tr("%1 · %2")
 			.arg(QString::fromStdString(session_.format()),
 			     QString::fromStdString(session_.architecture())));

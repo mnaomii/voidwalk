@@ -22,23 +22,37 @@ public:
 		return hasAddrSize ? std::string(addr16[r]) : "";
 	}
 
-	static std::string registerOf(uint16_t r, uint8_t size, bool opsize16) {
-		static constexpr std::string_view r8 [8] = { "AL","CL","DL","BL","AH","CH","DH","BH" };
-		static constexpr std::string_view r16[8] = { "AX","CX","DX","BX","SP","BP","SI","DI" };
+	static std::string registerOf(const uint16_t& r, const uint8_t size, const bool& is16bit, const bool& is64bit = false) {
+		static constexpr std::string_view r8_32 [] = { "AL","CL","DL","BL",
+														"AH","CH","DH","BH" };
 
-		if (r > 7)
+		static constexpr std::string_view r8_64[] = {  "AL","CL","DL","BL" ,
+													   "SPL", "BPL", "SIL", "DIL",
+													   "R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B" };
+
+		static constexpr std::string_view r16[] = { "AX","CX","DX","BX","SP","BP","SI","DI" ,
+													"R8W", "R9W", "R10W", "R11W", "R12W", "R13W", "R14W", "R15W" };
+
+		static constexpr std::string_view r32[] = { "EAX","ECX","EDX","EBX","ESP","EBP","ESI","EDI",
+											"R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D" };
+
+		static constexpr std::string_view r64[] = { "RAX","RCX","RDX","RBX","RSP","RBP","RSI","RDI",
+											"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15" };
+
+		if (r > 15)
 			throw std::runtime_error("Malformed expression detected..");
 		switch (static_cast<SIZE>(size)) {
-		case SIZE::b: return std::string(r8[r]);
+		case SIZE::b: return (is64bit) ? std::string(r8_64[r]) : std::string(r8_32[r]);
 		case SIZE::w: return std::string(r16[r]);
-		default:      return (opsize16 ? "" : "E") + std::string(r16[r]);   // v/z: 66h picks 16 vs 32
+		default:      return is64bit ? std::string(r64[r])                                 // v/z: REX.W(64) >
+		                   : (is16bit ? std::string(r16[r]) : std::string(r32[r]));        //      0x66(16) > 32
 		}
 	}
 
 	// Legacy two-arg form: a bare is16bit flag means "default operand size, 16 or 32".
 	// Kept so existing callers keep working; it cannot reach the 8-bit set (pass a size for that).
-	static std::string registerOf(uint16_t r, bool is16bit) {
-		return registerOf(r, static_cast<uint8_t>(SIZE::v), is16bit);
+	static std::string registerOf(uint16_t r, bool is16bit, bool is64bit = false) {
+		return registerOf(r, static_cast<uint8_t>(SIZE::v), is16bit, is64bit);
 	}
 
 
@@ -91,7 +105,7 @@ public:
 #define P(name,text, hasRM, op1, op2, op3) n[static_cast<uint32_t>(OPCODE::name)] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, -1}
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
-#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), false, val, val, val16 }
 #define NOP_ OP(None,None,"","")
 
 		P(ADD_EbGb, "ADD", true, OP(E,b,"",""), OP(G,b,"",""), NOP_);
@@ -99,7 +113,7 @@ public:
 		P(ADD_GbEb, "ADD", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(ADD_GvEv, "ADD", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(ADD_ALIb, "ADD", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(ADD_eAXIv, "ADD", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(ADD_eAXIv, "ADD", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(PUSH_ES, "PUSH", false, OP(ES,None,"ES","ES"), NOP_, NOP_);
 		P(POP_ES, "POP", false, OP(ES,None,"ES","ES"), NOP_, NOP_);
@@ -109,7 +123,7 @@ public:
 		P(OR_GbEb, "OR", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(OR_GvEv, "OR", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(OR_ALIb, "OR", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(OR_eAXIv, "OR", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(OR_eAXIv, "OR", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(PUSH_CS, "PUSH", false, OP(CS,None,"CS","CS"), NOP_, NOP_);
 		P(TWOBYTE, "2BYTE", false, NOP_, NOP_, NOP_);
@@ -119,7 +133,7 @@ public:
 		P(ADC_GbEb, "ADC", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(ADC_GvEv, "ADC", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(ADC_ALIb, "ADC", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(ADC_eAXIv, "ADC", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(ADC_eAXIv, "ADC", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(PUSH_SS, "PUSH", false, OP(SS,None,"SS","SS"), NOP_, NOP_);
 		P(POP_SS, "POP", false, OP(SS,None,"SS","SS"), NOP_, NOP_);
@@ -129,7 +143,7 @@ public:
 		P(SBB_GbEb, "SBB", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(SBB_GvEv, "SBB", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(SBB_ALIb, "SBB", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(SBB_eAXIv, "SBB", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(SBB_eAXIv, "SBB", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(PUSH_DS, "PUSH", false, OP(DS,None,"DS","DS"), NOP_, NOP_);
 		P(POP_DS, "POP", false, OP(DS,None,"DS","DS"), NOP_, NOP_);
@@ -139,7 +153,7 @@ public:
 		P(AND_GbEb, "AND", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(AND_GvEv, "AND", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(AND_ALIb, "AND", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(AND_eAXIv, "AND", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(AND_eAXIv, "AND", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(ES, "ES", false, NOP_, NOP_, NOP_);
 		P(DAA, "DAA", false, NOP_, NOP_, NOP_);
@@ -149,7 +163,7 @@ public:
 		P(SUB_GbEb, "SUB", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(SUB_GvEv, "SUB", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(SUB_ALIb, "SUB", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(SUB_eAXIv, "SUB", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(SUB_eAXIv, "SUB", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(CS, "CS", false, NOP_, NOP_, NOP_);
 		P(DAS, "DAS", false, NOP_, NOP_, NOP_);
@@ -159,7 +173,7 @@ public:
 		P(XOR_GbEb, "XOR", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(XOR_GvEv, "XOR", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(XOR_ALIb, "XOR", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(XOR_eAXIv, "XOR", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(XOR_eAXIv, "XOR", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(SS, "SS", false, NOP_, NOP_, NOP_);
 		P(AAA, "AAA", false, NOP_, NOP_, NOP_);
@@ -169,7 +183,7 @@ public:
 		P(CMP_GbEb, "CMP", true, OP(G,b,"",""), OP(E,b,"",""), NOP_);
 		P(CMP_GvEv, "CMP", true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
 		P(CMP_ALIb, "CMP", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(CMP_eAXIv, "CMP", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(CMP_eAXIv, "CMP", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 
 		P(DS, "DS", false, NOP_, NOP_, NOP_);
 		P(AAS, "AAS", false, NOP_, NOP_, NOP_);
@@ -192,23 +206,25 @@ public:
 		P(DEC_eSI, "DEC", false, OP(eSI,v,"ESI","SI"), NOP_, NOP_);
 		P(DEC_eDI, "DEC", false, OP(eDI,v,"EDI","DI"), NOP_, NOP_);
 
-		P(PUSH_eAX, "PUSH", false, OP(eAX,v,"EAX","AX"), NOP_, NOP_);
-		P(PUSH_eCX, "PUSH", false, OP(eCX,v,"ECX","CX"), NOP_, NOP_);
-		P(PUSH_eDX, "PUSH", false, OP(eDX,v,"EDX","DX"), NOP_, NOP_);
-		P(PUSH_eBX, "PUSH", false, OP(eBX,v,"EBX","BX"), NOP_, NOP_);
-		P(PUSH_eSP, "PUSH", false, OP(eSP,v,"ESP","SP"), NOP_, NOP_);
-		P(PUSH_eBP, "PUSH", false, OP(eBP,v,"EBP","BP"), NOP_, NOP_);
-		P(PUSH_eSI, "PUSH", false, OP(eSI,v,"ESI","SI"), NOP_, NOP_);
-		P(PUSH_eDI, "PUSH", false, OP(eDI,v,"EDI","DI"), NOP_, NOP_);
+		// 50-5F PUSH/POP r: the register is the opcode's low 3 bits (+r). Z decodes it from
+		// the byte (and folds in REX.B for R8-R15); no baked names. PUSH/POP are d64.
+		P(PUSH_eAX, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(PUSH_eCX, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(PUSH_eDX, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(PUSH_eBX, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(PUSH_eSP, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(PUSH_eBP, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(PUSH_eSI, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(PUSH_eDI, "PUSH", false, OP(Z,v,"",""), NOP_, NOP_);
 
-		P(POP_eAX, "POP", false, OP(eAX,v,"EAX","AX"), NOP_, NOP_);
-		P(POP_eCX, "POP", false, OP(eCX,v,"ECX","CX"), NOP_, NOP_);
-		P(POP_eDX, "POP", false, OP(eDX,v,"EDX","DX"), NOP_, NOP_);
-		P(POP_eBX, "POP", false, OP(eBX,v,"EBX","BX"), NOP_, NOP_);
-		P(POP_eSP, "POP", false, OP(eSP,v,"ESP","SP"), NOP_, NOP_);
-		P(POP_eBP, "POP", false, OP(eBP,v,"EBP","BP"), NOP_, NOP_);
-		P(POP_eSI, "POP", false, OP(eSI,v,"ESI","SI"), NOP_, NOP_);
-		P(POP_eDI, "POP", false, OP(eDI,v,"EDI","DI"), NOP_, NOP_);
+		P(POP_eAX, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(POP_eCX, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(POP_eDX, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(POP_eBX, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(POP_eSP, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(POP_eBP, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(POP_eSI, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
+		P(POP_eDI, "POP", false, OP(Z,v,"",""), NOP_, NOP_);
 
 		P16(PUSHA, "PUSHAD", "PUSHA", false, NOP_, NOP_, NOP_);
 		P16(POPA, "POPAD", "POPA", false, NOP_, NOP_, NOP_);
@@ -220,8 +236,8 @@ public:
 		P(OPSIZE, "OPSIZE", false, NOP_, NOP_, NOP_);
 		P(ADSIZE, "ADSIZE", false, NOP_, NOP_, NOP_);
 
-		P(PUSH_Iv, "PUSH", false, OP(I,v,"",""), NOP_, NOP_);
-		P(IMUL_GvEvIv, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,v,"",""));
+		P(PUSH_Iv, "PUSH", false, OP(I,z,"",""), NOP_, NOP_);
+		P(IMUL_GvEvIv, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,z,"",""));
 		P(PUSH_Ib, "PUSH", false, OP(I,bs,"",""), NOP_, NOP_);            // imm8 sign-extended to opsize
 		P(IMUL_GvEvIb, "IMUL", true, OP(G,v,"",""), OP(E,v,"",""), OP(I,bs,"",""));   // imm8 sign-extended
 
@@ -249,7 +265,7 @@ public:
 
 		// Group 1 (0x80-0x83): ADD/OR/ADC/SBB/AND/SUB/XOR/CMP, selected by ModRM.reg
 		PG(GRP1_EbIb, "GRP1", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 1);
-		PG(GRP1_EvIz, "GRP1", true, OP(E,v,"",""), OP(I,v,"",""), NOP_, 1);
+		PG(GRP1_EvIz, "GRP1", true, OP(E,v,"",""), OP(I,z,"",""), NOP_, 1);
 		PG(GRP1_EbIb2, "GRP1", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 1);
 		PG(GRP1_EvIb, "GRP1", true, OP(E,v,"",""), OP(I,bs,"",""), NOP_, 1);   // 83 /r ib: imm8 sign-extended to Ev width
 
@@ -272,13 +288,15 @@ public:
 		P(POP_Ev, "POP", true, OP(E,v,"",""), NOP_, NOP_);
 
 		P(NOP, "NOP", false, NOP_, NOP_, NOP_);
-		P(XCHG_eAXeCX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eCX,v,"ECX","CX"), NOP_);
-		P(XCHG_eAXeDX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eDX,v,"EDX","DX"), NOP_);
-		P(XCHG_eAXeBX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eBX,v,"EBX","BX"), NOP_);
-		P(XCHG_eAXeSP, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eSP,v,"ESP","SP"), NOP_);
-		P(XCHG_eAXeBP, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eBP,v,"EBP","BP"), NOP_);
-		P(XCHG_eAXeSI, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eSI,v,"ESI","SI"), NOP_);
-		P(XCHG_eAXeDI, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(eDI,v,"EDI","DI"), NOP_);
+		// 90-97 XCHG eAX,r: op0 is the accumulator (reg 0, named in silicon - keeps value*),
+		// op1 is the +r register decoded from the opcode via Z. Not d64, so 64-bit only under REX.W.
+		P(XCHG_eAXeCX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(Z,v,"",""), NOP_);
+		P(XCHG_eAXeDX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(Z,v,"",""), NOP_);
+		P(XCHG_eAXeBX, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(Z,v,"",""), NOP_);
+		P(XCHG_eAXeSP, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(Z,v,"",""), NOP_);
+		P(XCHG_eAXeBP, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(Z,v,"",""), NOP_);
+		P(XCHG_eAXeSI, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(Z,v,"",""), NOP_);
+		P(XCHG_eAXeDI, "XCHG", false, OP(eAX,v,"EAX","AX"), OP(Z,v,"",""), NOP_);
 
 		// 0x98/0x99 name their operands in silicon and take no operand slots, so the operand
 		// size can only show up in the mnemonic: CWDE sign-extends AX into EAX, CBW AL into AX;
@@ -307,7 +325,7 @@ public:
 		P(CMPSB_XbYb, "CMPSB", false, OP(X,b,"[ESI]","[ESI]"), OP(Y,b,"[EDI]","[EDI]"), NOP_);
 		P16(CMPSW_XvYv, "CMPSD", "CMPSW", false, OP(X,v,"[ESI]","[ESI]"), OP(Y,v,"[EDI]","[EDI]"), NOP_);
 		P(TEST_ALIb, "TEST", false, OP(AL,b,"AL","AL"), OP(I,b,"",""), NOP_);
-		P(TEST_eAXIv, "TEST", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
+		P(TEST_eAXIv, "TEST", false, OP(eAX,v,"EAX","AX"), OP(I,z,"",""), NOP_);
 		P(STOSB_YbAL, "STOSB", false, OP(Y,b,"[EDI]","[EDI]"), OP(AL,b,"AL","AL"), NOP_);
 		P16(STOSW_YveAX, "STOSD", "STOSW", false, OP(Y,v,"[EDI]","[EDI]"), OP(eAX,v,"EAX","AX"), NOP_);
 		P(LODSB_ALXb, "LODSB", false, OP(AL,b,"AL","AL"), OP(X,b,"[ESI]","[ESI]"), NOP_);
@@ -324,14 +342,15 @@ public:
 		P(MOV_DHIb, "MOV", false, OP(DH,b,"DH","DH"), OP(I,b,"",""), NOP_);
 		P(MOV_BHIb, "MOV", false, OP(BH,b,"BH","BH"), OP(I,b,"",""), NOP_);
 
-		P(MOV_eAXIv, "MOV", false, OP(eAX,v,"EAX","AX"), OP(I,v,"",""), NOP_);
-		P(MOV_eCXIv, "MOV", false, OP(eCX,v,"ECX","CX"), OP(I,v,"",""), NOP_);
-		P(MOV_eDXIv, "MOV", false, OP(eDX,v,"EDX","DX"), OP(I,v,"",""), NOP_);
-		P(MOV_eBXIv, "MOV", false, OP(eBX,v,"EBX","BX"), OP(I,v,"",""), NOP_);
-		P(MOV_eSPIv, "MOV", false, OP(eSP,v,"ESP","SP"), OP(I,v,"",""), NOP_);
-		P(MOV_eBPIv, "MOV", false, OP(eBP,v,"EBP","BP"), OP(I,v,"",""), NOP_);
-		P(MOV_eSIIv, "MOV", false, OP(eSI,v,"ESI","SI"), OP(I,v,"",""), NOP_);
-		P(MOV_eDIIv, "MOV", false, OP(eDI,v,"EDI","DI"), OP(I,v,"",""), NOP_);
+		// B8-BF MOV r,imm: op0 is the +r register (Z); imm is v (imm64 under REX.W -> movabs).
+		P(MOV_eAXIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_eCXIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_eDXIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_eBXIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_eSPIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_eBPIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_eSIIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_eDIIv, "MOV", false, OP(Z,v,"",""), OP(I,v,"",""), NOP_);
 
 		// Group 2 (0xC0/0xC1, 0xD0-0xD3): ROL/ROR/RCL/RCR/SHL/SHR/SAL/SAR, selected by ModRM.reg
 		PG(GRP2_EbIb, "GRP2", true, OP(E,b,"",""), OP(I,b,"",""), NOP_, 2);
@@ -341,7 +360,7 @@ public:
 		P(LES_GvMp, "LES", true, OP(G,v,"",""), OP(M,p,"",""), NOP_);
 		P(LDS_GvMp, "LDS", true, OP(G,v,"",""), OP(M,p,"",""), NOP_);
 		P(MOV_EbIb, "MOV", true, OP(E,b,"",""), OP(I,b,"",""), NOP_);
-		P(MOV_EvIv, "MOV", true, OP(E,v,"",""), OP(I,v,"",""), NOP_);
+		P(MOV_EvIv, "MOV", true, OP(E,v,"",""), OP(I,z,"",""), NOP_);
 		P(ENTER_IwIb, "ENTER", false, OP(I,w,"",""), OP(I,b,"",""), NOP_);
 		P(LEAVE, "LEAVE", false, NOP_, NOP_, NOP_);
 		P(RETF_Iw, "RETF", false, OP(I,w,"",""), NOP_, NOP_);
@@ -424,6 +443,71 @@ public:
 #undef P16
 #undef PG16
 
+		// --- 64-bit mode: one-byte encodings removed in long mode (raise #UD). The table is
+		// shared with 32-bit decoding, so isInvalid == "gone in 64-bit mode"; a 32-bit decode
+		// ignores it. NOTE 0x63 ARPL is deliberately NOT here: in 64-bit it is repurposed to
+		// MOVSXD, a change of meaning (not a removal) that a single bool cannot express.
+#define INV(name) n[static_cast<uint32_t>(OPCODE::name)].isInvalid = true
+		INV(PUSH_ES);  INV(POP_ES);  INV(PUSH_CS);
+		INV(PUSH_SS);  INV(POP_SS);  INV(PUSH_DS);  INV(POP_DS);
+		INV(DAA); INV(DAS); INV(AAA); INV(AAS);
+		INV(PUSHA); INV(POPA);
+		INV(BOUND_GvMa);
+		INV(GRP1_EbIb2);           // 0x82, undocumented grp1 alias
+		INV(CALL_Ap);              // 0x9A far call ptr16:16/32
+		INV(LES_GvMp); INV(LDS_GvMp);   // 0xC4/0xC5 (reused as VEX escapes)
+		INV(INTO);
+		INV(AAM_Ib); INV(AAD_Ib);
+		INV(SALC);
+		INV(JMP_Ap);               // 0xEA far jmp ptr16:16/32
+		// 0x40-0x4F are REX prefixes in 64-bit mode; the byte-eater consumes them before this
+		// table is consulted, but the INC/DEC r32 short forms they held are 32-bit only.
+		INV(INC_eAX); INV(INC_eCX); INV(INC_eDX); INV(INC_eBX);
+		INV(INC_eSP); INV(INC_eBP); INV(INC_eSI); INV(INC_eDI);
+		INV(DEC_eAX); INV(DEC_eCX); INV(DEC_eDX); INV(DEC_eBX);
+		INV(DEC_eSP); INV(DEC_eBP); INV(DEC_eSI); INV(DEC_eDI);
+#undef INV
+
+		// --- REX.W 64-bit mnemonics (text64): the width-in-the-name family. Mirror of the
+		// text16 entries a few rows up. Renderer picks text64 when REX.W, before text16/text.
+#define T64(name,name64) n[static_cast<uint32_t>(OPCODE::name)].text64 = name64
+		T64(CBW, "CDQE");         T64(CWD, "CQO");
+		T64(PUSHF_Fv, "PUSHFQ");  T64(POPF_Fv, "POPFQ");
+		T64(MOVSW_XvYv, "MOVSQ"); T64(CMPSW_XvYv, "CMPSQ");
+		T64(STOSW_YveAX, "STOSQ");T64(LODSW_eAXXv, "LODSQ"); T64(SCASW_eAXYv, "SCASQ");
+		T64(IRET, "IRETQ");
+		// INSD/OUTSD (0x6D/0x6F) have no 64-bit form - I/O ports max out at 32-bit, no text64.
+#undef T64
+
+		// --- long-mode default operand size (field: def64). Ignored by a 32-bit decode.
+		//   d64: defaults to 64, but 0x66 drops it to 16.   f64: forced 64, 0x66 ignored.
+#define D64(name) n[static_cast<uint32_t>(OPCODE::name)].def64 = Instruction::OpcodeInfo::Default64::d64
+#define F64(name) n[static_cast<uint32_t>(OPCODE::name)].def64 = Instruction::OpcodeInfo::Default64::f64
+		// stack ops (d64)
+		D64(PUSH_eAX); D64(PUSH_eCX); D64(PUSH_eDX); D64(PUSH_eBX);
+		D64(PUSH_eSP); D64(PUSH_eBP); D64(PUSH_eSI); D64(PUSH_eDI);
+		D64(POP_eAX);  D64(POP_eCX);  D64(POP_eDX);  D64(POP_eBX);
+		D64(POP_eSP);  D64(POP_eBP);  D64(POP_eSI);  D64(POP_eDI);
+		D64(PUSH_Iv);  D64(PUSH_Ib);  D64(POP_Ev);
+		D64(PUSHF_Fv); D64(POPF_Fv);
+		D64(ENTER_IwIb); D64(LEAVE);
+		// near branches (f64)
+		F64(CALL_Jv); F64(JMP_Jv); F64(JMP_Jb);
+		F64(LOOPNZ_Jb); F64(LOOPZ_Jb); F64(LOOP_Jb); F64(JeCXZ_Jb);
+		F64(JO);F64(JNO);F64(JB);F64(JNB);F64(JZ);F64(JNZ);F64(JBE);F64(JA);
+		F64(JS);F64(JNS);F64(JP);F64(JNP);F64(JL);F64(JNL);F64(JLE);F64(JNLE);
+#undef F64
+#undef D64
+
+		// --- long-mode name for XCHG's accumulator operand (op0 = reg 0, named in silicon).
+		// The +r operands (PUSH/POP/MOV, and XCHG's op1) now decode through the Z addressing
+		// mode, which resolves REX.B and width itself - only this fixed accumulator still needs
+		// a baked 64-bit name. The renderer's default operand case picks value64 under REX.W.
+#define V64_0(name,r64) n[static_cast<uint32_t>(OPCODE::name)].op[0].value64 = r64
+		V64_0(XCHG_eAXeCX,"RAX"); V64_0(XCHG_eAXeDX,"RAX"); V64_0(XCHG_eAXeBX,"RAX"); V64_0(XCHG_eAXeSP,"RAX");
+		V64_0(XCHG_eAXeBP,"RAX"); V64_0(XCHG_eAXeSI,"RAX"); V64_0(XCHG_eAXeDI,"RAX");
+#undef V64_0
+
 		return n;
 
 	}
@@ -457,7 +541,7 @@ public:
 #define GT(reg,text,group) G(reg, text, true, NOP_, NOP_, NOP_, group)
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
-#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), false, val, val, val16 }
 #define NOP_ OP(None,None,"","")
 
 	// 0x80-0x83
@@ -571,25 +655,15 @@ public:
 	}
 
 
-	// ---------------------------------------------------------------------------
-	// x87 FPU escape opcodes (0xD8-0xDF). These do NOT fit the reg-only group
-	// mechanism: the mnemonic depends on the WHOLE ModRM byte, not just reg.
-	//   * ModRM < 0xC0 (mod != 11): a memory form. reg picks the op; the r/m is a
-	//     memory operand (rendered through the existing M addressing mode).
-	//   * ModRM >= 0xC0 (mod == 11): a register form. The full reg:rm pair (64 slots
-	//     per opcode) names a specific ST-stack instruction; operands are ST / ST(i),
-	//     baked into the operand's value field so the renderer prints them verbatim.
-	// Both tables carry hasRMByte=true only for consistency - the byte-eater already
-	// decided to read the ModRM byte from the flat ESC row, and x87 has no immediate,
-	// so the resolved entry never changes the instruction length.
+	// --- x87 FPU instructions
 
 	// Memory forms, indexed (op-0xD8)*8 + reg. Empty rows (invalid /reg) stay "(bad)".
 	static constexpr std::array<Instruction::OpcodeInfo, 64> buildX87Mem() {
 		std::array<Instruction::OpcodeInfo, 64> n{};
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
-#define M_ Instruction::TableOperand{ a(M), s(None), "", "" }
-#define NO Instruction::TableOperand{ a(None), s(None), "", "" }
+#define M_ Instruction::TableOperand{ a(M), s(None), false, "", "", "" }
+#define NO Instruction::TableOperand{ a(None), s(None), false, "", "", "" }
 #define FM(idx,text) n[idx] = Instruction::OpcodeInfo{ text, "", true, M_, NO, NO, -1 }
 		// D8 (o=0): m32fp   D9 (o=1): load/store/control   DA (o=2): m32int
 		FM(0,"FADD");   FM(1,"FMUL");   FM(2,"FCOM");    FM(3,"FCOMP");
@@ -628,8 +702,8 @@ public:
 			{ "ST(0)","ST(1)","ST(2)","ST(3)","ST(4)","ST(5)","ST(6)","ST(7)" };
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
-#define STv(v) Instruction::TableOperand{ a(ST), s(None), v, v }
-#define NO Instruction::TableOperand{ a(None), s(None), "", "" }
+#define STv(v) Instruction::TableOperand{ a(ST), s(None), false, v, v, v }
+#define NO Instruction::TableOperand{ a(None), s(None), false, "", "", "" }
 		// op-relative base + reg row, one entry per rm.
 #define ROW2(o,reg,text,p0,p1)  for (uint8_t i=0;i<8;++i) n[(o)*64+(reg)*8+i] = Instruction::OpcodeInfo{ text, "", true, p0, p1, NO, -1 }
 #define ROW1(o,reg,text,p0)     for (uint8_t i=0;i<8;++i) n[(o)*64+(reg)*8+i] = Instruction::OpcodeInfo{ text, "", true, p0, NO, NO, -1 }
@@ -715,10 +789,29 @@ public:
 	// Merge the flat one-byte row with the entry ModRM selects. Takes the WHOLE ModRM
 	// byte now: groups still key on reg (bits 3-5), but x87 needs the full byte, so the
 	// dispatch happens here rather than in the caller.
-	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t modrm) {
+	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t modrm, bool is64Bit = false) {
 		if (isX87(op)) return x87ResolvedInfo(op, modrm);
 
+
+		static constexpr Instruction::OpcodeInfo conflictRow{
+		"MOVSXD", "",                                                                                   // text, text16
+		true,                                                                                           // hasRMByte
+
+		// op[0]: Gv dest
+		Instruction::TableOperand{ static_cast<uint8_t>(ADDRESSING::G),    static_cast<uint8_t>(SIZE::v),    false, "", "", "" },  
+
+		// op[1]: Ed source
+		Instruction::TableOperand{ static_cast<uint8_t>(ADDRESSING::E),    static_cast<uint8_t>(SIZE::v),    false, "", "", "" },  
+
+		// op[2]: none
+		Instruction::TableOperand{ static_cast<uint8_t>(ADDRESSING::None), static_cast<uint8_t>(SIZE::None), false, "", "", "" },  
+
+		// groupNo (not a group)
+		-1                                                                                             
+			};
+
 		const uint8_t reg = (modrm >> 3) & 0x07;
+		if (is64Bit && op == 0x63) return conflictRow;
 		const Instruction::OpcodeInfo& outer = opcodeTable()[op];
 		if (!isGroup(op)) return outer;
 
@@ -738,7 +831,9 @@ public:
 			if (e.addressingMode == noMode) return;              // entry says nothing: keep the outer row's
 			dst.addressingMode = e.addressingMode;
 			dst.size    = (e.size != none) ? e.size : opSize;
-			dst.value   = e.value;
+			dst.forcedSize = e.forcedSize;
+				dst.value64 = e.value64;
+				dst.value32 = e.value32;
 			dst.value16 = e.value16;
 		};
 		take(entry.op[0], info.op[0]);
@@ -766,12 +861,18 @@ public:
 #define TG(idx,text,hasRM,op1,op2,op3,group)   n[idx] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, group}
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
-#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), false, val, val, val16 }
 #define NOP_ OP(None,None,"","")
 
 		T(0x0B, "UD2",   false, NOP_, NOP_, NOP_);
 		T(0x31, "RDTSC", false, NOP_, NOP_, NOP_);
 		T(0xA2, "CPUID", false, NOP_, NOP_, NOP_);
+
+		// Fast system call/return - no ModRM, no operands, no immediate.
+		T(0x05, "SYSCALL",  false, NOP_, NOP_, NOP_);
+		T(0x07, "SYSRET",   false, NOP_, NOP_, NOP_);
+		T(0x34, "SYSENTER", false, NOP_, NOP_, NOP_);
+		T(0x35, "SYSEXIT",  false, NOP_, NOP_, NOP_);
 
 		// Multi-byte NOP (0F 1F /0) - the padding between functions. Has a ModRM, so its
 		// addressed bytes must be eaten or every run of it desyncs the sweep.
@@ -889,7 +990,7 @@ public:
 		std::array<Instruction::OpcodeInfo, 8> n{};
 #define a(name) static_cast<uint8_t>(ADDRESSING::name)
 #define s(name) static_cast<uint8_t>(SIZE::name)
-#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), val, val16 }
+#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), false, val, val, val16 }
 #define NOP_ OP(None,None,"","")
 #define GT(reg,text) n[reg] = Instruction::OpcodeInfo{text,"", true, NOP_, NOP_, NOP_, 8}
 		GT(4,"BT"); GT(5,"BTS"); GT(6,"BTR"); GT(7,"BTC");
@@ -940,7 +1041,9 @@ public:
 			if (e.addressingMode == noMode) return;
 			dst.addressingMode = e.addressingMode;
 			dst.size    = (e.size != none) ? e.size : opSize;
-			dst.value   = e.value;
+			dst.forcedSize = e.forcedSize;
+				dst.value64 = e.value64;
+				dst.value32 = e.value32;
 			dst.value16 = e.value16;
 		};
 		take(entry.op[0], info.op[0]);

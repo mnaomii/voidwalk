@@ -1,7 +1,7 @@
 #pragma once
 #include <memory>
 #include <iostream>
-#include "console.h"
+#include "console.hpp"
 #include "../main/disassembler/disassembler.hpp"
 
 
@@ -17,9 +17,6 @@ class Tests{
                       << name << "()" <<  " !\n" << test_console::reset;
         }
 
-    inline static int argc;
-    inline static char** argv;
-    inline static std::shared_ptr<Disassembler> disassembler;
 
     Tests(){};
 };

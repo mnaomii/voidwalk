@@ -15,8 +15,9 @@ struct Sections {
     Header _text, _data, _ronly, _bss;
 };
 
-struct Registers { // emulating the current values of the registers.
-    uint64_t eax, edx, ecx, ebx, esp, ebp, esi, edi, eip; // registers + eip - current instruction pointer;
+struct Registers_x86_64 { // emulating the current values of the registers.
+    uint64_t rax, rdx, rcx, rbx, rsp, rbp, rsi, rdi, rip; // registers + eip - current instruction pointer;
+    uint64_t r8, r9, r10, r11, r12, r13, r14, r15;
     uint64_t ds, cs, fs, gs, ss, es; // segments
 
     uint8_t flags;
@@ -24,9 +25,16 @@ struct Registers { // emulating the current values of the registers.
 
 
 class Disassembler {
+
+private:
+    size_t instrDecodePos{};
+    std::vector<std::ostream*> outputStreams;
+
+
+
 protected:
 
-
+    uint64_t imageBase{};
 
     std::vector<std::unique_ptr<Instruction>> decodedInstructions;
     // Virtual address each decodedInstructions[i] starts at, recorded by decode().
@@ -37,32 +45,24 @@ protected:
     uint64_t offset;
     uint16_t architecture;
 
-    Registers registers;
+    Registers_x86_64 registers{};
 
     AddressSpace& contents;
 
     virtual void setHeadersOffsets()=0;
 
-    uint64_t decodeLine_IA_32(uint64_t address, uint64_t vaddr);
+    uint64_t decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool is64Bit);
 
 public:
-    Disassembler(AddressSpace& temp) : contents(temp), architecture(0x00), offset(0x00) {
+    Disassembler(AddressSpace& temp, const std::vector<std::ostream*>& stream) : contents(temp), architecture(0x00), offset(0x00), outputStreams(stream) {
 
         // emulated for the moment
-        registers.eax = 0;
-        registers.ecx = 0;
-        registers.edx = 0;
-        registers.ebp = 0; // offset into fake stack
-        registers.esp = 0; // offset into fake stack
-        registers.esi = 0;
-        registers.edi = 0;
-        registers.ebx = 0;
-        registers.flags = 0;
-        registers.eip = baseSections._text.getOffset();
-        registers.cs = registers.eip;
+        registers.rip = baseSections._text.getOffset();
+        registers.cs = registers.rip;
+
 
     };
-    void decodeCS(FILE* outputStream);
+    void emitDecodedLine();
     virtual std::string getArchitecture()=0;
     virtual uint64_t decodeLine(uint64_t address, uint64_t vaddr)=0;
     virtual ~Disassembler() = default;
@@ -70,7 +70,7 @@ public:
     void decode();
 
     // read-only views for the UI layers (TUI/GUI); they must not mutate core state
-    const Registers& getRegisters() const { return registers; }
+    const Registers_x86_64& getRegisters() const { return registers; }
     const std::vector<uint64_t>& getVirtStack() const { return virtStack; }
     const std::vector<std::unique_ptr<Instruction>>& getDecodedInstructions() const { return decodedInstructions; }
     const std::vector<uint64_t>& getInstructionAddresses() const { return instructionAddresses; }

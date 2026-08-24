@@ -54,7 +54,7 @@ std::string formatDisasmText(const std::string& raw) {
 
 // Registers to hand out when nothing is loaded, so panes can render a
 // zeroed register file without null-checking the disassembler.
-const Registers kZeroRegisters{};
+const Registers_x86_64 kZeroRegisters{};
 const std::vector<uint64_t> kEmptyStack{};
 
 } // namespace
@@ -109,7 +109,7 @@ bool Session::is64bit() const {
 	return architecture().find("64") != std::string::npos;
 }
 
-const Registers& Session::registers() const {
+const Registers_x86_64& Session::registers() const {
 	return loaded() ? disassembler_->getRegisters() : kZeroRegisters;
 }
 

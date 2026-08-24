@@ -1,23 +1,21 @@
 #include <iostream>
 #include <memory>
-#include "disassembler/IA-32/tests.h"
-#include "disassembler/elf-sections.h"
-#include "disassembler/pe-sections.h"
+#include "disassembler/x86_64-tests/IA-32-tests.hpp"
+#include "disassembler/elf-sections-tests.hpp"
+#include "disassembler/pe-sections-tests.hpp"
 #include "../main/disassembler/disassembler.hpp"
-#include "base.h"
-#include "console.h"
+#include "base.hpp"
+#include "console.hpp"
 
 
 
-void runTests(int ac, char** av, std::shared_ptr<Disassembler> disasm) {
+void runTests() {
 
     test_console::init();   // UTF-8 + ANSI colors, for this module's output only
     using namespace test_console;
 
     std::cout << cyan << "  (*)  " << reset << "Setting initial parameters...\n";
-    Tests::argc = ac;
-    Tests::argv = av;
-    Tests::disassembler = disasm;
+
 
     std::cout << cyan << "  (*)  " << reset << "Running IA-32-tests .. \n" << dim << "  |\n" << reset;
     IA_32_Tests();

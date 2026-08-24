@@ -1,4 +1,5 @@
 #include "gui_main.h"
+#include "../theme/theme.h"
 #include "../widgets/main_window.h"
 
 #include <QApplication>
@@ -23,6 +24,11 @@ int GUIstart(int argc, char** argv) {
 	QApplication app(argc, argv);
 	QApplication::setApplicationName(QStringLiteral("voidwalk-gui"));
 	QApplication::setOrganizationName(QStringLiteral("voidwalk"));
+
+	// Register the bundled JetBrains Mono (:/fonts) before any widget exists, so
+	// monoFont() resolves to it. A no-op when the font resource isn't compiled in
+	// (the TTFs aren't shipped) — monoFont() then falls back to host mono fonts.
+	gui::registerBundledFonts();
 
 	gui::MainWindow window;
 	window.show();

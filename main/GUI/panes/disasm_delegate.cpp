@@ -1,8 +1,11 @@
 #include "disasm_delegate.h"
 
+#include "disassembly_pane.h"
+
 #include <QApplication>
 #include <QPainter>
 #include <QSet>
+#include <algorithm>
 
 namespace gui {
 
@@ -57,6 +60,10 @@ DisasmDelegate::DisasmDelegate(QObject* parent)
 
 void DisasmDelegate::setTheme(const Theme& theme) {
 	theme_ = theme;
+}
+
+bool DisasmDelegate::isBreakpoint(int row) const {
+	return std::find(breakpoints_.begin(), breakpoints_.end(), row) != breakpoints_.end();
 }
 
 std::vector<DisasmDelegate::Token> DisasmDelegate::tokenize(const QString& text) const {
@@ -117,23 +124,63 @@ void DisasmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
 	QStyleOptionViewItem opt = option;
 	initStyleOption(&opt, index);
 
-	// Background (selection, hover, alternate) via the style, text by hand.
+	const int row = index.row();
+	const int column = index.column();
+	const bool isCurrent = row == currentRow_;
+
+	// Background (selection, hover) via the style, text by hand.
 	const QString text = opt.text;
 	opt.text.clear();
 	const QWidget* widget = option.widget;
 	QStyle* style = widget ? widget->style() : QApplication::style();
 	style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, widget);
 
-	painter->save();
-	painter->setRenderHint(QPainter::TextAntialiasing, true);
-	painter->setFont(opt.font);
-	const QRect r = opt.rect.adjusted(8, 0, -4, 0);
 	const bool selected = opt.state & QStyle::State_Selected;
 
-	if (index.column() == 0 || index.column() == 1) {
-		painter->setPen(selected ? theme_.accentText
-			: (index.column() == 0 ? theme_.textFaint : theme_.textDim));
+	// Execution band: painted over the style's background so it survives whether
+	// or not the row is also selected.
+	if (isCurrent && !selected)
+		painter->fillRect(opt.rect, theme_.accentBg);
+
+	painter->save();
+	painter->setRenderHint(QPainter::TextAntialiasing, true);
+	painter->setRenderHint(QPainter::Antialiasing, true);
+	painter->setFont(opt.font);
+
+	if (column == DisassemblyPane::ColGutter) {
+		if (isCurrent) {
+			// 2px rule at the left edge + a small triangle: the rule is what the
+			// eye catches while scrolling, the triangle is what confirms it.
+			painter->fillRect(QRect(opt.rect.left(), opt.rect.top(), 2, opt.rect.height()),
+			                  theme_.accent);
+			const QPointF c = QPointF(opt.rect.center()) + QPointF(1.5, 0.5);
+			const QPolygonF tri({QPointF(c.x() - 3, c.y() - 4),
+			                     QPointF(c.x() + 4, c.y()),
+			                     QPointF(c.x() - 3, c.y() + 4)});
+			painter->setBrush(theme_.accent);
+			painter->setPen(Qt::NoPen);
+			painter->drawPolygon(tri);
+		}
+		else if (isBreakpoint(row)) {
+			painter->setBrush(theme_.breakpoint);
+			painter->setPen(Qt::NoPen);
+			painter->drawEllipse(QPointF(opt.rect.center()) + QPointF(0.5, 0.5), 3.5, 3.5);
+		}
+		painter->restore();
+		return;
+	}
+
+	const QRect r = opt.rect.adjusted(8, 0, -4, 0);
+
+	if (column == DisassemblyPane::ColAddress || column == DisassemblyPane::ColBytes) {
+		const QColor base = column == DisassemblyPane::ColAddress ? theme_.textDim : theme_.textFaint;
+		painter->setPen(selected || isCurrent ? theme_.accentText : base);
 		painter->drawText(r, Qt::AlignLeft | Qt::AlignVCenter, text);
+	}
+	else if (column == DisassemblyPane::ColNotes) {
+		painter->setPen(selected || isCurrent ? theme_.accent : theme_.textGhost);
+		painter->drawText(opt.rect.adjusted(0, 0, -12, 0),
+		                  Qt::AlignRight | Qt::AlignVCenter, text);
 	}
 	else {
 		// Tokens are drawn one at a time, so the pen advances by hand. Keep the
@@ -145,7 +192,10 @@ void DisasmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
 		qreal x = r.left();
 		painter->setClipRect(r);
 		for (const Token& tok : tokenize(text)) {
-			painter->setPen(selected ? theme_.textBright : tok.color);
+			// On the current row every token flattens to bright text: the band
+			// already carries the emphasis, and keeping the syntax colors on top
+			// of accentBg turned the one row you care about into the noisiest.
+			painter->setPen(selected || isCurrent ? theme_.textBright : tok.color);
 			painter->drawText(QPointF(x, baseline), tok.text);
 			x += fm.horizontalAdvance(tok.text);
 			if (x > r.right()) break;

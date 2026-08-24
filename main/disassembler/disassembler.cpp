@@ -4,6 +4,7 @@
 #include "mnemonic/x86_64/x86_64-instr.hpp"
 #include "mnemonic/x86_64/x86_64-mnemonic.hpp"
 
+#include <iomanip>
 
 void Disassembler::decode() {
 	decodedInstructions.clear();
@@ -27,28 +28,37 @@ void Disassembler::decode() {
 
 		vaddr += next - ptr;
 		ptr = next;
+
+		emitDecodedLine();
 	}
 }
 
-uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
+uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool is64Bit) {
 
-	uint64_t instructionBytes[15] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }; // originalDisp = 0; // instr cap of 15 bytes
+	uint64_t instructionBytes[15]{}; // originalDisp = 0; // instr cap of 15 bytes
 	uint8_t tmp = 0x0;
 	uint8_t cnt = 0;
-	uint32_t width = 0, dispWidth = 0;   // bytes this immediate occupies in the stream
+	uint32_t width = 0, dispWidth = 0;   // bytes this immediate/disp occupies in the stream
+
+	uint64_t initAddress = address;
 
 
+	bool rexBits[4]{};
+	int positions[4]{};
+	bool checks[10]{};
 
-	bool checks[8] = { false, false, false, false, false, false, false , false}; 
-
-	enum flags {
-		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize
+	enum flagsIdx {
+		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize, hasREX, hasAdditionalEscape
 	};
 
+	enum rexBitsIdx {
+		b, x, r, w
+	};
 
+	enum positionsIdx {
+		endPrefix, endOpcode, immBegin, rexBegin
+	};
 
-	int endPrefix = 0, endOpcode = 0, immBegin = 0;
-	uint64_t initAddress = address;
 
 	try {
 		tmp = static_cast<uint64_t>(contents.read_u8(address++));
@@ -72,32 +82,78 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 
 		}
 
+		positions[endPrefix] = cnt; // past the last prefix
+
+
+		// --- VEX will go here..
+
+		// --- REX
+
+
+
+		if (is64Bit && tmp >= 0x40 && tmp <= 0x4f) 
+		{
+				checks[hasREX] = true;
+
+				instructionBytes[cnt++] = tmp; 
+
+				tmp = static_cast<uint64_t>(contents.read_u8(address++));
+				
+				positions[rexBegin] = cnt - 1; // *exactly* the last REX position - where the REX reading should start
+
+				auto aux = instructionBytes[positions[rexBegin]];
+				int cnt_aux = 0;
+				while (aux != 0b0100) { // filling the rex struct with its individual values
+					rexBits[cnt_aux] = aux & 0b1;
+					aux >>= 1;
+					cnt_aux++;
+				}
+				if (rexBits[w]) checks[hasOpsize] = false;  // REX.W nullifies OpsizePFX if present
+			
+		}
 
 		// --- OPCODE
 		if (cnt < 15) {
-			endPrefix = cnt; // past the last prefix
-
-			if (tmp == 0x0f) checks[has2Byte] = true;
-
-			instructionBytes[cnt++] = tmp;
-			tmp = static_cast<uint64_t>(contents.read_u8(address));
-
-			if (checks[has2Byte] && cnt < 15) {
-				instructionBytes[cnt++] = tmp; address++; // reading the second byte
+			if (x86_64_Mnemonic::opcodeTable()[tmp].isInvalid && cnt < 15 && is64Bit) {
+				instructionBytes[cnt++] = tmp;
+				tmp = static_cast<uint64_t>(contents.read_u8(address++));
 			}
-			endOpcode = cnt; // past the last opcode byte
+			else {
+				instructionBytes[cnt++] = tmp;
+
+				if (tmp == 0x0f) {
+					checks[has2Byte] = true;
+					tmp = contents.read_u8(address++);
+
+					// 3rd operand byte - further escape opcodes : sse, avx, vex ISA's etc
+				if(cnt<15)
+					// if ((tmp == 0x38 || tmp == 0x3A)) { instructionBytes[cnt++] = tmp; address++; }
+					// else
+					  instructionBytes[cnt++] = tmp;
+
+				}
+
+			}
+
+
+
+
+			
+			positions[endOpcode] = cnt; // past the last opcode byte
 		}
 
 
-		uint64_t opcode = instructionBytes[endOpcode - 1];
+		uint64_t opcode = instructionBytes[positions[endOpcode] - 1];
+
+		
 
 		const Instruction::OpcodeInfo& outer = checks[has2Byte]
 			? x86_64_Mnemonic::twoByteTable()[opcode]
-			: x86_64_Mnemonic::opcodeTable()[opcode];
+			: ( (is64Bit && opcode == 0x63) ? x86_64_Mnemonic::resolvedInfo(0x63, 0,true) : x86_64_Mnemonic::opcodeTable()[opcode]);
 
 		Instruction::OpcodeInfo opcodeInfo = outer;
 
-
+		if (opcodeInfo.def64 == Instruction::OpcodeInfo::Default64::d64) checks[hasOpsize] = false;
 
 		// --- MOD R/M
 		uint8_t mod = 0x0, reg_op = 0x0, rm = 0x0;
@@ -113,7 +169,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 			// Pass the whole ModRM byte: groups key on reg internally, x87 needs it all.
 			opcodeInfo = checks[has2Byte]
 				? x86_64_Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(opcode), modrm)
-				: x86_64_Mnemonic::resolvedInfo(static_cast<uint32_t>(opcode), modrm);
+				: x86_64_Mnemonic::resolvedInfo(static_cast<uint32_t>(opcode), modrm, is64Bit);
 
 
 			// --- SIB
@@ -152,7 +208,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 			case 0b00:
 				if (cnt >= 15) checks[hasDisp] = false;
 				else if (rm == (checks[hasAddrSize] ? 0b110 : 0b101)
-					|| (!checks[hasAddrSize] && rm == 0b100 && (instructionBytes[endOpcode + 1] & 0b00000111) == 0b101)) {
+					|| (!checks[hasAddrSize] && rm == 0b100 && (instructionBytes[positions[endOpcode] + 1] & 0b00000111) == 0b101)) {
 
 					dispWidth = 2;
 					if (!checks[hasAddrSize])
@@ -163,10 +219,11 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 						instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u16(address));
 						address += 2;
 					}
-					else {
+					else if (dispWidth == 4) {
 						instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u32(address));
 						address += 4;
 					}
+
 
 					break;
 				}
@@ -182,7 +239,7 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 		// --- IMMEDIATE(s)
 		if (x86_64_Mnemonic::hasImmediate(opcodeInfo) && cnt < 15) { // set immediate field
 			checks[hasImm] = true;
-			immBegin = cnt;
+			positions[immBegin] = cnt;
 
 			uint8_t immSize = 0;
 			uint8_t immAddr = 0;
@@ -216,16 +273,17 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 					case cast(x86_64::SIZE::b): case cast(x86_64::SIZE::bs): width = 1; break;   // bs occupies 1 byte too
 					case cast(x86_64::SIZE::w): width = 2; break;
 					case cast(x86_64::SIZE::v):
-					case cast(x86_64::SIZE::z): width = checks[hasOpsize] ? 2 : 4; break;
+						width = (is64Bit && rexBits[w]) ? width = 8 : (checks[hasOpsize] ? 2 : 4); break;
+					case cast(x86_64::SIZE::z): 
+						width = checks[hasOpsize] ? 2 : 4; break;
 					case cast(x86_64::SIZE::p): width = checks[hasOpsize] ? 4 : 6; break;
 					default:
-						fprintf(stderr, "Immediate IA_32::SIZE not implemented yet (opcode %#x)\n", opcode);
+						fprintf(stderr, "Immediate x86_64::SIZE not implemented yet (opcode %#x)\n", opcode);
 						break;
 					}
 
 					if (immAddr == cast(x86_64::ADDRESSING::O))
-						width = checks[hasAddrSize] ? 2 : 4;
-
+						width = is64Bit ? (checks[hasAddrSize] ? 4 : 8) : (checks[hasAddrSize] ? 2 : 4);
 
 					int64_t value = 0;
 					switch (width) {
@@ -247,14 +305,19 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 						value = (static_cast<uint64_t>(seg) << 32) | off;
 						break;
 					}
+					case 8:
+						value = contents.read_u64(address);
 					}
 
-					// 83 /r ib, 6B, 6A: the imm8 is sign-extended to the operand width (16-bit
-					// under a 66h prefix, else 32-bit). Widen the byte just read; length stays 1,
-					// so this is display-only and cannot desync the sweep.
-					if (immSize == cast(x86_64::SIZE::bs))
-						value = checks[hasOpsize] ? static_cast<uint16_t>(static_cast<int8_t>(static_cast<uint8_t>(value)))
-							: static_cast<uint32_t>(static_cast<int8_t>(static_cast<uint8_t>(value)));
+					// Sign extension of Imm8, based on the custom Size::bs
+
+					if (immSize == cast(x86_64::SIZE::bs)) {
+						value = static_cast<int8_t>(value);
+						if (is64Bit && rexBits[w]) value = static_cast<uint64_t>(value);
+						else if (checks[hasOpsize]) value = static_cast<uint16_t>(value);
+						else value = static_cast<uint32_t>(value);
+					}
+
 
 					address += width;
 
@@ -264,13 +327,13 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 					instructionBytes[cnt] = isRelative
 						? static_cast<uint64_t>(vaddr + (address - initAddress) + value)
 						: static_cast<uint64_t>(value);
-					rawImmediates[cnt - immBegin] = (isRelative) ? value : 0x0;
+					rawImmediates[cnt - positions[immBegin]] = (isRelative) ? value : 0x0;
 					++cnt;
 				}
 		}
 
 		auto instruction = std::make_unique<x86_64>();
-		instruction->decode(instructionBytes, checks, endPrefix, endOpcode, immBegin, width, dispWidth, rawImmediates);
+		instruction->decode(instructionBytes, checks, positions, rexBits, width, dispWidth, rawImmediates, is64Bit);
 		decodedInstructions.push_back(std::move(instruction));
 
 		return address; // address where the next instr begins
@@ -282,14 +345,16 @@ uint64_t Disassembler::decodeLine_IA_32(uint64_t address, uint64_t vaddr) {
 }
 
 
-void Disassembler::decodeCS(FILE* outputStream) {
+void Disassembler::emitDecodedLine() {
 
-	decode();
+	for(auto stream : outputStreams)
+		*stream << std::hex << std::setfill('0') << std::setw(8)
+		<< instructionAddresses[instrDecodePos] << ":  "
+		<< std::setfill(' ') << std::left << std::setw(24)
+		<< decodedInstructions[instrDecodePos]->getMachineCode() << ' '
+		<< decodedInstructions[instrDecodePos]->decodeLineString() << '\n';
 
-	size_t i = 0;
-	for (const auto& instruction : decodedInstructions)
-		fprintf(outputStream, "  | %08llx:  %-24s %s\n", instructionAddresses[i++], instruction->getMachineCode().c_str(), instruction->decodeLineString().c_str());
-
+	instrDecodePos++;
 }
 
 

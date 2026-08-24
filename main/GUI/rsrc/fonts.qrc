@@ -1,0 +1,19 @@
+<!DOCTYPE RCC>
+<!--
+  Bundled programming mono. JetBrains Mono is OFL-1.1: free to embed and ship,
+  and the license file must travel with the binary — keep OFL.txt in the
+  resource so `about` can show it.
+
+  Download: https://github.com/JetBrains/JetBrainsMono/releases
+  Drop the three TTFs next to this file. registerBundledFonts() (theme.cpp)
+  loads them from main() before the first widget is built; if the files are
+  absent the app still runs and monoFont() falls through to host fonts.
+-->
+<RCC>
+	<qresource prefix="/fonts">
+		<file>JetBrainsMono-Regular.ttf</file>
+		<file>JetBrainsMono-Medium.ttf</file>
+		<file>JetBrainsMono-Bold.ttf</file>
+		<file>OFL.txt</file>
+	</qresource>
+</RCC>

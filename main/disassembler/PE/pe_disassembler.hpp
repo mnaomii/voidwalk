@@ -21,7 +21,7 @@ public:
      uint64_t decodeLine(uint64_t address, uint64_t vaddr) ;
 
 
-    PE_Disassembler(AddressSpace& data);
+    PE_Disassembler(AddressSpace& data, const std::vector<std::ostream*>& outputs);
 
 
 };

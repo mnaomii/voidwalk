@@ -3,18 +3,24 @@
 
 #include "theme.h"
 
+#include <QIcon>
+#include <QString>
+
 namespace gui {
 
-// Applies a Theme app-wide: forces the Fusion style (so the rendering is
-// identical on Windows/macOS/Linux), fills a QPalette from the theme, and
-// installs the QSS built from the stylesheet template. Call once at startup
-// and again whenever the user switches themes in Settings.
+// Applies a Theme to the whole application: Fusion style + QPalette + the QSS
+// skin built from Theme::placeholderMap(). Call apply() before the first widget
+// paints and again whenever the theme changes in Settings.
 class ThemeManager {
 public:
 	static void apply(const Theme& theme);
-	static const Theme& current(); // last applied theme (dark() before any apply)
+	static const Theme& current();
 
-private:
+	// The symbol-sidebar toggle glyph, recolored for `theme`. Lives here rather
+	// than in :/icons because it is chrome, not an action icon, and it needs the
+	// same recolor path as the QSS glyphs.
+	static QIcon sidebarIcon(const Theme& theme);
+
 	static QString buildStylesheet(const Theme& theme);
 };
 
