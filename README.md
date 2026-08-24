@@ -69,6 +69,8 @@ Flags:
 (--ui) -> launches the TUI
 (--gui) -> launches the GUI (default)
 (--run-tests) -> runs a set of tests which verify the correctness of the code
+(--print <executable> <file1> <file2> ..) -> prints the assembly to stdout and the specified files
+(--dump-hex <executable>) -> dumps the hex of the specified executable
 ```
 ---
 
