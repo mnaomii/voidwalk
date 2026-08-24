@@ -23,10 +23,10 @@ A C++20 binary analysis tool targeting **ELF** and **PE** executable formats. Au
 
 ### Not yet implemented
 
-- **Extended instructions set for IA-32** such as AVX, SSE etc.
+- **Extended instructions set for IA-32** - such as AVX, SSE etc.
 - **ARM32/AArch64 architecture decoding**
-- **Debugging capabilities** in the near future.
-- **AI chatbot integration** *opt-in* feature. Will be able to analyze the code and offer insight.
+- **Debugging capabilities**  - in the near future.
+- **AI chatbot integration** - *opt-in* feature. Will be able to analyze the code and offer insight.
 ---
 
 ## Architecture
