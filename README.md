@@ -1,10 +1,10 @@
 # voidwalk
 
-An **early-stage** C++ binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
+A C++20 binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
 
 **Platforms** - Linux and Windows.
 
-> **Status:** Active development. ELF x86/x86_64 section parsing is functional. IA-32 architecture is functional.
+> **Status:** Active development. Supports decoding of both PE and ELF formats, and 
 
 ---
 
@@ -13,15 +13,18 @@ An **early-stage** C++ binary analysis tool targeting **ELF** and **PE** executa
 - **Format detection** - identifies ELF (`7F 45 4C 46`) and PE (`MZ` + PE signature) binaries from magic bytes and selects the correct parser automatically
 - **ELF section parsing** (x86 / x86_64)
 - **PE Section parsing** (x86 / x86_64)
-- **Architecture detection** - reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF header
+- **Architecture detection** - reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF/PE header
 - **File-backed binary reader** - `AddressSpace` provides random-access reads (`read_u8/16/32/64`) directly from disk without loading the entire file into memory
 - **PE & ELF binary disassembly (x86)** - Decodes every machine code instruction in a subclass of *Instruction*.
+- **Console scripting interface** - print the decoded assembly to stdout/files, dump the hex of the executable..
+- **IA-32 decoding** - base instructions, twoByte, instruction groups, all implemented
+- **AMD64 decoding (!)** - extending upon the IA-32 ISA, still needs some bugfixes
 
 
 ### Not yet implemented
 
 - **Extended instructions set for IA-32** such as AVX, SSE etc.
-- **ARM32/AArch64/AMD64 architecture decoding**
+- **ARM32/AArch64 architecture decoding**
 - **Debugging capabilities** in the near future.
 - **AI chatbot integration** *opt-in* feature. Will be able to analyze the code and offer insight.
 ---
@@ -86,10 +89,11 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 **Near-term**
 - [x] PE parser implementation (32-bit and 64-bit)
 - [x] IA-32 instruction decoding support
-- [ ] AMD64 instruction decoding support
+- [x] AMD64 instruction decoding support
 - [x] TUI
 - [ ] Tests
 - [x] GUI
+- [x] Console scripting interface
 
 **Longer-term**
 - [ ] DWARF debug info parsing
