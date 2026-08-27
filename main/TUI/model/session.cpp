@@ -40,15 +40,31 @@ Session::Session(std::shared_ptr<AddressSpace> space,
 }
 
 void Session::runDecode() {
-	decodeNote_.clear();
 	if (!disassembler_) return;
-	try {
-		disassembler_->decode();
-	}
-	catch (const std::exception& e) {
-		// Partial results survive: whatever decoded before the throw is kept.
-		decodeNote_ = e.what();
-	}
+	if (!decodeState_) decodeState_ = std::make_shared<DecodeState>();
+	decodeState_->note.clear();
+	// New sweep: drop the previous binary's lines so refresh() appends from zero.
+	disasmLines_.clear();
+	builtInstrs_ = 0;
+	decodeState_->running.store(true, std::memory_order_release);
+
+	// Capture shared_ptr copies (never `this` — the Session gets moved into the UI):
+	// they keep the disassembler and its address space alive for the worker
+	// regardless of where the Session lives or a later re-open. Move-assigning the
+	// jthread stops+joins any previous decode; decode() polls the stop_token.
+	decodeThread_ = std::jthread(
+		[disasm = disassembler_, space = space_, state = decodeState_](std::stop_token st) {
+			(void)space; // held only to keep the AddressSpace alive under the worker
+			try {
+				disasm->decode(st);
+			}
+			catch (const std::exception& e) {
+				// Partial results survive: whatever decoded before the throw is kept.
+				state->note = e.what();
+			}
+			// Release so a reader that sees running==false also sees note above.
+			state->running.store(false, std::memory_order_release);
+		});
 }
 
 bool Session::open(const std::string& path) {
@@ -106,11 +122,12 @@ uint64_t Session::textOffset() const {
 }
 
 void Session::refresh() {
-	disasmLines_.clear();
 	regRows_.clear();
 	stackRows_.clear();
 
 	if (!loaded()) {
+		disasmLines_.clear();
+		builtInstrs_ = 0;
 		disasmLines_.push_back("  [no binary loaded - use Open]");
 		regRows_.push_back("  [no binary loaded]");
 		stackRows_.push_back("  [no binary loaded]");
@@ -123,27 +140,48 @@ void Session::refresh() {
 	// .text bytes and say why nothing decoded rather than silently showing "??".
 	const auto& decoded = disassembler_->getDecodedInstructions();
 	const auto& addresses = disassembler_->getInstructionAddresses();
-	if (!decoded.empty()) {
-		for (size_t i = 0; i < decoded.size(); ++i) {
-			// addresses is parallel to decoded, but stay defensive: a decodeLine
-			// that throws mid-push could leave it short.
-			std::string addr = (i < addresses.size()) ? hexAddr(addresses[i]) + "  "
-			                                          : std::string(12, ' ');
+	// Only [0, ready) is safe to read while decode() runs on the worker; this
+	// acquire pairs with the worker's release store of readyCount.
+	const size_t ready = disassembler_->readyInstructions();
+	// The note is only safe to read once the worker has stopped (see isDecoding).
+	const std::string note = (!isDecoding() && decodeState_) ? decodeState_->note : std::string();
+	if (ready > 0) {
+		// APPEND-ONLY. The instruction lines in [0, builtInstrs_) were built on a
+		// previous poll and never change, so drop only the trailing status line from
+		// last time (resize to builtInstrs_) and append the new instructions. This is
+		// what stops every frame during decode from rebuilding the whole vector —
+		// the O(n²) that made a large binary crawl in the TUI.
+		disasmLines_.resize(builtInstrs_);
+		for (size_t i = builtInstrs_; i < ready; ++i) {
+			// Both vectors have >= ready elements (readyCount is published only once
+			// they are consistent), so index directly. Do NOT call addresses.size()
+			// here — that would race the worker's push_back on the same vector.
+			std::string addr = hexAddr(addresses[i]) + "  ";
 			disasmLines_.push_back("  " + addr + decoded[i]->decodeLineString());
 		}
-		if (!decodeNote_.empty())
-			disasmLines_.push_back("  ... decode stopped: " + decodeNote_);
+		builtInstrs_ = ready;
+		if (isDecoding())
+			disasmLines_.push_back("  ... decoding");
+		else if (!note.empty())
+			disasmLines_.push_back("  ... decode stopped: " + note);
+	}
+	else if (isDecoding()) {
+		disasmLines_.clear();
+		builtInstrs_ = 0;
+		disasmLines_.push_back("  [decoding...]");
 	}
 	else {
+		disasmLines_.clear();
+		builtInstrs_ = 0;
 		const Header& text = disassembler_->getSections()._text;
 		uint64_t size = text.getSize();
 		if (size == 0) {
 			disasmLines_.push_back("  [.text section not found or empty]");
 		}
 		else {
-			disasmLines_.push_back(decodeNote_.empty()
+			disasmLines_.push_back(note.empty()
 				? "  [no instructions decoded - decodeLine() is a stub for " + architecture() + "]"
-				: "  [decode failed: " + decodeNote_ + "]");
+				: "  [decode failed: " + note + "]");
 			disasmLines_.push_back("  [raw .text bytes follow]");
 			disasmLines_.push_back("");
 

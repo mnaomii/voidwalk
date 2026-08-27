@@ -8,7 +8,9 @@
 #include "ftxui/component/screen_interactive.hpp"
 #include "ftxui/dom/elements.hpp"
 
+#include <chrono>
 #include <string>
+#include <thread>
 #include <utility>
 
 namespace tui {
@@ -58,9 +60,20 @@ int UI::start() {
 	// topBar + body share the container so Tab/arrows route focus between them.
 	auto layout = Container::Vertical({ topBar, body });
 
+	// decode() runs on a worker thread; re-derive the pane feeds each frame while
+	// it is still filling in, plus one final frame right after it finishes (so the
+	// completed disassembly and any "decode stopped" note land). prevDecoding
+	// carries the "was decoding last frame" edge so the final refresh happens once.
+	bool prevDecoding = true;
+
 	// Whole-screen frame: top bar, body, then the (non-focusable) status bar,
 	// re-read from the Session every frame.
 	auto mainComponent = Renderer(layout, [&] {
+		if (session_.isDecoding() || prevDecoding) {
+			session_.refresh();
+			prevDecoding = session_.isDecoding();
+		}
+
 		std::string path = session_.filePath();
 		if (path.empty()) path = "-";
 		std::string fmt = session_.format();
@@ -138,6 +151,18 @@ int UI::start() {
 	});
 
 	mainComponent |= Modal(openDialog, &showOpen);
+
+	// Heartbeat: FTXUI only redraws on events, but the decode worker produces none.
+	// Post a custom event ~10x/s so the render loop above re-reads decode progress.
+	// A plain heartbeat (not tied to one decode) keeps working across re-opens; the
+	// Renderer itself decides when to actually rebuild. Declared after `screen` so
+	// it is stopped/joined before the screen is destroyed.
+	std::jthread ticker([&screen](std::stop_token st) {
+		while (!st.stop_requested()) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			screen.PostEvent(Event::Custom);
+		}
+	});
 
 	screen.Loop(mainComponent);
 	return 0;

@@ -9,11 +9,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# The single voidwalk binary dispatches by argv[1]: --gui, --ui/<binary>, or
-# --run-tests. Each frontend is compiled in only when its option is ON; the test
-# harness is always bundled (it is tiny and main.cpp always routes --run-tests).
-option(VOIDWALK_BUILD_TUI "Compile the FTXUI terminal frontend into voidwalk" ON)
-option(VOIDWALK_BUILD_GUI "Compile the Qt6 GUI frontend into voidwalk"        ON)
+# The single voidwalk binary dispatches by argv[1]: --gui or --ui/<binary>. Each
+# frontend is compiled in only when its option is ON. The test suite is a SEPARATE
+# executable (voidwalk-tests) so it builds and runs with neither Qt nor FTXUI - that is
+# what CI compiles.
+option(VOIDWALK_BUILD_TUI   "Compile the FTXUI terminal frontend into voidwalk" ON)
+option(VOIDWALK_BUILD_GUI   "Compile the Qt6 GUI frontend into voidwalk"        ON)
+option(VOIDWALK_BUILD_TESTS "Build the standalone voidwalk-tests binary"        ON)
+
+enable_testing()
 
 # Mirror the Visual Studio projects, which all set <OutDir>exec</OutDir>. On
 # multi-config generators CMake appends the config name unless each config is
@@ -41,18 +45,27 @@ target_include_directories(voidwalk-core PUBLIC
     "${CMAKE_SOURCE_DIR}"
     "${CMAKE_SOURCE_DIR}/main")
 
+# The core (AddressSpace mutex) and every frontend (the decode worker runs on a
+# std::jthread) need the platform threading library. Linking it PUBLIC on the core
+# propagates to voidwalk and voidwalk-tests. No-op on MSVC; -pthread on GNU/Linux.
+find_package(Threads REQUIRED)
+target_link_libraries(voidwalk-core PUBLIC Threads::Threads)
+
 # ---------------------------------------------------------------------------
 # voidwalk — one executable that bundles every frontend. main/main.cpp routes
 # by argv[1]:
 #   voidwalk --gui                -> Qt6 GUI     (needs VOIDWALK_BUILD_GUI)
 #   voidwalk --ui <bin> | <bin>   -> FTXUI TUI   (needs VOIDWALK_BUILD_TUI)
-#   voidwalk --run-tests <bin>    -> test harness (always compiled in)
 # ---------------------------------------------------------------------------
 
 add_executable(voidwalk
-    main/main.cpp
-    main/app.rc
-    tests/runner.cpp)
+    main/main.cpp)
+# app.rc is a Windows resource script (the app icon). It is only meaningful with an RC
+# compiler, so keep it off non-Windows configures - otherwise a Linux/macOS `cmake -B build`
+# fails at generation on an unknown RC source, which would break CI before it builds anything.
+if(WIN32)
+    target_sources(voidwalk PRIVATE main/app.rc)
+endif()
 target_link_libraries(voidwalk PRIVATE voidwalk-core)
 
 # --- TUI (FTXUI) -----------------------------------------------------------
@@ -144,4 +157,22 @@ if(VOIDWALK_BUILD_GUI)
     # NOTE: intentionally NOT WIN32_EXECUTABLE. The bundled binary is a console
     # app so the TUI and test modes have a console; the trade-off is that on
     # Windows the --gui mode also gets a console window behind it.
+endif()
+
+# ---------------------------------------------------------------------------
+# voidwalk-tests — the test runner. Links ONLY voidwalk-core (no Qt, no FTXUI),
+# so `cmake -B build -DVOIDWALK_BUILD_GUI=OFF -DVOIDWALK_BUILD_TUI=OFF` builds
+# and runs it on a bare CI machine. The suites synthesise their own ELF/PE/code
+# fixtures at runtime, so nothing under .testing/ is needed.
+#
+#   cmake --build build --target voidwalk-tests
+#   ctest --test-dir build --output-on-failure
+# ---------------------------------------------------------------------------
+if(VOIDWALK_BUILD_TESTS)
+    add_executable(voidwalk-tests
+        tests/test_main.cpp
+        tests/runner.cpp)
+    target_link_libraries(voidwalk-tests PRIVATE voidwalk-core)
+
+    add_test(NAME voidwalk-tests COMMAND voidwalk-tests)
 endif()

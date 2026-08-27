@@ -6,23 +6,39 @@
 
 #include <iomanip>
 
-void Disassembler::decode() {
+void Disassembler::decode(std::stop_token stopToken) {
 	decodedInstructions.clear();
 	instructionAddresses.clear();
+	readyCount.store(0, std::memory_order_relaxed);
 
 	const uint64_t start = baseSections._text.getOffset();
 	const uint64_t end = start + baseSections._text.getSize();
+
+	// Worst case is one instruction per byte of .text. Reserving that many entries
+	// up front means neither vector ever reallocates during the sweep, so a reader
+	// thread (GUI/TUI) can safely hold a reference into them and index [0,
+	// readyCount) while we keep appending: the buffer never moves out from under it.
+	// This reserve is what makes the lock-free handoff below correct.
+	const size_t worst = static_cast<size_t>(baseSections._text.getSize());
+	decodedInstructions.reserve(worst);
+	instructionAddresses.reserve(worst);
 
 	uint64_t ptr = start;
 	uint64_t vaddr = baseSections._text.getVaddr();
 
 	while (ptr < end) {
+		if (stopToken.stop_requested()) break; // re-open / shutdown asked us to bail
+
 		const uint64_t lineVaddr = vaddr;
 		uint64_t next = decodeLine(ptr, vaddr);
 
 		while (instructionAddresses.size() < decodedInstructions.size())
 			instructionAddresses.push_back(lineVaddr);
 
+		// Both vectors are equal length and consistent for [0, size) here, so
+		// publish. The release pairs with the acquire in readyInstructions(): a
+		// reader that sees this count also sees every vector write behind it.
+		readyCount.store(decodedInstructions.size(), std::memory_order_release);
 
 		if (next <= ptr) break;
 
@@ -31,6 +47,9 @@ void Disassembler::decode() {
 
 		emitDecodedLine();
 	}
+
+	decodedInstructions.shrink_to_fit();
+	instructionAddresses.shrink_to_fit();
 }
 
 uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool is64Bit) {
@@ -38,17 +57,19 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 	uint64_t instructionBytes[15]{}; // originalDisp = 0; // instr cap of 15 bytes
 	uint8_t tmp = 0x0;
 	uint8_t cnt = 0;
-	uint32_t width = 0, dispWidth = 0;   // bytes this immediate/disp occupies in the stream
+	uint32_t immWidth[3]{}, dispWidth = 0;   // bytes this immediate/disp occupies in the stream
 
 	uint64_t initAddress = address;
 
 
 	bool rexBits[4]{};
 	int positions[4]{};
-	bool checks[10]{};
+	bool checks[11]{};
+
+
 
 	enum flagsIdx {
-		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize, hasREX, hasAdditionalEscape
+		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize, hasREX, hasAdditionalEscape, isInvalid
 	};
 
 	enum rexBitsIdx {
@@ -115,8 +136,9 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 		// --- OPCODE
 		if (cnt < 15) {
 			if (x86_64_Mnemonic::opcodeTable()[tmp].isInvalid && cnt < 15 && is64Bit) {
+				checks[isInvalid] = true;
 				instructionBytes[cnt++] = tmp;
-				tmp = static_cast<uint64_t>(contents.read_u8(address++));
+				//tmp = static_cast<uint64_t>(contents.read_u8(address++));
 			}
 			else {
 				instructionBytes[cnt++] = tmp;
@@ -153,11 +175,11 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 
 		Instruction::OpcodeInfo opcodeInfo = outer;
 
-		if (opcodeInfo.def64 == Instruction::OpcodeInfo::Default64::d64) checks[hasOpsize] = false;
+		if (opcodeInfo.def64 == Instruction::OpcodeInfo::Default64::f64 && is64Bit) checks[hasOpsize] = false;
 
 		// --- MOD R/M
 		uint8_t mod = 0x0, reg_op = 0x0, rm = 0x0;
-		if (outer.hasRMByte && cnt < 15) {
+		if (outer.hasRMByte && cnt < 15 && !checks[isInvalid]) {
 			checks[hasModRM] = true;
 			instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // getting ModR/M byte
 
@@ -173,7 +195,7 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 
 
 			// --- SIB
-			if (mod != 0b11 && rm == 0b100 && cnt < 15 && !checks[hasAddrSize]) {
+			if (mod != 0b11 && rm == 0b100 && cnt < 15 && ((is64Bit)? true : !checks[hasAddrSize])) {
 				instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // read sib;
 				checks[hasSIB] = true;
 
@@ -236,8 +258,9 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 
 
 		uint64_t rawImmediates[] = { 0,0,0 };
+		int j = 0;
 		// --- IMMEDIATE(s)
-		if (x86_64_Mnemonic::hasImmediate(opcodeInfo) && cnt < 15) { // set immediate field
+		if (x86_64_Mnemonic::hasImmediate(opcodeInfo) && cnt < 15 && !checks[isInvalid]) { // set immediate field
 			checks[hasImm] = true;
 			positions[immBegin] = cnt;
 
@@ -270,23 +293,31 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 					const bool isRelative = (immAddr == static_cast<uint8_t>(x86_64::ADDRESSING::J));
 
 					switch (immSize) {
-					case cast(x86_64::SIZE::b): case cast(x86_64::SIZE::bs): width = 1; break;   // bs occupies 1 byte too
-					case cast(x86_64::SIZE::w): width = 2; break;
+					case cast(x86_64::SIZE::b): case cast(x86_64::SIZE::bs): immWidth[j] = 1; break;   // bs occupies 1 byte too
+					case cast(x86_64::SIZE::w): immWidth[j] = 2; break;
 					case cast(x86_64::SIZE::v):
-						width = (is64Bit && rexBits[w]) ? width = 8 : (checks[hasOpsize] ? 2 : 4); break;
+
+						if (rexBits[w])
+						{
+							immWidth[j] = 8;
+							if (checks[hasOpsize] && opcodeInfo.def64 == Instruction::OpcodeInfo::Default64::d64)
+								immWidth[j] = 2;
+						}
+						else immWidth[j] = checks[hasOpsize] ? 2 : 4; break;
+
 					case cast(x86_64::SIZE::z): 
-						width = checks[hasOpsize] ? 2 : 4; break;
-					case cast(x86_64::SIZE::p): width = checks[hasOpsize] ? 4 : 6; break;
+						immWidth[j] = checks[hasOpsize] ? 2 : 4; break;
+					case cast(x86_64::SIZE::p): immWidth[j] = checks[hasOpsize] ? 4 : 6; break;
 					default:
 						fprintf(stderr, "Immediate x86_64::SIZE not implemented yet (opcode %#x)\n", opcode);
 						break;
 					}
 
 					if (immAddr == cast(x86_64::ADDRESSING::O))
-						width = is64Bit ? (checks[hasAddrSize] ? 4 : 8) : (checks[hasAddrSize] ? 2 : 4);
+						immWidth[j] = is64Bit ? (checks[hasAddrSize] ? 4 : 8) : (checks[hasAddrSize] ? 2 : 4);
 
 					int64_t value = 0;
-					switch (width) {
+					switch (immWidth[j]) {
 					case 1:
 						value = isRelative ? static_cast<int8_t>(contents.read_u8(address))
 							: static_cast<uint64_t>(contents.read_u8(address));
@@ -319,7 +350,7 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 					}
 
 
-					address += width;
+					address += immWidth[j++];
 
 					// rel is counted from the END of the instruction, so resolve the target only once
 					// every byte of it has been consumed - address - initAddress is now its full length.
@@ -333,7 +364,7 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 		}
 
 		auto instruction = std::make_unique<x86_64>();
-		instruction->decode(instructionBytes, checks, positions, rexBits, width, dispWidth, rawImmediates, is64Bit);
+		instruction->decode(instructionBytes, checks, positions, rexBits, immWidth, dispWidth, rawImmediates, is64Bit);
 		decodedInstructions.push_back(std::move(instruction));
 
 		return address; // address where the next instr begins
@@ -345,6 +376,8 @@ uint64_t Disassembler::decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool 
 }
 
 
+
+// prints the most recenlty decoded line to the embedded streams
 void Disassembler::emitDecodedLine() {
 
 	for(auto stream : outputStreams)

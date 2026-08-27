@@ -1,19 +1,26 @@
 #ifndef ADDRESS_SPACE_H
 #define ADDRESS_SPACE_H
 
-#include <fstream>
 #include <cstdint>
 #include <string>
+#include <cstring>
 
 class AddressSpace {
 private:
-	std::string binary;
-	size_t maxOffset;
-	std::ifstream f;
 
-	void initialize(uint64_t& offset, size_t size);
+	// base pointer to array of mmap
+	void* base;
+
+	// max file size in bytes from metadata
+	size_t maxSize;
+
+
 
 public:
+
+	template <typename T>
+	T readType(uint64_t offset);
+
 
 	AddressSpace(std::string filename);
 
@@ -24,12 +31,8 @@ public:
 
 	const size_t size() noexcept;
 
-
-
-	template <typename T>
-	T readType(uint64_t offset);
-
-	AddressSpace(const AddressSpace& other);
+	AddressSpace(const AddressSpace&) = delete;
+	AddressSpace& operator=(const AddressSpace&) = delete;
 	~AddressSpace();
 };
 #endif

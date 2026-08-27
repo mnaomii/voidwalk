@@ -22,8 +22,8 @@ struct SymbolInfo {
 // Derives the sidebar's contents from what the core already knows — no new
 // Session or Disassembler API. Three passes:
 //
-//   Functions  every address that appears as a `call` target in
-//              Session::disassembly(), plus .text's entry, named sub_<vaddr>.
+//   Functions  every address that appears as a `call` target in the decoded
+//              rows (Session::row*()), plus .text's entry, named sub_<vaddr>.
 //              These are real call graph facts, not guesses.
 //   Strings    printable ASCII runs of >= kMinStringLen bytes in .rodata and
 //              .data, quoted and truncated for display.

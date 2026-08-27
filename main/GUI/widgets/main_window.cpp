@@ -20,6 +20,7 @@
 #include <QMenuBar>
 #include <QStackedWidget>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 
@@ -60,6 +61,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
 	disasm_->setTheme(ThemeManager::current()); // delegate colors (created after applyTheme)
 	symbols_->setTheme(ThemeManager::current());
+
+	// Polls the background decode: while the worker fills the instruction vectors,
+	// this rebuilds the rows up to the published count and repaints. Stops itself
+	// on the first tick that sees the decode finished (that tick shows the full
+	// result). Runs only between start()/stop(), so it costs nothing when idle.
+	decodeTimer_ = new QTimer(this);
+	decodeTimer_->setInterval(100);
+	connect(decodeTimer_, &QTimer::timeout, this, &MainWindow::onDecodeTick);
 
 	applyAiVisibility();
 	refreshAll();
@@ -313,8 +322,36 @@ void MainWindow::openPath(const QString& path) {
 		disasm_->clearPendingEdits();
 		recompileAct_->setEnabled(false);
 	}
+
+	// decode() runs on a worker thread. If it is still going, poll it so the pane
+	// fills in progressively and the final rows land on the tick that sees it stop.
+	// If it has ALREADY finished — a small binary decodes in microseconds, often
+	// before we get here — the timer would never start and Session's one open()-time
+	// refresh() ran while ready was still 0, leaving the pane empty. So pull the
+	// finished result now: observing isDecoding()==false is the acquire that makes
+	// the whole decode visible, so this refresh() sees every row.
+	if (session_.isDecoding())
+		decodeTimer_->start();
+	else
+		session_.refresh();
+
 	refreshAll();
 	setStatus(QString::fromStdString(session_.status()));
+}
+
+void MainWindow::onDecodeTick() {
+	session_.refresh(); // ingest newly-decoded rows (append-only)
+	if (session_.isDecoding()) {
+		// Only the disassembly grows between polls. The symbol/memory/register panes
+		// are fixed at open — refreshing them every 100ms is pure waste (the symbol
+		// pane re-scans the binary and rebuilds its whole tree each time). So poke
+		// just the disassembly and the count while the worker runs.
+		disasm_->refresh();
+		setCounts();
+	} else {
+		refreshAll();          // final tick: everything reflects the completed decode
+		decodeTimer_->stop();
+	}
 }
 
 void MainWindow::onOpen() {
@@ -376,7 +413,7 @@ void MainWindow::setCounts() {
 		countLabel_->clear();
 		return;
 	}
-	countLabel_->setText(tr("%n instr", "", static_cast<int>(session_.disassembly().size())));
+	countLabel_->setText(tr("%n instr", "", static_cast<int>(session_.rowCount())));
 }
 
 void MainWindow::refreshAll() {

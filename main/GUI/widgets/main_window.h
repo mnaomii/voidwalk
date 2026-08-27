@@ -12,6 +12,7 @@ class QDockWidget;
 class QLabel;
 class QLineEdit;
 class QStackedWidget;
+class QTimer;
 
 namespace gui {
 
@@ -57,6 +58,7 @@ private slots:
 	void onDebugStub();       // shared handler for the not-yet-implemented actions
 	void onEditsChanged();
 	void onGotoSubmitted();   // toolbar address field -> disasm_->navigateTo()
+	void onDecodeTick();      // polls the background decode, refreshes as it fills
 
 private:
 	void buildActions();
@@ -101,6 +103,8 @@ private:
 	QLineEdit* gotoField_ = nullptr;
 	QLabel* countLabel_ = nullptr; // "N instr"
 	QLabel* archLabel_ = nullptr;  // format/arch
+
+	QTimer* decodeTimer_ = nullptr; // drives progressive refresh while decoding
 };
 
 } // namespace gui

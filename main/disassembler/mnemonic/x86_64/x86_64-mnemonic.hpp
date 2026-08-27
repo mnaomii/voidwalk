@@ -22,7 +22,7 @@ public:
 		return hasAddrSize ? std::string(addr16[r]) : "";
 	}
 
-	static std::string registerOf(const uint16_t& r, const uint8_t size, const bool& is16bit, const bool& is64bit = false) {
+	static std::string registerOf(const uint16_t& r, const uint8_t size, const bool& is16bit,  const bool& hasREX, const bool& is64bit = false) {
 		static constexpr std::string_view r8_32 [] = { "AL","CL","DL","BL",
 														"AH","CH","DH","BH" };
 
@@ -39,10 +39,10 @@ public:
 		static constexpr std::string_view r64[] = { "RAX","RCX","RDX","RBX","RSP","RBP","RSI","RDI",
 											"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15" };
 
-		if (r > 15)
+		if ((r > 15 && is64bit) || r > 7)
 			throw std::runtime_error("Malformed expression detected..");
 		switch (static_cast<SIZE>(size)) {
-		case SIZE::b: return (is64bit) ? std::string(r8_64[r]) : std::string(r8_32[r]);
+		case SIZE::b: return (hasREX) ? std::string(r8_64[r]) : std::string(r8_32[r]);
 		case SIZE::w: return std::string(r16[r]);
 		default:      return is64bit ? std::string(r64[r])                                 // v/z: REX.W(64) >
 		                   : (is16bit ? std::string(r16[r]) : std::string(r32[r]));        //      0x66(16) > 32
@@ -51,8 +51,8 @@ public:
 
 	// Legacy two-arg form: a bare is16bit flag means "default operand size, 16 or 32".
 	// Kept so existing callers keep working; it cannot reach the 8-bit set (pass a size for that).
-	static std::string registerOf(uint16_t r, bool is16bit, bool is64bit = false) {
-		return registerOf(r, static_cast<uint8_t>(SIZE::v), is16bit, is64bit);
+	static std::string registerOf(uint16_t r, bool is16bit, bool hasREX, bool is64bit = false) {
+		return registerOf(r, static_cast<uint8_t>(SIZE::v), is16bit, hasREX, is64bit);
 	}
 
 

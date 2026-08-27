@@ -56,11 +56,11 @@ static bool isPrefix(uint8_t op)										{ return !prefixTable()[op].empty(); }
 
 x86_64() {};
 
-inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[10], const int (&positions)[4], const bool (&rexBits)[4], const uint32_t& immWidth, const uint32_t& dispWidth, const uint64_t(&rawImmediates)[3], bool is64Bit) {
+inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[11], const int (&positions)[4], const bool (&rexBits)[4], const uint32_t (&immWidth)[3], const uint32_t& dispWidth, const uint64_t(&rawImmediates)[3], bool is64Bit) {
 	
 	uint8_t mod = 0, reg_op = 0, rm = 0, scale = 0, index = 0, base = 0;
 	enum flagsIdx { 
-		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize, hasREX, hasAdditionalEscape
+		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize, hasREX, hasAdditionalEscape, isInvalid
 	};
 
 	enum rexBitsIdx {
@@ -70,6 +70,13 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[10], 
 	enum positionsIdx {
 		prefixEnd, opcodeEnd, immBegin, rexBegin
 	};
+
+	if (checks[isInvalid]) {
+		instructionStr = "(bad)";
+		for (int i = 0; i < positions[opcodeEnd]; ++i)
+			machineCode += std::format("{:02x}", instructionBytes[i]);
+		return;
+	}
 
 	std::string segment = "", fmt = "";
 	int i = 0;
@@ -183,14 +190,14 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[10], 
 		memory += "[";
 		if (checks[hasSIB]) {
 			if(! (base == 5 && mod == 0))
-			memory += x86_64_Mnemonic::registerOf(base, checks[hasAddrSize], is64Bit);
+			memory += x86_64_Mnemonic::registerOf(base, checks[hasAddrSize], checks[hasREX], is64Bit);
 			if (index != static_cast<uint32_t>(REGISTER::SP)) {                      // index 100 = no index
 				memory += (!(base == 5 && mod == 0)) ? " + " : "";
-				memory += x86_64_Mnemonic::registerOf(index, checks[hasAddrSize], is64Bit) + "*" + std::to_string(static_cast<int>(scale));
+				memory += x86_64_Mnemonic::registerOf(index, checks[hasAddrSize], checks[hasREX], is64Bit) + "*" + std::to_string(static_cast<int>(scale));
 			}
 		}
 		else if (!(mod == 0b00 && rm == (checks[hasAddrSize] ? 0b110 :  0b101))) {                                    // that form has no base register
-			memory += checks[hasAddrSize] ? x86_64_Mnemonic::registerOf16(rm, true):  x86_64_Mnemonic::registerOf(rm, checks[hasAddrSize], rexBits[w]);
+			memory += checks[hasAddrSize] ? x86_64_Mnemonic::registerOf16(rm, true):  x86_64_Mnemonic::registerOf(rm, checks[hasAddrSize], checks[hasREX], is64Bit);
 		}
 		if (checks[hasDisp]) {
 			// Nothing printed yet means there is no base register: the displacement is an
@@ -225,7 +232,7 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[10], 
 
 			const uint64_t hexValue = (m == ADDRESSING::J) ? rawImmediates[j] : immediate[j];
 
-			for(int k=0; k<immWidth; ++k)
+			for(int k=0; k<immWidth[j]; ++k)
 				fmt+=std::format("{:02x} ", (hexValue >> (8 * k)) & 0xff);
 			machineCode += fmt;
 			++j;
@@ -241,12 +248,12 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[10], 
 
 		case ADDRESSING::E:
 		case ADDRESSING::M:		// memory
-			operands[i] = (mod == 0b11) ? x86_64_Mnemonic::registerOf(rm, op[i].size,checks[hasOpsize],rexBits[w]) : (segment + memory);
+			operands[i] = (mod == 0b11) ? x86_64_Mnemonic::registerOf(rm, op[i].size,checks[hasOpsize], checks[hasREX], rexBits[w]) : (segment + memory);
 			if (mod != 0b11) segment = "";
 			break;
 
 		case ADDRESSING::G:
-			operands[i] = x86_64_Mnemonic::registerOf(reg_op, op[i].size, checks[hasOpsize], rexBits[w]);
+			operands[i] = x86_64_Mnemonic::registerOf(reg_op, op[i].size, checks[hasOpsize], checks[hasREX], rexBits[w]);
 			break;
 
 		case ADDRESSING::S:		// segment
@@ -274,7 +281,7 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[10], 
 			// registerOf then applies: REX.W(64) > 0x66(16) > 32.
 			const bool wide64 = is64Bit
 				&& (rexBits[w] || (opcode.def64 == Instruction::OpcodeInfo::Default64::d64 && !checks[hasOpsize]));
-			operands[i] = x86_64_Mnemonic::registerOf(reg, op[i].size, checks[hasOpsize], wide64);
+			operands[i] = x86_64_Mnemonic::registerOf(reg, op[i].size, checks[hasOpsize], checks[hasREX], wide64);
 			break;
 		}
 		case ADDRESSING::None:

@@ -88,9 +88,10 @@ std::vector<SymbolInfo> collectSymbols(const Session& session) {
 	std::set<uint64_t> targets;
 	if (session.textVaddr() != 0)
 		targets.insert(session.textVaddr());
-	for (const DisasmRow& row : session.disassembly()) {
+	const size_t rows = session.rowCount();
+	for (size_t i = 0; i < rows; ++i) {
 		uint64_t target = 0;
-		if (callTarget(row.text, &target))
+		if (callTarget(session.rowText(i), &target))
 			targets.insert(target);
 	}
 	for (uint64_t addr : targets) {

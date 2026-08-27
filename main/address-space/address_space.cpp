@@ -1,55 +1,102 @@
 #include "address_space.hpp"
 #include <stdexcept>
 
-AddressSpace::AddressSpace(std::string filename) {
-	this->binary = filename;
 
-	this->f.open(this->binary, std::ios::binary | std::ios::ate);
-	if (!this->f.is_open()) throw std::runtime_error("Cannot open executable.");
+#ifdef _WIN32
 
-	this->maxOffset = this->f.tellg();
-	this->f.close();
+	#define WIN32_LEAN_AND_MEAN   // skip niche headers
+	#define NOMINMAX              // stop windows.h from clobbering std::min/std::max
+	#include <windows.h>
 
-	this->f.open(this->binary, std::ios::binary);
-	if (!this->f.is_open()) throw std::runtime_error("Executable cannot be read.");
+#else
+
+	#include <sys/stat.h>
+	#include <sys/mman.h>
+	#include <fcntl.h>
+	#include <unistd.h>
+
+#endif
+
+AddressSpace::AddressSpace(std::string filename) : base(nullptr), maxSize(0){ // using mmap - ability to rewind in the file efficiently
+
+	
+#ifdef _WIN32
+	
+	// open file / get descriptor
+	HANDLE f = CreateFileA(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+	if (f == INVALID_HANDLE_VALUE) throw std::length_error("[voidwalk] : Invalid file.\n");
+
+	LARGE_INTEGER size;
+	if (!GetFileSizeEx(f, &size))
+	{
+		CloseHandle(f); 
+		throw std::length_error("[voidwalk] : Invalid file.\n");
+	}
+
+
+	// get filesize in bytes
+	maxSize = size.QuadPart;
+
+	// windows equivalent of mmap
+	HANDLE fMap = CreateFileMapping(f, nullptr, PAGE_READONLY, 0, 0, nullptr);
+	base = MapViewOfFile(fMap, FILE_MAP_READ, 0, 0, 0);
+
+	// close handles
+	CloseHandle(f); CloseHandle(fMap);
+
+	if (!base) throw std::length_error("[voidwalk] : cannot map file.\n");
+
+
+#else // POSIX ( macOS, Linux )
+	
+
+	// open a file / get the descriptor
+	FILE* f = open(filename.c_str(), O_RDONLY);
+	if (f < 0) throw std::length_error("[voidwalk] : Invalid file.\n");
+
+	struct stat st;
+	stat(f, &st);
+
+	// get the size in bytes from the stats
+	this->maxSize = st.st_size;
+	if (maxSize == 0) std::length_error("[voidwalk] : Invalid file.\n");
+
+	base = mmap(nullptr, maxSize, PROT_READ, MAP_PRIVATE, f, 0);
+	close(f);
+
+	if (base == MAP_FAILED) throw std::length_error("[voidwalk] : cannot map file.\n");
+
+#endif
 
 }
 
+// unmaps the file from memory
 AddressSpace::~AddressSpace() {
-	if (this->f.is_open())
-		f.close();
-}
+#ifdef _WIN32
+	
+	UnmapViewOfFile(base);
 
-AddressSpace::AddressSpace(const AddressSpace& other) {
-	this->binary = other.binary;
-	this->maxOffset = other.maxOffset;
-	this->f.open(this->binary, std::ios::binary);
-	if (!this->f.is_open()) throw std::runtime_error("Executable cannot be read.");
+#else // POSIX
 
+	munmap(base, maxSize);
+
+#endif
 }
 
 
 const size_t AddressSpace::size() noexcept {
-	return this->maxOffset;
-}
-
-void AddressSpace::initialize(uint64_t& offset, size_t size) {
-	if (static_cast<size_t>(offset) + size > this->maxOffset) throw std::length_error("Invalid offset.");
-	f.clear();
-	this->f.seekg(offset, std::ios::beg);
+	return maxSize;
 }
 
 
 template <typename T>
 T AddressSpace::readType(uint64_t offset) {
 
-	try {
-		this->initialize(offset, sizeof(T));
-	}
-	catch (const std::length_error& e) { throw; }
-	catch (const std::runtime_error& e) { throw; }
-	T val;
-	f.read(reinterpret_cast<char*>(&val), sizeof(T));
+
+	if (offset + sizeof(T) > maxSize ) throw std::length_error("Reading past bounds.\n");
+	T val{};
+	std::memcpy(&val, static_cast<const char*>(base) + offset, sizeof(T));
 	return val;
 }
 

@@ -6,6 +6,8 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <atomic>
+#include <stop_token>
 #include "../address-space/address_space.hpp"
 #include "miscellaneous/sections/base/header.hpp"
 #include "mnemonic/instruction.hpp"
@@ -53,6 +55,8 @@ protected:
 
     uint64_t decodeLine_x86_64(uint64_t address, uint64_t vaddr, bool is64Bit);
 
+    std::atomic<size_t> readyCount{0};
+
 public:
     Disassembler(AddressSpace& temp, const std::vector<std::ostream*>& stream) : contents(temp), architecture(0x00), offset(0x00), outputStreams(stream) {
 
@@ -67,7 +71,11 @@ public:
     virtual uint64_t decodeLine(uint64_t address, uint64_t vaddr)=0;
     virtual ~Disassembler() = default;
 
-    void decode();
+    // Sweeps .text and appends to decodedInstructions / instructionAddresses.
+    // Runs synchronously when called bare (tests/CLI); the GUI/TUI run it on a
+    // std::jthread, which passes a stop_token so a re-open/shutdown can cancel a
+    // long sweep. Readers use readyInstructions() to see partial progress safely.
+    void decode(std::stop_token stopToken = {});
 
     // read-only views for the UI layers (TUI/GUI); they must not mutate core state
     const Registers_x86_64& getRegisters() const { return registers; }
@@ -76,6 +84,8 @@ public:
     const std::vector<uint64_t>& getInstructionAddresses() const { return instructionAddresses; }
     const Sections& getSections() const { return baseSections; }
     AddressSpace& getAddressSpace() { return contents; }
+
+    size_t readyInstructions() const { return readyCount.load(std::memory_order_acquire); }
 
 };
 

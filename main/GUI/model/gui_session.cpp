@@ -88,15 +88,35 @@ bool Session::open(const std::string& path) {
 }
 
 void Session::runDecode() {
-	decodeNote_.clear();
 	if (!disassembler_) return;
-	try {
-		disassembler_->decode();
-	}
-	catch (const std::exception& e) {
-		// Partial results survive: whatever decoded before the throw is kept.
-		decodeNote_ = e.what();
-	}
+	if (!decodeState_) decodeState_ = std::make_shared<DecodeState>();
+	decodeState_->note.clear();
+	// New sweep: reset the published count / fallback and bump the generation so the
+	// view resets. Rows are read through to the core, so there is nothing else to drop.
+	shownRows_ = 0;
+	fallbackRows_.clear();
+	decodedForReal_ = false;
+	++decodeGen_;
+	decodeState_->running.store(true, std::memory_order_release);
+
+	// Capture shared_ptr copies (never `this`): they keep the disassembler and its
+	// address space alive for the worker even if a re-open replaces the Session's
+	// own pointers, and stay valid wherever the Session lives. Move-assigning the
+	// jthread first stops+joins any previous decode — decode() checks the
+	// stop_token each line, so that returns promptly.
+	decodeThread_ = std::jthread(
+		[disasm = disassembler_, space = space_, state = decodeState_](std::stop_token st) {
+			(void)space; // held only to keep the AddressSpace alive under the worker
+			try {
+				disasm->decode(st);
+			}
+			catch (const std::exception& e) {
+				// Partial results survive: whatever decoded before the throw is kept.
+				state->note = e.what();
+			}
+			// Release so a reader that sees running==false also sees note above.
+			state->running.store(false, std::memory_order_release);
+		});
 }
 
 std::string Session::architecture() const {
@@ -171,48 +191,38 @@ std::string Session::applyPatches(const std::vector<std::pair<size_t, std::strin
 }
 
 void Session::refresh() {
-	disasmRows_.clear();
-	decodedForReal_ = false;
-	if (!loaded()) return;
-
-	const auto& decoded = disassembler_->getDecodedInstructions();
-	const auto& addresses = disassembler_->getInstructionAddresses();
-	const Header& text = disassembler_->getSections()._text;
-	const uint64_t textEnd = text.getOffset() + text.getSize();
-
-	if (!decoded.empty()) {
-		decodedForReal_ = true;
-		disasmRows_.reserve(decoded.size());
-		for (size_t i = 0; i < decoded.size(); ++i) {
-			DisasmRow row;
-			// addresses is parallel to decoded, but stay defensive: a
-			// decodeLine that throws mid-push could leave it short.
-			row.vaddr = (i < addresses.size()) ? addresses[i] : 0;
-			row.text = formatDisasmText(decoded[i]->decodeLineString());
-
-			// Instruction length = distance to the next instruction (the core
-			// records start addresses only). Last one is clamped to .text end.
-			if (i < addresses.size() && row.vaddr >= text.getVaddr()) {
-				uint64_t off = text.getOffset() + (row.vaddr - text.getVaddr());
-				uint64_t next = (i + 1 < addresses.size())
-					? text.getOffset() + (addresses[i + 1] - text.getVaddr())
-					: textEnd;
-				if (next > off && off < textEnd) {
-					uint64_t len = next - off;
-					if (len > 16) len = 16; // desynced decode; don't dump runs
-					auto raw = bytes(off, static_cast<size_t>(len));
-					for (size_t b = 0; b < raw.size(); ++b)
-						row.bytes += (b ? " " : "") + hexByte(raw[b]);
-				}
-			}
-			disasmRows_.push_back(std::move(row));
-		}
+	if (!loaded()) {
+		decodedForReal_ = false;
+		shownRows_ = 0;
+		fallbackRows_.clear();
 		return;
 	}
 
-	// Fallback: decoder for this arch is a stub — show raw .text bytes, 8 per
-	// row, so the pane still has content. decodeNote()/decodedForReal() tell
-	// the pane to explain why. Capped so a huge .text can't flood the model.
+	// Only [0, ready) is safe to read while decode() runs on the worker; this is
+	// the acquire that pairs with the worker's release store of readyCount.
+	const size_t ready = disassembler_->readyInstructions();
+	if (ready > 0) {
+		decodedForReal_ = true;
+		shownRows_ = ready; // expose exactly the published rows; row*() read through
+		return;
+	}
+
+	// Nothing decoded yet. While the worker is still running, show an empty pane for
+	// this frame rather than flashing the "no decoder for this arch" fallback; the
+	// next poll will have rows. The fallback below is only for a genuine stub.
+	if (isDecoding()) return;
+
+	// Decode finished with zero instructions -> unimplemented-arch fallback.
+	decodedForReal_ = false;
+	buildFallback();
+}
+
+// Raw-bytes fallback for a stub arch: no Instruction objects exist to read
+// through, so build a small capped set of "db 0x.." rows here. Bounded, so a huge
+// .text can't flood it. decodeNote()/decodedForReal() tell the pane to explain why.
+void Session::buildFallback() {
+	fallbackRows_.clear();
+	const Header& text = disassembler_->getSections()._text;
 	if (text.getSize() == 0) return;
 	constexpr uint64_t kMaxBytes = 4096;
 	uint64_t total = text.getSize() < kMaxBytes ? text.getSize() : kMaxBytes;
@@ -223,15 +233,45 @@ void Session::refresh() {
 		size_t n = raw.size() - i < 8 ? raw.size() - i : 8;
 		for (size_t b = 0; b < n; ++b)
 			row.bytes += (b ? " " : "") + hexByte(raw[i + b]);
-		// The Instruction column needs text here too. Leaving it empty renders as
-		// a blank column for the whole table, which reads as a broken pane rather
-		// than as "no decoder for this arch" - the banner says the latter. "db" is
-		// the usual spelling for a run of bytes no decoder claimed.
+		// "db" is the usual spelling for a run of bytes no decoder claimed; leaving
+		// the text empty would read as a broken pane rather than "no decoder here".
 		row.text = "db ";
 		for (size_t b = 0; b < n; ++b)
 			row.text += (b ? ", 0x" : "0x") + hexByte(raw[i + b]);
-		disasmRows_.push_back(std::move(row));
+		fallbackRows_.push_back(std::move(row));
 	}
+}
+
+size_t Session::rowCount() const {
+	if (!loaded()) return 0;
+	return decodedForReal_ ? shownRows_ : fallbackRows_.size();
+}
+
+uint64_t Session::rowVaddr(size_t i) const {
+	if (!loaded()) return 0;
+	if (!decodedForReal_)
+		return i < fallbackRows_.size() ? fallbackRows_[i].vaddr : 0;
+	if (i >= shownRows_) return 0; // never read past what the worker published
+	return disassembler_->getInstructionAddresses()[i];
+}
+
+std::string Session::rowBytes(size_t i) const {
+	if (!loaded()) return {};
+	if (!decodedForReal_)
+		return i < fallbackRows_.size() ? fallbackRows_[i].bytes : std::string{};
+	if (i >= shownRows_) return {};
+	// Straight from the decoder's recorded machine code — no file IO, no core copy.
+	std::string b = disassembler_->getDecodedInstructions()[i]->getMachineCode();
+	while (!b.empty() && b.back() == ' ') b.pop_back(); // trim the trailing separator
+	return b;
+}
+
+std::string Session::rowText(size_t i) const {
+	if (!loaded()) return {};
+	if (!decodedForReal_)
+		return i < fallbackRows_.size() ? fallbackRows_[i].text : std::string{};
+	if (i >= shownRows_) return {};
+	return formatDisasmText(disassembler_->getDecodedInstructions()[i]->decodeLineString());
 }
 
 } // namespace gui

@@ -92,14 +92,12 @@ QString AiChatPane::buildContext() const {
 	if (limit <= 0) limit = 200;
 
 	QStringList lines;
-	int count = 0;
-	for (const auto& row : session_->disassembly()) {
-		if (count >= limit) break;
+	const size_t rows = session_->rowCount();
+	for (size_t i = 0; i < rows && static_cast<int>(i) < limit; ++i) {
 		lines << QString("0x%1  %2  %3")
-			.arg(row.vaddr, 8, 16, QLatin1Char('0'))
-			.arg(QString::fromStdString(row.bytes))
-			.arg(QString::fromStdString(row.text));
-		++count;
+			.arg(session_->rowVaddr(i), 8, 16, QLatin1Char('0'))
+			.arg(QString::fromStdString(session_->rowBytes(i)))
+			.arg(QString::fromStdString(session_->rowText(i)));
 	}
 
 	return header + QStringLiteral("\nDisassembly:\n") + lines.join(QStringLiteral("\n"));
