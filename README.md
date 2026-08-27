@@ -14,7 +14,7 @@ A C++20 binary analysis tool targeting **ELF** and **PE** executable formats. Au
 - **ELF section parsing** (x86 / x86_64)
 - **PE Section parsing** (x86 / x86_64)
 - **Architecture detection** - reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF/PE header
-- **MMAP-backed binary reader** - `AddressSpace` provides random-access reads (`read_u8/16/32/64`) by mapping the executable into the memory (mmap).
+- **MMAP-backed binary reader** - `AddressSpace` provides random-access reads (`read_u8/16/32/64`) by mapping the executable into the memory (mmap) - File-backed random reads were *deprecated* for optimization reasons
 - **PE & ELF binary disassembly (x86)** - Decodes every machine code instruction in a subclass of *Instruction*.
 - **Console scripting interface** - print the decoded assembly to stdout/files, dump the hex of the executable..
 - **IA-32 decoding** - base instructions, twoByte, instruction groups, all implemented
