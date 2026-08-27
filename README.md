@@ -19,6 +19,7 @@ A C++20 binary analysis tool targeting **ELF** and **PE** executable formats. Au
 - **Console scripting interface** - print the decoded assembly to stdout/files, dump the hex of the executable..
 - **IA-32 decoding** - base instructions, twoByte, instruction groups, all implemented
 - **AMD64 decoding (!)** - extending upon the IA-32 ISA, still needs some bugfixes
+- **Async decoding (TUI & GUI only)** - Uses a separate thread to decode the instructions, in order for the GUI to be responsive. 
 
 
 ### Not yet implemented
