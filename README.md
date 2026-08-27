@@ -98,6 +98,9 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 
 **Longer-term**
 - [ ] DWARF debug info parsing
+- [ ] ARM32 Support
+- [ ] AArch64 Support
+- [ ] Memory Optimizations
 - [ ] PE `.reloc` and `.pdata` support
 - [ ] GUI jump tree with zoom/pan
 - [ ] Dynamic tracer with breakpoint support
