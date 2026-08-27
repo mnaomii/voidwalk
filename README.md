@@ -65,7 +65,7 @@ exec/voidwalk-tui.exe <path-to-binary>
 Expects flags + exactly one path to an executable.
 Flags:
 ``` text
-(--ui) -> launches the TUI
+(--tui) -> launches the TUI
 (--gui) -> launches the GUI (default)
 (--run-tests) -> runs a set of tests which verify the correctness of the code
 (--print <executable> <file1> <file2> ..) -> prints the assembly to stdout and the specified files
