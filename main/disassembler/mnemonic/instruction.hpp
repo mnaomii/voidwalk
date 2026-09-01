@@ -1,6 +1,6 @@
+#pragma once
 #include <cstdint>
 #include <string>
-#pragma once
 
 
 class Instruction {
@@ -51,4 +51,5 @@ public:
 	//void decode() {}
 	virtual std::string& decodeLineString() = 0;
 	virtual std::string& getMachineCode() = 0;
+	virtual ~Instruction() = default;
 };

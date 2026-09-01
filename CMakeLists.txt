@@ -130,6 +130,7 @@ if(VOIDWALK_BUILD_GUI)
         main/GUI/ai/ai_client.cpp
         main/GUI/dialogs/settings_dialog.cpp
         main/GUI/panes/ai_chat_pane.cpp
+        main/GUI/panes/column_fit.cpp
         main/GUI/panes/disasm_delegate.cpp
         main/GUI/panes/disassembly_pane.cpp
         main/GUI/panes/memory_pane.cpp
@@ -175,4 +176,88 @@ if(VOIDWALK_BUILD_TESTS)
     target_link_libraries(voidwalk-tests PRIVATE voidwalk-core)
 
     add_test(NAME voidwalk-tests COMMAND voidwalk-tests)
+endif()
+
+# ---------------------------------------------------------------------------
+# Sanitizers.
+#
+# The robustness suite asks "does this malformed binary crash us?", and a plain
+# build can only answer that for faults that actually fault - reading
+# instructionBytes[-1] reads adjacent stack and looks like a pass. Under ASan/UBSan
+# the same input aborts and the check fails, which is the point.
+#
+#   cmake -B build -DVOIDWALK_SANITIZE=ON -DVOIDWALK_BUILD_GUI=OFF -DVOIDWALK_BUILD_TUI=OFF
+#   cmake --build build --target voidwalk-tests
+#   ./exec/voidwalk-tests
+#
+# -fno-sanitize-recover=all is not optional here: UBSan otherwise prints a diagnostic
+# and continues, so an out-of-bounds index lands in the log while the check still
+# passes. With it, detected UB aborts and the suite sees the failure.
+#
+# MSVC has /fsanitize=address but no UBSan and no -fno-sanitize-recover equivalent,
+# so ASan alone is applied there.
+# ---------------------------------------------------------------------------
+option(VOIDWALK_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+
+if(VOIDWALK_SANITIZE)
+    if(MSVC)
+        set(VOIDWALK_SAN_FLAGS /fsanitize=address)
+        message(STATUS "Sanitizers: ASan (MSVC has no UBSan)")
+    else()
+        set(VOIDWALK_SAN_FLAGS
+            -fsanitize=address,undefined
+            -fno-sanitize-recover=all
+            -fno-omit-frame-pointer)
+        message(STATUS "Sanitizers: ASan + UBSan, halting on first error")
+    endif()
+
+    # PUBLIC on the core: both voidwalk and voidwalk-tests link it, so the flags reach
+    # every target that matters without being repeated. Sanitizers must be applied at
+    # compile AND link time, hence both calls.
+    target_compile_options(voidwalk-core PUBLIC ${VOIDWALK_SAN_FLAGS})
+    target_link_options(voidwalk-core PUBLIC ${VOIDWALK_SAN_FLAGS})
+endif()
+
+# ---------------------------------------------------------------------------
+# Warnings.
+#
+# On by default rather than opt-in: several AUDIT.md findings are diagnosed by the
+# compiler for free - the discarded std::length_error (-Wunused-value), the varargs
+# type mismatch in the immediate-size fallback (-Wformat), the malformed bounds-check
+# line in readType (-Wmisleading-indentation), and the by-value PE_Sections parameter
+# (-Wunused-parameter).
+#
+# -Wmissing-field-initializers is turned back OFF deliberately. The opcode tables build
+# ~4,500 OpcodeInfo/TableOperand aggregates through the P()/OP() macros, each leaving
+# trailing members to be value-initialised on purpose. That produces 4,554 warnings
+# against about 70 real ones - a ratio at which nobody reads the output and the whole
+# flag gets switched off. Suppressing the one noisy category is what keeps the rest
+# usable.
+#
+# Applied to every target, not just the core: main.cpp, the TUI and the GUI are where
+# most of the code lives. Qt and FTXUI arrive through imported targets whose includes
+# are SYSTEM, so their headers stay quiet.
+# ---------------------------------------------------------------------------
+if(MSVC)
+    set(VOIDWALK_WARN_FLAGS /W4)
+else()
+    set(VOIDWALK_WARN_FLAGS -Wall -Wextra -Wno-missing-field-initializers)
+endif()
+
+foreach(voidwalk_target voidwalk-core voidwalk voidwalk-tests)
+    if(TARGET ${voidwalk_target})
+        target_compile_options(${voidwalk_target} PRIVATE ${VOIDWALK_WARN_FLAGS})
+    endif()
+endforeach()
+
+# Opt-in: make the build fail on a warning. Off by default so a new compiler version
+# introducing a new diagnostic cannot break a local build, but worth turning on in CI.
+option(VOIDWALK_WERROR "Treat compiler warnings as errors" OFF)
+if(VOIDWALK_WERROR)
+    foreach(voidwalk_target voidwalk-core voidwalk voidwalk-tests)
+        if(TARGET ${voidwalk_target})
+            target_compile_options(${voidwalk_target} PRIVATE
+                $<IF:$<BOOL:${MSVC}>,/WX,-Werror>)
+        endif()
+    endforeach()
 endif()

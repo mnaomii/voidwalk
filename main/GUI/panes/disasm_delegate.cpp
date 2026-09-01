@@ -2,9 +2,12 @@
 
 #include "disassembly_pane.h"
 
+#include <QAbstractItemView>
 #include <QApplication>
+#include <QHelpEvent>
 #include <QPainter>
 #include <QSet>
+#include <QToolTip>
 #include <algorithm>
 
 namespace gui {
@@ -52,6 +55,19 @@ bool isImmediate(const QString& w) {
 
 bool isWordChar(QChar c) {
 	return c.isLetterOrNumber() || c == QLatin1Char('_') || c == QLatin1Char('.');
+}
+
+// Horizontal padding the paint path leaves inside a cell, kept here so the
+// "does it fit?" test in helpEvent() measures against the same width the text
+// is actually drawn into.
+constexpr int kCellPadLeft = 8;
+constexpr int kCellPadRight = 4;
+
+// Drawn where a cell runs out of room. A real ellipsis, not "...", so it costs
+// one character's worth of the column instead of three.
+const QString& ellipsis() {
+	static const QString kEllipsis = QStringLiteral("\u2026");
+	return kEllipsis;
 }
 } // namespace
 
@@ -170,17 +186,25 @@ void DisasmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
 		return;
 	}
 
-	const QRect r = opt.rect.adjusted(8, 0, -4, 0);
+	const QRect r = opt.rect.adjusted(kCellPadLeft, 0, -kCellPadRight, 0);
 
 	if (column == DisassemblyPane::ColAddress || column == DisassemblyPane::ColBytes) {
 		const QColor base = column == DisassemblyPane::ColAddress ? theme_.textDim : theme_.textFaint;
 		painter->setPen(selected || isCurrent ? theme_.accentText : base);
-		painter->drawText(r, Qt::AlignLeft | Qt::AlignVCenter, text);
+		// Elide rather than let drawText clip at the rect edge: a half-drawn hex
+		// digit reads as data, an ellipsis reads as "there is more here" — and
+		// helpEvent() then offers the rest on hover.
+		const QFontMetrics fm(opt.font);
+		painter->drawText(r, Qt::AlignLeft | Qt::AlignVCenter,
+		                  fm.elidedText(text, Qt::ElideRight, r.width()));
 	}
 	else if (column == DisassemblyPane::ColNotes) {
 		painter->setPen(selected || isCurrent ? theme_.accent : theme_.textGhost);
-		painter->drawText(opt.rect.adjusted(0, 0, -12, 0),
-		                  Qt::AlignRight | Qt::AlignVCenter, text);
+		const QRect notesRect = opt.rect.adjusted(0, 0, -12, 0);
+		const QFontMetrics fm(opt.font);
+		// Right-aligned, so the front of the name is what has to go.
+		painter->drawText(notesRect, Qt::AlignRight | Qt::AlignVCenter,
+		                  fm.elidedText(text, Qt::ElideLeft, notesRect.width()));
 	}
 	else {
 		// Tokens are drawn one at a time, so the pen advances by hand. Keep the
@@ -189,19 +213,69 @@ void DisasmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
 		// uneven letter spacing.
 		const QFontMetricsF fm(opt.font);
 		const qreal baseline = r.top() + (r.height() + fm.ascent() - fm.descent()) / 2.0;
-		qreal x = r.left();
 		painter->setClipRect(r);
+
+		// Elide by hand: QFontMetrics::elidedText works on a whole string, and this
+		// column is painted token by token so each can carry its own color. Reserve
+		// the ellipsis's width up front so it lands inside the cell rather than
+		// being the thing that gets clipped.
+		const bool overflows = fm.horizontalAdvance(text) > r.width();
+		const qreal limit = overflows ? r.right() - fm.horizontalAdvance(ellipsis())
+		                              : static_cast<qreal>(r.right());
+		qreal x = r.left();
 		for (const Token& tok : tokenize(text)) {
+			if (x >= limit) break;
+			QString piece = tok.text;
+			qreal advance = fm.horizontalAdvance(piece);
+			if (x + advance > limit) {
+				// Trim this token to whole characters instead of drawing half of one.
+				int fits = 0;
+				qreal used = 0;
+				while (fits < piece.size()) {
+					const qreal charWidth = fm.horizontalAdvance(piece.at(fits));
+					if (x + used + charWidth > limit) break;
+					used += charWidth;
+					++fits;
+				}
+				piece.truncate(fits);
+				advance = used;
+			}
 			// On the current row every token flattens to bright text: the band
 			// already carries the emphasis, and keeping the syntax colors on top
 			// of accentBg turned the one row you care about into the noisiest.
 			painter->setPen(selected || isCurrent ? theme_.textBright : tok.color);
-			painter->drawText(QPointF(x, baseline), tok.text);
-			x += fm.horizontalAdvance(tok.text);
-			if (x > r.right()) break;
+			painter->drawText(QPointF(x, baseline), piece);
+			x += advance;
+			if (piece.size() != tok.text.size()) break; // this token was the cut point
+		}
+		if (overflows) {
+			painter->setPen(selected || isCurrent ? theme_.textBright : theme_.synPunct);
+			painter->drawText(QPointF(x, baseline), ellipsis());
 		}
 	}
 	painter->restore();
+}
+
+bool DisasmDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
+                               const QStyleOptionViewItem& option, const QModelIndex& index) {
+	if (!event || event->type() != QEvent::ToolTip || !index.isValid()
+		|| index.column() == DisassemblyPane::ColGutter)
+		return QStyledItemDelegate::helpEvent(event, view, option, index);
+
+	const QString text = index.data(Qt::ToolTipRole).toString();
+	// Same padding the paint path uses, so "did it fit" here means the same thing
+	// as "did it fit" there.
+	const int available = option.rect.width()
+		- (index.column() == DisassemblyPane::ColNotes ? 12 : kCellPadLeft + kCellPadRight);
+	const QFontMetrics fm(option.font);
+	if (!text.isEmpty() && fm.horizontalAdvance(text) > available) {
+		QToolTip::showText(event->globalPos(), text, view);
+		return true;
+	}
+	// It fits, so there is nothing a tooltip could add. Consume the event rather
+	// than falling through, which would show the full text on every hover.
+	QToolTip::hideText();
+	return true;
 }
 
 } // namespace gui

@@ -1,13 +1,18 @@
 #include "symbols_pane.h"
 
+#include "column_fit.h"
 #include "../theme/theme.h"
 
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMetaObject>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+
+#include <utility>
 
 namespace gui {
 
@@ -48,15 +53,27 @@ SymbolsPane::SymbolsPane(QWidget* parent) : QWidget(parent) {
 	tree_ = new QTreeWidget(this);
 	tree_->setObjectName(QStringLiteral("symbolsTree"));
 	tree_->setColumnCount(2);
-	tree_->setHeaderHidden(true);
+	// The header used to be hidden, which also hid the only handle for resizing
+	// the two columns — and with NAME stretched and ADDR sized to its contents,
+	// a long string literal or sub_xxxxxx name was clipped in a narrow sidebar
+	// with no way to trade width between them. It is a quiet strip (the QSS gives
+	// it the same 10px faint caption as the disassembly's) and it earns its row.
+	tree_->setHeaderLabels({tr("NAME"), tr("ADDR")});
 	tree_->setRootIsDecorated(true);
 	tree_->setUniformRowHeights(true);
 	tree_->setFont(monoFont());
 	tree_->setFrameShape(QFrame::NoFrame);
 	tree_->setSelectionMode(QAbstractItemView::SingleSelection);
+	tree_->setTextElideMode(Qt::ElideRight);
 	tree_->setIndentation(0); // groups carry their own left padding
-	tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
-	tree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	tree_->header()->setHighlightSections(false);
+
+	// NAME takes the slack; ADDR starts at the width of the addresses it holds.
+	const QFontMetrics mono(monoFont());
+	installColumnFit(tree_, 0, mono.horizontalAdvance(QStringLiteral("sub_000000")) + kCellPadding);
+	tree_->header()->resizeSection(
+		1, mono.horizontalAdvance(QStringLiteral("00000000")) + kCellPadding);
+
 	tree_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 	layout->addWidget(tree_, 1);
 
@@ -80,8 +97,55 @@ void SymbolsPane::setTheme(const Theme& theme) {
 }
 
 void SymbolsPane::refresh() {
-	symbols_ = session_ ? collectSymbols(*session_) : std::vector<SymbolInfo>{};
-	rebuild();
+	// Cancel whatever is in flight first: its result is about to be superseded, and
+	// joining here (rather than letting the assignment below do it after the new
+	// worker has started) keeps at most one scan running at a time.
+	scanThread_ = {};
+	// Bump the token unconditionally, before any early return. A scan can post its
+	// result and only then see the stop request, so the join above does not
+	// guarantee the queue is empty — and a stale result that still matched the
+	// token would be applied to whatever binary is loaded by the time it is
+	// delivered. Bumping here is what makes it unmatchable.
+	const uint64_t token = ++scanToken_;
+
+	if (!session_ || !session_->loaded()) {
+		symbols_.clear();
+		scanning_ = false;
+		rebuild();
+		return;
+	}
+
+	symbols_.clear();
+	scanning_ = true;
+	rebuild(); // "Scanning…" until the worker reports back
+
+	// Nothing worth scanning until the sweep has published its rows: a scan started
+	// now would walk a fraction of the binary and be thrown away by the one
+	// MainWindow starts on the decode's final tick. Leave the placeholder up.
+	if (session_->isDecoding()) return;
+
+	// A Snapshot owns shared_ptr copies of the disassembler and its address space
+	// and pins the row count, so the worker keeps reading a consistent binary even
+	// if the user opens another one mid-scan.
+	Snapshot snap = session_->snapshot();
+
+	scanThread_ = std::jthread(
+		[this, snap = std::move(snap), token](std::stop_token stop) {
+			std::vector<SymbolInfo> found = collectSymbols(snap, stop);
+			if (stop.stop_requested()) return;
+			// Hop back to the UI thread — QTreeWidget is not touchable from here.
+			// `this` stays a live QObject for as long as this thread runs, because
+			// scanThread_ is declared last and so is joined before the pane's own
+			// destruction gets any further.
+			QMetaObject::invokeMethod(this,
+				[this, token, found = std::move(found)]() mutable {
+					if (token != scanToken_) return; // superseded by a newer scan
+					symbols_ = std::move(found);
+					scanning_ = false;
+					rebuild();
+				},
+				Qt::QueuedConnection);
+		});
 }
 
 QTreeWidgetItem* SymbolsPane::addGroup(const QString& title, int count) {
@@ -105,6 +169,17 @@ QTreeWidgetItem* SymbolsPane::addGroup(const QString& title, int count) {
 void SymbolsPane::rebuild() {
 	tree_->clear();
 	const QString needle = filter_ ? filter_->text().trimmed() : QString();
+
+	if (scanning_) {
+		// Say so rather than showing an empty sidebar, which reads as "this binary
+		// has no symbols" instead of "the scan hasn't finished".
+		auto* note = new QTreeWidgetItem(tree_);
+		note->setText(0, tr("Scanning…"));
+		note->setForeground(0, theme_.textGhost);
+		note->setFlags(Qt::ItemIsEnabled);
+		if (countLabel_) countLabel_->clear();
+		return;
+	}
 
 	struct Bucket {
 		SymbolInfo::Kind kind;
@@ -138,8 +213,12 @@ void SymbolsPane::rebuild() {
 			row->setForeground(1, theme_.textGhost);
 			row->setData(0, kAddrRole, QVariant::fromValue<qulonglong>(sym->addr));
 			row->setSizeHint(0, QSize(0, kRowHeight));
-			row->setToolTip(0, QStringLiteral("0x%1")
-				.arg(sym->addr, 8, 16, QLatin1Char('0')).toUpper());
+			// Name as well as address: the name is what gets elided in a narrow
+			// sidebar, and a string literal's tail is the half worth reading.
+			const QString addr = QStringLiteral("0x%1")
+				.arg(sym->addr, 8, 16, QLatin1Char('0')).toUpper();
+			row->setToolTip(0, QString::fromStdString(sym->name) + QStringLiteral("\n") + addr);
+			row->setToolTip(1, addr);
 			++shown;
 		}
 	}

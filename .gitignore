@@ -48,4 +48,9 @@
 
 .testing/
 .vscode/
-.vs-project/
+
+*.md
+
+exec/
+cmake-build-*/
+.idea/

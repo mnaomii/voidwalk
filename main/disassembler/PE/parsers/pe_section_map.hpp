@@ -46,7 +46,7 @@ inline void setHeaders32bit(Sections& base, PE_Sections& extra, AddressSpace& da
 }
 
 
-inline void setHeaders64bit(Sections& base, PE_Sections extra, AddressSpace& data, uint32_t e_lfanew, uint64_t& imageBase) {
+inline void setHeaders64bit(Sections& base, PE_Sections& extra, AddressSpace& data, uint32_t e_lfanew, uint64_t& imageBase) {
 
 	uint16_t NumberOfSections = data.read_u16(e_lfanew + 6);
 	uint16_t SizeOfOptionalHeader = data.read_u16(e_lfanew + 20);

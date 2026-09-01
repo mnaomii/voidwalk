@@ -57,7 +57,69 @@ std::string formatDisasmText(const std::string& raw) {
 const Registers_x86_64 kZeroRegisters{};
 const std::vector<uint64_t> kEmptyStack{};
 
+// The two reads Session and Snapshot both do, factored out so the UI-thread and
+// the worker-thread paths can never drift apart. Both are pure reads of core
+// state that a running decode does not mutate (the section table is filled
+// before decode() starts; the mapping is fixed for the file's lifetime).
+std::vector<SectionInfo> sectionsOf(const Disassembler& d) {
+	std::vector<SectionInfo> out;
+	const Sections& s = d.getSections();
+	auto add = [&out](const char* name, const Header& h) {
+		// Drop sections the parser never filled in (offset and size both zero) so
+		// the pane doesn't list a jump target that goes nowhere.
+		if (h.getOffset() == 0 && h.getSize() == 0) return;
+		out.push_back({name, h.getOffset(), h.getVaddr(), h.getSize()});
+	};
+	add(".text", s._text);
+	add(".data", s._data);
+	add(".rodata", s._ronly);
+	add(".bss", s._bss);
+	return out;
+}
+
+std::vector<uint8_t> bytesOf(AddressSpace& space, uint64_t offset, size_t count) {
+	std::vector<uint8_t> out;
+	size_t max = space.size();
+	if (offset >= max) return out;
+	if (count > max - offset) count = max - offset;
+	out.reserve(count);
+	for (size_t i = 0; i < count; ++i)
+		out.push_back(space.read_u8(offset + i));
+	return out;
+}
+
 } // namespace
+
+// ---------------------------------------------------------------------------
+// Snapshot — the off-thread view. Every accessor is bounded by rows_, the count
+// that had been published when Session::snapshot() took it, and reads only
+// through the shared_ptrs it owns, so nothing here depends on the Session still
+// existing or still pointing at the same binary.
+// ---------------------------------------------------------------------------
+
+uint64_t Snapshot::rowVaddr(size_t i) const {
+	if (!disassembler_ || i >= rows_) return 0;
+	return disassembler_->getInstructionAddresses()[i];
+}
+
+std::string Snapshot::rowText(size_t i) const {
+	if (!disassembler_ || i >= rows_) return {};
+	return formatDisasmText(disassembler_->getDecodedInstructions()[i]->decodeLineString());
+}
+
+uint64_t Snapshot::textVaddr() const {
+	return disassembler_ ? disassembler_->getSections()._text.getVaddr() : 0;
+}
+
+std::vector<SectionInfo> Snapshot::sections() const {
+	if (!disassembler_) return {};
+	return sectionsOf(*disassembler_);
+}
+
+std::vector<uint8_t> Snapshot::bytes(uint64_t offset, size_t count) const {
+	if (!space_) return {};
+	return bytesOf(*space_, offset, count);
+}
 
 bool Session::open(const std::string& path) {
 	std::shared_ptr<AddressSpace> newSpace;
@@ -89,8 +151,18 @@ bool Session::open(const std::string& path) {
 
 void Session::runDecode() {
 	if (!disassembler_) return;
-	if (!decodeState_) decodeState_ = std::make_shared<DecodeState>();
-	decodeState_->note.clear();
+	// Stop and join the previous worker BEFORE touching any shared state. Until it
+	// has returned it may still be writing state->note and state->running, and the
+	// clear below used to race that write (two threads on one std::string). The
+	// jthread's move-assignment would have joined it too, but only *after* the new
+	// worker had already started, which left both the race and a window where the
+	// old sweep's running.store(false) landed on top of the new sweep's true.
+	decodeThread_ = {};
+	// One DecodeState per sweep, never reused: even if a worker somehow outlived
+	// the join above, it would be writing to its own object, which it keeps alive
+	// through its own shared_ptr copy. Belt and braces, and it costs one alloc per
+	// opened binary.
+	decodeState_ = std::make_shared<DecodeState>();
 	// New sweep: reset the published count / fallback and bump the generation so the
 	// view resets. Rows are read through to the core, so there is nothing else to drop.
 	shownRows_ = 0;
@@ -101,9 +173,9 @@ void Session::runDecode() {
 
 	// Capture shared_ptr copies (never `this`): they keep the disassembler and its
 	// address space alive for the worker even if a re-open replaces the Session's
-	// own pointers, and stay valid wherever the Session lives. Move-assigning the
-	// jthread first stops+joins any previous decode — decode() checks the
-	// stop_token each line, so that returns promptly.
+	// own pointers, and stay valid wherever the Session lives. The previous decode
+	// was already stopped and joined above — decode() checks the stop_token each
+	// line, so that returns promptly.
 	decodeThread_ = std::jthread(
 		[disasm = disassembler_, space = space_, state = decodeState_](std::stop_token st) {
 			(void)space; // held only to keep the AddressSpace alive under the worker
@@ -138,15 +210,8 @@ const std::vector<uint64_t>& Session::stack() const {
 }
 
 std::vector<uint8_t> Session::bytes(uint64_t offset, size_t count) const {
-	std::vector<uint8_t> out;
-	if (!space_) return out;
-	size_t max = space_->size();
-	if (offset >= max) return out;
-	if (count > max - offset) count = max - offset;
-	out.reserve(count);
-	for (size_t i = 0; i < count; ++i)
-		out.push_back(space_->read_u8(offset + i));
-	return out;
+	if (!space_) return {};
+	return bytesOf(*space_, offset, count);
 }
 
 size_t Session::binarySize() const {
@@ -162,20 +227,19 @@ uint64_t Session::textVaddr() const {
 }
 
 std::vector<SectionInfo> Session::sections() const {
-	std::vector<SectionInfo> out;
-	if (!loaded()) return out;
-	const Sections& s = disassembler_->getSections();
-	auto add = [&out](const char* name, const Header& h) {
-		// Drop sections the parser never filled in (offset and size both zero) so
-		// the pane doesn't list a jump target that goes nowhere.
-		if (h.getOffset() == 0 && h.getSize() == 0) return;
-		out.push_back({name, h.getOffset(), h.getVaddr(), h.getSize()});
-	};
-	add(".text", s._text);
-	add(".data", s._data);
-	add(".rodata", s._ronly);
-	add(".bss", s._bss);
-	return out;
+	if (!loaded()) return {};
+	return sectionsOf(*disassembler_);
+}
+
+Snapshot Session::snapshot() const {
+	Snapshot s;
+	if (!loaded()) return s;
+	s.space_ = space_;
+	s.disassembler_ = disassembler_;
+	// Only real decoded rows: the stub-arch fallback lives in fallbackRows_, which
+	// is a UI-thread-only vector and carries no instructions to walk anyway.
+	s.rows_ = decodedForReal_ ? shownRows_ : 0;
+	return s;
 }
 
 std::string Session::applyPatches(const std::vector<std::pair<size_t, std::string>>& edits) {

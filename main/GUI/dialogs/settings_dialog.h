@@ -29,6 +29,12 @@ private:
 	QComboBox* theme_ = nullptr;
 	QCheckBox* aiEnabled_ = nullptr;
 	QLineEdit* apiKey_ = nullptr;
+	// Set when the key came from VOIDWALK_AI_API_KEY. The field is then read-only
+	// (the environment is where you change it) and both flags are carried straight
+	// back out by settings(), so accepting the dialog cannot turn an environment
+	// key into a persisted one.
+	bool keyFromEnv_ = false;
+	QString envKey_;
 	QLineEdit* model_ = nullptr;
 	QLineEdit* endpoint_ = nullptr;
 	QSpinBox* contextLines_ = nullptr;

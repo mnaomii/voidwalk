@@ -5,7 +5,6 @@
 #include "../../../address-space/address_space.hpp"
 #include <unordered_map>
 #include <string>
-#include <stdexcept>
 #include <cstdint>
 
 
@@ -13,10 +12,10 @@
 inline void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
 
 
-	uint32_t e_shoff = data.read_u32(0x20);
-	uint16_t e_shentsize = data.read_u16(0x2e);
-	uint16_t e_shnum = data.read_u16(0x30);
-	uint16_t e_shstrndx = data.read_u16(0x32);
+	uint64_t e_shoff = data.read_u32(0x20); // section header offset
+	uint64_t e_shentsize = data.read_u16(0x2e); // section header entry size
+	uint64_t e_shnum = data.read_u16(0x30); // section header nb. entries
+	uint64_t e_shstrndx = data.read_u16(0x32); // index into section names
 
 	uint32_t sh_name, sh_offset, sh_size, sh_addr;
 
@@ -35,8 +34,8 @@ inline void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& d
 	};
 
 
-	uint32_t shstrtab_entry = e_shoff + e_shstrndx * e_shentsize;
-	uint32_t shstrtab_offset = data.read_u32(shstrtab_entry + 0x10);
+	uint64_t shstrtab_entry = e_shoff + e_shstrndx * e_shentsize;
+	uint64_t shstrtab_offset = data.read_u32(shstrtab_entry + 0x10);
 
 	for (uint16_t count = 0; count < e_shnum; ++count) // going through the information of all sections
 	{
@@ -48,7 +47,7 @@ inline void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& d
 
 		std::string section_name = "";
 
-		for (uint32_t i = 0; ; ++i) {
+		for (uint64_t i = 0; ; ++i) {
 			char c = data.read_u8(shstrtab_offset + sh_name + i);
 			if (c == '\0') break;
 			section_name += c;
@@ -69,13 +68,20 @@ inline void setHeaders32bit(Sections& base, ELF_Sections& extra, AddressSpace& d
 
 inline void setHeaders64bit(Sections& base, ELF_Sections& extra, AddressSpace& data) {
 
-	uint64_t e_shoff = data.read_u64(0x28); // section header offset
-	uint16_t e_shentsize = data.read_u16(0x3A); // size of one section header entry
-	uint16_t e_shnum =	data.read_u16(0x3C); // how many entries
-	uint16_t e_shstrndx =	data.read_u16(0x3E); // index of the section that holds section names
+	uint64_t e_shoff =		data.read_u64(0x28); // section header offset
+	uint64_t e_shentsize =	data.read_u16(0x3A); // size of one section header entry
+	uint64_t e_shnum =		data.read_u16(0x3C); // how many entries
+	uint64_t e_shstrndx =	data.read_u16(0x3E); // index of the section that holds section names
+
+	if (e_shoff == 0 && e_shnum == 0) { // sstrip-ed binary
 
 
-	uint32_t sh_name; uint64_t sh_offset, sh_size, sh_addr;
+
+		return;
+	}
+
+
+	uint64_t sh_name; uint64_t sh_offset, sh_size, sh_addr;
 
 	std::unordered_map<std::string, Header*> section_map = {
 	{ ".text",    &base._text    },
@@ -95,6 +101,8 @@ inline void setHeaders64bit(Sections& base, ELF_Sections& extra, AddressSpace& d
 	uint64_t shstrtab_entry = e_shoff + e_shstrndx * e_shentsize;
 	uint64_t shstrtab_offset = data.read_u64(shstrtab_entry + 0x18);
 
+
+	// parsing the section map
 	for (uint16_t count = 0; count < e_shnum; ++count) // going through the information of all sections
 	{
 
@@ -105,7 +113,7 @@ inline void setHeaders64bit(Sections& base, ELF_Sections& extra, AddressSpace& d
 
 		std::string section_name = "";
 
-		for (uint32_t i = 0; ; ++i) {
+		for (uint64_t i = 0; ; ++i) {
 			char c = data.read_u8(shstrtab_offset + sh_name + i);
 			if (c == '\0') break;
 			section_name += c;

@@ -1,0 +1,16 @@
+name: ci.yml
+on: [push]
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DVOIDWALK_BUILD_GUI=OFF -DVOIDWALK_BUILD_TUI=OFF
+      - run: cmake --build build --config Release --target voidwalk-tests --parallel
+      - run: ctest --test-dir build --build-config Release --output-on-failure

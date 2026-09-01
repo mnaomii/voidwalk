@@ -21,22 +21,27 @@ PE_Disassembler::PE_Disassembler(AddressSpace& data, const std::vector<std::ostr
 void PE_Disassembler::setHeadersOffsets() {
 
 	switch (this->architecture) {
-	case 0x14c: // 32bit
-		setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
 
-	case 0x8664: // 64bit
-		setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
+		case 0x14c: // 32bit
+			setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
 
-	case 0xAA64: // AARCH64
-		setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
+		case 0x8664: // 64bit
+			setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
 
-	case 0x1c0: // ARM32
-		setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
+		case 0xAA64: // AARCH64
+			setHeaders64bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
+
+		case 0x1c0: // ARM32
+			setHeaders32bit(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase); break;
+		default:
+			throw std::runtime_error("Architecture not recognized.\n");
+
 	}
 }
 
 std::string PE_Disassembler::getArchitecture() {
 	switch (this->architecture) {
+
 	case 0x14c:
 		return "x86";
 
@@ -48,6 +53,7 @@ std::string PE_Disassembler::getArchitecture() {
 
 	case 0x1c0:
 		return "ARM32";
+
 	default:
 		return "Unknown";
 

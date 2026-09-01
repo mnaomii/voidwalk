@@ -1,8 +1,10 @@
 #include "registers_pane.h"
 
+#include "column_fit.h"
 #include "../theme/theme.h"
 
 #include <QAbstractItemView>
+#include <QFontMetrics>
 #include <QHeaderView>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -20,8 +22,23 @@ RegistersPane::RegistersPane(QWidget* parent) : QWidget(parent) {
 	tree_->setRootIsDecorated(true);       // expand arrows on the category rows
 	tree_->setUniformRowHeights(true);
 	tree_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-	tree_->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-	tree_->header()->setStretchLastSection(true);
+	tree_->setTextElideMode(Qt::ElideRight);
+
+	// Both columns draggable, Value taking the slack. The register names were
+	// ResizeToContents and the value column stretched, so neither could be
+	// resized: docked narrow, a 16-digit 64-bit value was simply cut off with no
+	// way to widen it. Values now start wide enough for the 64-bit form and the
+	// pane scrolls sideways instead of clipping when the dock is narrower.
+	const QFontMetrics mono(monoFont());
+	// The minimum is the width of a 64-bit value plus the padding the cell eats,
+	// so the widest thing this pane shows still fits at that minimum.
+	installColumnFit(tree_, 1,
+	                 mono.horizontalAdvance(QStringLiteral("0x0000000000000000")) + kCellPadding);
+	// Sized for a register name, not for "General Purpose": the category rows are
+	// first-column-spanned, so they never need column 0 to hold them, and sizing
+	// for them cost ~25px that the value column then had to scroll for.
+	tree_->header()->resizeSection(
+		0, tree_->indentation() + mono.horizontalAdvance(QStringLiteral("Register")) + kCellPadding);
 
 	auto* layout = new QVBoxLayout(this);
 	layout->addWidget(tree_);
@@ -50,9 +67,13 @@ void RegistersPane::refresh() {
 
 	auto addReg = [&mono](QTreeWidgetItem* cat, const QString& name, uint64_t value, int digits) {
 		auto* item = new QTreeWidgetItem(cat);
+		const QString text = QString("0x%1").arg(value, digits, 16, QLatin1Char('0'));
 		item->setText(0, name);
-		item->setText(1, QString("0x%1").arg(value, digits, 16, QLatin1Char('0')));
+		item->setText(1, text);
 		item->setFont(1, mono);
+		// The full value on hover, for when the column is narrower than 16 digits.
+		item->setToolTip(0, name + QLatin1Char(' ') + text);
+		item->setToolTip(1, text);
 	};
 
 	// General purpose — renamed to the 64-bit set when a 64-bit target is loaded.

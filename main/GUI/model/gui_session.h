@@ -46,6 +46,46 @@ struct SectionInfo {
 	uint64_t size = 0;
 };
 
+// A stable, read-only view of the rows one decode produced — the only thing in
+// this layer that is safe to touch off the UI thread.
+//
+// It holds shared_ptr copies of the disassembler and its address space, so an
+// Open on the UI thread cannot pull them out from under a worker, and it pins
+// the row count at the moment it was taken, so it can never read past what the
+// decode had published. Rows are still read through to the core per call (no
+// second stringified copy of the disassembly), so it is cheap to take and cheap
+// to hold. Session::snapshot() is the only way to make a valid one.
+//
+// Only real decoded rows are exposed: for a stub-architecture fallback the
+// snapshot is empty, since there are no instructions to walk.
+//
+// Reading it while the decode worker is still appending rests on exactly the
+// same invariant the UI thread already relies on: decode() reserves worst case
+// up front, so the backing vectors never reallocate, and rows_ never exceeds the
+// worker's published count. If that reserve is ever traded for growth (see G1 in
+// AUDIT.md), both readers need a different handoff, not just this one.
+class Snapshot {
+public:
+	Snapshot() = default;
+
+	bool valid() const { return disassembler_ != nullptr; }
+
+	size_t rowCount() const { return rows_; }
+	uint64_t rowVaddr(size_t i) const;
+	std::string rowText(size_t i) const; // formatted mnemonic + operands
+
+	uint64_t textVaddr() const;
+	std::vector<SectionInfo> sections() const;
+	std::vector<uint8_t> bytes(uint64_t offset, size_t count) const;
+
+private:
+	friend class Session;
+
+	std::shared_ptr<AddressSpace> space_;
+	std::shared_ptr<Disassembler> disassembler_;
+	size_t rows_ = 0;
+};
+
 // View-model between the analysis core and the Qt panes — same seam as
 // tui::Session, but with structured rows instead of preformatted strings so
 // the item models can put address/bytes/mnemonic in separate columns.
@@ -137,6 +177,10 @@ public:
 	// Bumped once per decode start. The disassembly view watches it: a change means
 	// the row content is entirely new, so it resets rather than diffing row counts.
 	uint64_t decodeGeneration() const { return decodeGen_; }
+
+	// A snapshot of the rows published so far, safe to hand to a worker thread —
+	// see Snapshot. Empty (but valid) while the arch decoder is a stub.
+	Snapshot snapshot() const;
 
 private:
 	void runDecode();     // launches Disassembler::decode() on decodeThread_

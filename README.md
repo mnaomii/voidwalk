@@ -98,6 +98,7 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 - [x] Console scripting interface
 
 **Longer-term**
+- [ ] Program-header fallback for stripped ELF binaries
 - [ ] DWARF debug info parsing
 - [ ] ARM32 Support
 - [ ] AArch64 Support
@@ -108,4 +109,3 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 - [ ] AI-generated code explanation
 - [ ] Export analysis report to file
 - [ ] Simulated stack visualiser
-

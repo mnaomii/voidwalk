@@ -39,8 +39,10 @@ public:
 		static constexpr std::string_view r64[] = { "RAX","RCX","RDX","RBX","RSP","RBP","RSI","RDI",
 											"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15" };
 
-		if ((r > 15 && is64bit) || r > 7)
+		if (r > 15 || (r > 7 && static_cast<SIZE>(size) == SIZE::b && !hasREX))
 			throw std::runtime_error("Malformed expression detected..");
+
+
 		switch (static_cast<SIZE>(size)) {
 		case SIZE::b: return (hasREX) ? std::string(r8_64[r]) : std::string(r8_32[r]);
 		case SIZE::w: return std::string(r16[r]);
@@ -848,11 +850,11 @@ public:
 	// after 0F: 0F B6 is MOVZX, unrelated to one-byte B6. Never index opcodeTable()
 	// with an 0F pair - that array is 0x00-0xFF and 0x0Fxx runs off the end.
 	//
-	// First cut: the integer opcodes compilers actually emit. Unpopulated slots stay
-	// empty (rendered "(bad)") but still length-correct at 2 bytes, since they carry
-	// no ModRM/immediate here. Deferred: SSE / mandatory-prefix forms (66/F2/F3 0F xx),
-	// the three-byte 0F 38 / 0F 3A maps, and groups 6/7/9/15/16. Only group 8 (0F BA)
-	// is wired, because it carries an imm8 and so affects length.
+	// First cut: the integer opcodes compilers actually emit. Unpopulated slots are
+	// filled in at the end of this function with hasRMByte = true and the name
+	// "(bad)" - see the comment there. Deferred: naming the SSE / mandatory-prefix
+	// forms (66/F2/F3 0F xx), the three-byte 0F 38 / 0F 3A maps, and groups
+	// 6/7/9/15/16. Only group 8 (0F BA) is wired, because it carries an imm8.
 	static constexpr std::array<Instruction::OpcodeInfo, 256> buildTwoByteOpcodes() {
 		std::array<Instruction::OpcodeInfo, 256> n{};
 
@@ -877,6 +879,21 @@ public:
 		// Multi-byte NOP (0F 1F /0) - the padding between functions. Has a ModRM, so its
 		// addressed bytes must be eaten or every run of it desyncs the sweep.
 		T(0x1F, "NOP", true, OP(E,v,"",""), NOP_, NOP_);
+
+		// 0F 1E - reserved hint-NOP in the base ISA. Under an F3 prefix with ModRM
+		// FA/FB it is ENDBR64/ENDBR32, CET's indirect-branch landing pad, which sits
+		// at the head of essentially every function in a CET-enabled binary (254 of
+		// them in /bin/ls). This table is keyed by the opcode byte alone and cannot
+		// see the mandatory prefix, so the ENDBR name is applied in the renderer;
+		// the row here is what gives it its ModRM byte.
+		T(0x1E, "NOP", true, OP(E,v,"",""), NOP_, NOP_);
+
+		// Double-precision shifts: Ev, Gv, Ib / Ev, Gv, CL. The Ib forms carry an
+		// immediate, so leaving them unnamed also left them the wrong length.
+		T(0xA4,"SHLD", true, OP(E,v,"",""), OP(G,v,"",""), OP(I,b,"",""));
+		T(0xA5,"SHLD", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
+		T(0xAC,"SHRD", true, OP(E,v,"",""), OP(G,v,"",""), OP(I,b,"",""));
+		T(0xAD,"SHRD", true, OP(E,v,"",""), OP(G,v,"",""), NOP_);
 
 		// CMOVcc Gv, Ev  (0F 40-4F)
 		T(0x40,"CMOVO",  true, OP(G,v,"",""), OP(E,v,"",""), NOP_);
@@ -969,6 +986,36 @@ public:
 		T(0xCE,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
 		T(0xCF,"BSWAP", false, OP(Z,v,"",""), NOP_, NOP_);
 
+		// The 0F rows that are unnamed above but DO carry an imm8. Shape only - the
+		// names need mandatory-prefix dispatch (0F 70 is PSHUFW/PSHUFD/PSHUFLW/PSHUFHW
+		// depending on none/66/F2/F3) which this table cannot express yet. Listed
+		// explicitly so the blanket fill below does not leave them an immediate short.
+		T(0x70, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // PSHUFx
+		T(0x71, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // grp12  PSRLW/PSRAW/PSLLW
+		T(0x72, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // grp13  PSRLD/PSRAD/PSLLD
+		T(0x73, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // grp14  PSRLQ/PSLLQ/PSxDQ
+		T(0xC2, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // CMPPS/CMPSS/CMPPD/CMPSD
+		T(0xC4, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // PINSRW
+		T(0xC5, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // PEXTRW
+		T(0xC6, "(bad)", true, OP(I,b,"",""), NOP_, NOP_);   // SHUFPS/SHUFPD
+
+		// Every row still unnamed takes a ModRM. That is the safe default here, not
+		// an approximation: the unnamed part of the 0F map is almost entirely MMX/SSE
+		// (0F 10-6F, 0F 74-7F, 0F D0-FF), and every one of those is ModRM-addressed.
+		// The rows that genuinely have no ModRM - SYSCALL, RDTSC, CPUID, UD2, Jcc,
+		// BSWAP - are all named above and keep hasRMByte = false.
+		//
+		// The old default of false made an unnamed row two bytes long, so 0F 29 44 24
+		// 50 (MOVAPS) consumed 2 instead of 5 and the sweep resumed mid-instruction,
+		// mis-decoding the rest of .text. Consuming the ModRM (and the SIB and
+		// displacement it implies) keeps the stream aligned even when we cannot name
+		// the opcode: one "(bad)" line of the correct length, then back in step.
+		for (auto& row : n)
+			if (row.text.empty()) {
+				row.text = "(bad)";
+				row.hasRMByte = true;
+			}
+
 #undef NOP_
 #undef OP
 #undef s
@@ -977,6 +1024,23 @@ public:
 #undef T
 #undef T16
 		return n;
+	}
+
+	// Stand-in rows for the three-byte maps (0F 38 xx / 0F 3A xx), which are not built
+	// yet. No name, but the right shape: 0F 38 rows are ModRM-addressed with no
+	// immediate, 0F 3A rows are ModRM + imm8. Enough to stay length-correct through
+	// SSSE3/SSE4 code (PSHUFB, PALIGNR, PCMPISTRI...) instead of desynchronising on
+	// the first one.
+	static const Instruction::OpcodeInfo& threeByteRow(bool hasImm8) {
+		constexpr auto none  = static_cast<uint8_t>(SIZE::None);
+		constexpr auto noAdr = static_cast<uint8_t>(ADDRESSING::None);
+		constexpr Instruction::TableOperand nop{ noAdr, none, false, "", "", "" };
+		constexpr Instruction::TableOperand ib{
+			static_cast<uint8_t>(ADDRESSING::I), static_cast<uint8_t>(SIZE::b), false, "", "", "" };
+
+		static constexpr Instruction::OpcodeInfo plain{ "(bad)", "", true, nop, nop, nop, -1 };
+		static constexpr Instruction::OpcodeInfo withImm{ "(bad)", "", true, ib,  nop, nop, -1 };
+		return hasImm8 ? withImm : plain;
 	}
 
 	static const std::array<Instruction::OpcodeInfo, 256>& twoByteTable() {

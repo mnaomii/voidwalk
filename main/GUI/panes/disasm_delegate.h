@@ -39,6 +39,13 @@ public:
 	void paint(QPainter* painter, const QStyleOptionViewItem& option,
 	           const QModelIndex& index) const override;
 
+	// Tooltip only for a cell the paint above had to clip. A disassembly is dense
+	// enough that a tooltip on every row would be noise, and the model returns the
+	// same string for ToolTipRole as for DisplayRole, so the popup is exactly the
+	// text that did not fit.
+	bool helpEvent(QHelpEvent* event, QAbstractItemView* view,
+	               const QStyleOptionViewItem& option, const QModelIndex& index) override;
+
 private:
 	struct Token {
 		QString text;

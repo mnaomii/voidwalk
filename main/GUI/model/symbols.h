@@ -4,6 +4,7 @@
 #include "gui_session.h"
 
 #include <cstdint>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -31,9 +32,14 @@ struct SymbolInfo {
 //              collectImports() is the single seam to fill in when it does —
 //              the sidebar already renders the group and hides it while empty.
 //
-// Cheap enough to call from refresh() (one linear pass over the rows plus one
-// over the two data sections); the sidebar caches the result either way.
-std::vector<SymbolInfo> collectSymbols(const Session& session);
+// NOT cheap: the function pass is one linear walk over *every* decoded row, each
+// of which formats a string on the way through. On a large binary that is
+// hundreds of thousands of allocations, which is why it takes a Snapshot (safe to
+// read off the UI thread) rather than a live Session, and why SymbolsPane runs it
+// on a worker. `stop` lets a superseded scan give up early — it is polled between
+// rows, so cancellation is prompt even mid-binary.
+std::vector<SymbolInfo> collectSymbols(const Snapshot& snapshot,
+                                       const std::stop_token& stop = {});
 
 constexpr int kMinStringLen = 4;
 constexpr int kMaxStringDisplay = 28;

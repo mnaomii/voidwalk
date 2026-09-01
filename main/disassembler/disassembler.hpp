@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <vector>
-#include <vector>
 #include <string>
 #include <memory>
 #include <atomic>
@@ -59,11 +58,6 @@ protected:
 
 public:
     Disassembler(AddressSpace& temp, const std::vector<std::ostream*>& stream) : contents(temp), architecture(0x00), offset(0x00), outputStreams(stream) {
-
-        // emulated for the moment
-        registers.rip = baseSections._text.getOffset();
-        registers.cs = registers.rip;
-
 
     };
     void emitDecodedLine();

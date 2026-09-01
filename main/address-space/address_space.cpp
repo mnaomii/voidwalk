@@ -40,6 +40,7 @@ AddressSpace::AddressSpace(std::string filename) : base(nullptr), maxSize(0){ //
 
 	// windows equivalent of mmap
 	HANDLE fMap = CreateFileMapping(f, nullptr, PAGE_READONLY, 0, 0, nullptr);
+	if (fMap == nullptr) throw std::length_error("[voidwalk] : Invalid file.\n");
 	base = MapViewOfFile(fMap, FILE_MAP_READ, 0, 0, 0);
 
 	// close handles
@@ -52,15 +53,18 @@ AddressSpace::AddressSpace(std::string filename) : base(nullptr), maxSize(0){ //
 	
 
 	// open a file / get the descriptor
-	FILE* f = open(filename.c_str(), O_RDONLY);
+	int f = open(filename.c_str(), O_RDONLY);
 	if (f < 0) throw std::length_error("[voidwalk] : Invalid file.\n");
 
 	struct stat st;
-	stat(f, &st);
+	if ( fstat(f, &st) < 0) {
+		close(f);
+		throw std::length_error("[voidwalk] : Invalid file.\n");
+	}
 
 	// get the size in bytes from the stats
 	this->maxSize = st.st_size;
-	if (maxSize == 0) std::length_error("[voidwalk] : Invalid file.\n");
+	if (maxSize == 0) {close(f); throw std::length_error("[voidwalk] : Invalid file.\n");}
 
 	base = mmap(nullptr, maxSize, PROT_READ, MAP_PRIVATE, f, 0);
 	close(f);
@@ -94,7 +98,7 @@ template <typename T>
 T AddressSpace::readType(uint64_t offset) {
 
 
-	if (offset + sizeof(T) > maxSize ) throw std::length_error("Reading past bounds.\n");
+	if (offset > maxSize || sizeof(T) > maxSize - offset) throw std::length_error("[voidwalk] : Invalid offset.\n");
 	T val{};
 	std::memcpy(&val, static_cast<const char*>(base) + offset, sizeof(T));
 	return val;

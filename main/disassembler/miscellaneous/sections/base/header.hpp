@@ -1,5 +1,6 @@
-#include <cstdint>
 #pragma once
+
+#include <cstdint>
 
 class Header {
 private:

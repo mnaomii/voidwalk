@@ -18,17 +18,32 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
+#include <QScreen>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 
+#include <algorithm>
+
 namespace gui {
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	setWindowTitle(tr("voidwalk"));
-	resize(1200, 800);
+	// 1200x800 is the layout the panes are sized for, but never larger than the
+	// screen: a flat resize() to it on a 1366x768 laptop put the status bar and
+	// the memory dock off the bottom edge, which is where "the text is cut off"
+	// starts. availableGeometry() already excludes the taskbar/panel.
+	if (const QScreen* s = screen()) {
+		const QRect avail = s->availableGeometry();
+		resize(std::min(1200, avail.width() - 80), std::min(800, avail.height() - 80));
+	} else {
+		resize(1200, 800);
+	}
+	// Small enough to be usable on a half-screen split; below this the docks are
+	// better closed than squeezed.
+	setMinimumSize(720, 480);
 	setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowTabbedDocks);
 
 	settings_ = AppSettings::load();

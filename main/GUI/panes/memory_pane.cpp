@@ -8,6 +8,7 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -21,12 +22,19 @@ MemoryPane::MemoryPane(QWidget* parent)
 	auto* gotoRow = new QHBoxLayout();
 	gotoRow->addWidget(new QLabel(tr("Section:"), this));
 	sectionBox_ = new QComboBox(this);
-	sectionBox_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-	gotoRow->addWidget(sectionBox_);
+	// NOT AdjustToContents: that sizes the box to ".rodata  (off 0x2000, 918264
+	// bytes)" and makes it the pane's minimum width, which at a narrow dock pushed
+	// the offset field off the edge. Give it a readable minimum instead and let it
+	// elide its own label; the popup still shows every entry in full.
+	sectionBox_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	sectionBox_->setMinimumContentsLength(12);
+	sectionBox_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	gotoRow->addWidget(sectionBox_, 1);
 	gotoRow->addSpacing(12);
 	gotoRow->addWidget(new QLabel(tr("Go to offset:"), this));
 	gotoBox_ = new QLineEdit(this);
 	gotoBox_->setPlaceholderText(QStringLiteral("0x0"));
+	gotoBox_->setMinimumWidth(80);
 	gotoRow->addWidget(gotoBox_);
 	layout->addLayout(gotoRow);
 
@@ -72,6 +80,9 @@ void MemoryPane::populateSections() {
 				.arg(s.offset, 0, 16)
 				.arg(s.size));
 			const int i = sectionBox_->count() - 1;
+			// The box elides when the dock is narrow; the tooltip keeps the full
+			// entry reachable.
+			sectionBox_->setItemData(i, sectionBox_->itemText(i), Qt::ToolTipRole);
 			sectionBox_->setItemData(i, KindSection, Qt::UserRole);
 			sectionBox_->setItemData(i, static_cast<qulonglong>(s.offset), Qt::UserRole + 1);
 		}

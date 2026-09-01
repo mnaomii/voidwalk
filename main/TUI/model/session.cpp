@@ -41,8 +41,17 @@ Session::Session(std::shared_ptr<AddressSpace> space,
 
 void Session::runDecode() {
 	if (!disassembler_) return;
-	if (!decodeState_) decodeState_ = std::make_shared<DecodeState>();
-	decodeState_->note.clear();
+	// Stop and join the previous worker BEFORE touching any shared state. Until it
+	// has returned it may still be writing state->note and state->running, and the
+	// clear below used to race that write (two threads on one std::string). The
+	// jthread's move-assignment would have joined it too, but only *after* the new
+	// worker had already started, which left both the race and a window where the
+	// old sweep's running.store(false) landed on top of the new sweep's true.
+	decodeThread_ = {};
+	// One DecodeState per sweep, never reused: even if a worker somehow outlived
+	// the join above, it would be writing to its own object, kept alive by its own
+	// shared_ptr copy. Belt and braces, and it costs one alloc per opened binary.
+	decodeState_ = std::make_shared<DecodeState>();
 	// New sweep: drop the previous binary's lines so refresh() appends from zero.
 	disasmLines_.clear();
 	builtInstrs_ = 0;
@@ -50,8 +59,8 @@ void Session::runDecode() {
 
 	// Capture shared_ptr copies (never `this` — the Session gets moved into the UI):
 	// they keep the disassembler and its address space alive for the worker
-	// regardless of where the Session lives or a later re-open. Move-assigning the
-	// jthread stops+joins any previous decode; decode() polls the stop_token.
+	// regardless of where the Session lives or a later re-open. The previous decode
+	// was already stopped and joined above; decode() polls the stop_token.
 	decodeThread_ = std::jthread(
 		[disasm = disassembler_, space = space_, state = decodeState_](std::stop_token st) {
 			(void)space; // held only to keep the AddressSpace alive under the worker

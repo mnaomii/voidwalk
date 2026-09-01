@@ -1,5 +1,6 @@
 #include "disassembly_pane.h"
 
+#include "column_fit.h"
 #include "disasm_delegate.h"
 
 #include <QAbstractItemView>
@@ -21,6 +22,10 @@ namespace {
 constexpr int kRowHeight = 25;
 constexpr int kGutterWidth = 26;
 constexpr int kNotesWidth = 150;
+// Floor for a column the user drags. Low enough that the gutter (26px, and not
+// draggable anyway) is not forced wider, high enough that a collapsed column
+// still leaves a grab handle you can find.
+constexpr int kMinSectionWidth = 26;
 
 // Parses "call 0x00401160" / "jb 0x401014" into mnemonic + numeric target.
 bool staticTarget(const std::string& text, std::string* mnemonic, uint64_t* target) {
@@ -104,7 +109,10 @@ QString DisasmModel::noteFor(int i) const {
 
 QVariant DisasmModel::data(const QModelIndex& index, int role) const {
 	if (!session_ || !index.isValid()) return {};
-	if (role != Qt::DisplayRole && role != Qt::EditRole) return {};
+	// ToolTipRole answers with the same string as DisplayRole: the delegate asks
+	// for it only when it had to clip the cell, so the tooltip is the unclipped
+	// text and nothing more.
+	if (role != Qt::DisplayRole && role != Qt::EditRole && role != Qt::ToolTipRole) return {};
 
 	const auto row = static_cast<std::size_t>(index.row());
 	// Never read past what the view has been told about, nor past the live rows.
@@ -207,18 +215,25 @@ DisassemblyPane::DisassemblyPane(QWidget* parent)
 	QHeaderView* head = view_->horizontalHeader();
 	head->setHighlightSections(false);
 	// NOTE: no ResizeToContents anywhere. On a virtualized view it would measure
-	// every row (O(n)) and bring the freeze straight back. Widths are derived from
-	// the mono font and fixed; the Instruction column absorbs the slack. Bytes is
-	// left draggable since instruction length varies.
+	// every row (O(n)) and bring the freeze straight back. Widths start from the
+	// mono font's metrics, every column is draggable from there, and INSTRUCTION
+	// absorbs the slack until the user sizes it by hand (see column_fit.h). Below
+	// the minimum the view scrolls horizontally instead of clipping, so a narrow
+	// window costs a scrollbar rather than the operands.
 	const QFontMetrics fm(monoFont());
+	installColumnFit(view_, ColInstruction,
+	                 fm.horizontalAdvance(QStringLiteral("mov    eax, 0x00000000")) + kCellPadding,
+	                 kMinSectionWidth);
+	// The gutter is the one exception: 26px of marker strip with nothing in it to
+	// widen, so it stays fixed and keeps its handle out of the way.
 	head->setSectionResizeMode(ColGutter, QHeaderView::Fixed);
-	head->setSectionResizeMode(ColAddress, QHeaderView::Fixed);
-	head->setSectionResizeMode(ColBytes, QHeaderView::Interactive);
-	head->setSectionResizeMode(ColInstruction, QHeaderView::Stretch);
-	head->setSectionResizeMode(ColNotes, QHeaderView::Fixed);
 	view_->setColumnWidth(ColGutter, kGutterWidth);
-	view_->setColumnWidth(ColAddress, fm.horizontalAdvance(QStringLiteral("0x00000000")) + 24);
-	view_->setColumnWidth(ColBytes, fm.horizontalAdvance(QStringLiteral("00 00 00 00 00 00 ")) + 16);
+	view_->setColumnWidth(ColAddress, fm.horizontalAdvance(QStringLiteral("0x00000000")) + kCellPadding);
+	// Seven bytes, not six: a RIP-relative LEA — the single most common shape in
+	// 64-bit code — encodes to exactly seven, and at six every one of those rows
+	// opened with an ellipsis.
+	view_->setColumnWidth(ColBytes,
+	                      fm.horizontalAdvance(QStringLiteral("00 00 00 00 00 00 00")) + kCellPadding);
 	view_->setColumnWidth(ColNotes, kNotesWidth);
 
 	delegate_ = new DisasmDelegate(view_);

@@ -95,10 +95,15 @@ struct ElfFixture {
 // Minimal ELF (class picked by is64) carrying a null section, a .text and a
 // .shstrtab. e_machine is caller-chosen so the same builder feeds both the ELF
 // section suite (real machines) and the loader suite.
-inline ElfFixture buildELF(bool is64, uint16_t e_machine) {
+//
+// textBody defaults to "nop;nop;nop;ret". Pass your own to get a whole-file fixture
+// whose .text is an exact instruction stream - that is what lets the sweep and
+// robustness suites drive Disassembler::decode() (not just decodeLine) over chosen
+// bytes, including hostile ones.
+inline ElfFixture buildELF(bool is64, uint16_t e_machine,
+                           std::vector<uint8_t> textBody = { 0x90, 0x90, 0x90, 0xc3 }) {
     ByteBuf b;
     const uint64_t textVaddr = is64 ? 0x401000ull : 0x08048000ull;
-    const std::vector<uint8_t> textBody = { 0x90, 0x90, 0x90, 0xc3 };   // nop;nop;nop;ret
     const uint16_t shentsize = is64 ? 64 : 40;
 
     // .shstrtab blob; names are null-terminated, index 0 is the empty name.
@@ -227,6 +232,119 @@ inline PeFixture buildPE(bool is64) {
     f.rodata = { imageBase + 0x3000, 0x900, 0x100 };
     f.bss    = { imageBase + 0x4000, 0x000, 0x050 };
     return f;
+}
+
+// ---------------------------------------------------------------------------
+// Hostile-input fixtures.
+//
+// A disassembler's normal workload includes files that are truncated, packed,
+// deliberately malformed, or simply not what their headers claim. These builders
+// produce that class of input so the robustness suite can assert the only
+// acceptable behaviours: parse it, or reject it. Never crash, never hang.
+// ---------------------------------------------------------------------------
+
+// Patch one field of an otherwise valid ELF. `off` is an absolute file offset -
+// the caller uses the same header offsets the parser reads.
+inline std::vector<uint8_t> elfWith64(bool is64, uint16_t machine, size_t off, uint64_t value) {
+    auto fx = buildELF(is64, machine);
+    ByteBuf b; b.data = std::move(fx.bytes);
+    if (off + 8 <= b.size()) b.patch64(off, value);
+    return std::move(b.data);
+}
+inline std::vector<uint8_t> elfWith32(bool is64, uint16_t machine, size_t off, uint32_t value) {
+    auto fx = buildELF(is64, machine);
+    ByteBuf b; b.data = std::move(fx.bytes);
+    if (off + 4 <= b.size()) b.patch32(off, value);
+    return std::move(b.data);
+}
+inline std::vector<uint8_t> elfWith16(bool is64, uint16_t machine, size_t off, uint16_t value) {
+    auto fx = buildELF(is64, machine);
+    ByteBuf b; b.data = std::move(fx.bytes);
+    if (off + 2 <= b.size()) b.patch16(off, value);
+    return std::move(b.data);
+}
+
+// Offsets of the ELF64 header fields the section parser trusts, so the robustness
+// suite can name what it is corrupting instead of hard-coding magic numbers.
+namespace elf64 {
+    constexpr size_t e_machine   = 0x12;
+    constexpr size_t e_shoff     = 0x28;
+    constexpr size_t e_shentsize = 0x3A;
+    constexpr size_t e_shnum     = 0x3C;
+    constexpr size_t e_shstrndx  = 0x3E;
+}
+
+// The file offset of section header `idx`'s `field` byte, for an ELF64 fixture -
+// used to corrupt a specific section's sh_offset / sh_size after the fact.
+inline size_t elf64SectionField(const std::vector<uint8_t>& elf, uint16_t idx, size_t field) {
+    uint64_t shoff = 0; uint16_t shentsize = 0;
+    for (int i = 0; i < 8; ++i) shoff |= uint64_t(elf[elf64::e_shoff + i]) << (8 * i);
+    for (int i = 0; i < 2; ++i) shentsize |= uint16_t(elf[elf64::e_shentsize + i]) << (8 * i);
+    return static_cast<size_t>(shoff + uint64_t(idx) * shentsize + field);
+}
+namespace elf64_sh {
+    constexpr size_t sh_addr   = 0x10;
+    constexpr size_t sh_offset = 0x18;
+    constexpr size_t sh_size   = 0x20;
+}
+
+// Truncate a fixture to `n` bytes - the "download stopped halfway" case, which
+// every header read past the cut must survive.
+inline std::vector<uint8_t> truncated(std::vector<uint8_t> v, size_t n) {
+    if (n < v.size()) v.resize(n);
+    return v;
+}
+
+// ---------------------------------------------------------------------------
+// Instruction streams that have historically broken the byte-eater. Named so a
+// failing check says WHAT shape of input broke it, not just an opcode blob.
+// ---------------------------------------------------------------------------
+namespace streams {
+
+// 15 legacy prefixes fill instructionBytes[15] exactly; the byte after it is the
+// one with nowhere left to go.
+inline std::vector<uint8_t> prefixRun(uint8_t tail, int count = 15) {
+    std::vector<uint8_t> v(static_cast<size_t>(count), 0x66);
+    v.push_back(tail);
+    return v;
+}
+
+inline std::vector<uint8_t> maxPrefixesThenRex()    { return prefixRun(0x48); } // REX.W
+inline std::vector<uint8_t> maxPrefixesThenOpcode() { return prefixRun(0x90); } // NOP
+
+} // namespace streams
+
+// ---------------------------------------------------------------------------
+// A real, compiler-produced binary to sweep end to end.
+//
+// Synthetic fixtures cannot catch a decoder that stops after one instruction on
+// real code - the property only shows up over thousands of consecutive, genuinely
+// emitted instructions. The suite therefore looks for a native executable on the
+// host. It is allowed to find nothing: the integration suite then SKIPS rather
+// than fails, so a minimal CI container stays green.
+// ---------------------------------------------------------------------------
+inline std::string findSystemBinary() {
+#ifdef _WIN32
+    const char* candidates[] = {
+        "C:\\Windows\\System32\\notepad.exe",
+        "C:\\Windows\\System32\\cmd.exe",
+        "C:\\Windows\\System32\\kernel32.dll",
+    };
+#else
+    const char* candidates[] = {
+        "/bin/ls", "/usr/bin/ls",
+        "/bin/cat", "/usr/bin/cat",
+        "/bin/sh",
+    };
+#endif
+    for (const char* c : candidates) {
+        std::error_code ec;
+        // Must be a regular file with content; a symlink to one is fine (status follows it).
+        if (std::filesystem::is_regular_file(c, ec) &&
+            std::filesystem::file_size(c, ec) > 4096 && !ec)
+            return c;
+    }
+    return {};
 }
 
 } // namespace fixtures

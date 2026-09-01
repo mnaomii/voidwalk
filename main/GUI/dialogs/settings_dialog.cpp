@@ -32,10 +32,38 @@ SettingsDialog::SettingsDialog(const AppSettings& current, QWidget* parent)
 	aiEnabled_->setChecked(current.aiEnabled);
 	form->addRow(aiEnabled_);
 
-	apiKey_ = new QLineEdit(current.aiApiKey, aiGroup);
+	keyFromEnv_ = current.aiKeyFromEnv;
+	envKey_ = current.aiApiKey;
+
+	apiKey_ = new QLineEdit(keyFromEnv_ ? QString() : current.aiApiKey, aiGroup);
 	apiKey_->setEchoMode(QLineEdit::Password);
 	apiKey_->setPlaceholderText(tr("stored locally; used by your AI backend"));
 	form->addRow(tr("API key"), apiKey_);
+
+	// Say where the key ends up rather than leaving it to be discovered. The two
+	// branches are the two storage paths in AppSettings, and this is the only
+	// place the user gets told which one is in force.
+	auto* keyNote = new QLabel(aiGroup);
+	keyNote->setWordWrap(true);
+	keyNote->setStyleSheet(QStringLiteral("color: palette(mid); font-size: 11px;"));
+	if (keyFromEnv_) {
+		apiKey_->setReadOnly(true);
+		apiKey_->setPlaceholderText(tr("supplied by %1")
+			.arg(QLatin1String(AppSettings::kApiKeyEnvVar)));
+		keyNote->setText(tr("The key is coming from the %1 environment variable and is "
+		                    "not written to disk. Unset it to store one here instead.")
+			.arg(QLatin1String(AppSettings::kApiKeyEnvVar)));
+	} else {
+		const QString store = AppSettings::storeLocation();
+		keyNote->setText(store.isEmpty()
+			? tr("Saved in plain text in the registry under HKCU. Set %1 in the "
+			     "environment instead to keep it off disk.")
+				.arg(QLatin1String(AppSettings::kApiKeyEnvVar))
+			: tr("Saved in plain text in %1 (owner-readable only). Set %2 in the "
+			     "environment instead to keep it off disk.")
+				.arg(store, QLatin1String(AppSettings::kApiKeyEnvVar)));
+	}
+	form->addRow(QString(), keyNote);
 
 	model_ = new QLineEdit(current.aiModel, aiGroup);
 	form->addRow(tr("Model"), model_);
@@ -52,7 +80,8 @@ SettingsDialog::SettingsDialog(const AppSettings& current, QWidget* parent)
 	// Gate the credential fields on the enable toggle.
 	auto sync = [this]() {
 		const bool on = aiEnabled_->isChecked();
-		apiKey_->setEnabled(on);
+		// An environment-supplied key stays visible but never editable here.
+		apiKey_->setEnabled(on && !keyFromEnv_);
 		model_->setEnabled(on);
 		endpoint_->setEnabled(on);
 		contextLines_->setEnabled(on);
@@ -84,7 +113,10 @@ AppSettings SettingsDialog::settings() const {
 	AppSettings s;
 	s.theme = theme_->currentData().toString();
 	s.aiEnabled = aiEnabled_->isChecked();
-	s.aiApiKey = apiKey_->text();
+	// Carry the environment key straight through: the field was never populated
+	// with it, so reading the widget back would silently blank the key.
+	s.aiKeyFromEnv = keyFromEnv_;
+	s.aiApiKey = keyFromEnv_ ? envKey_ : apiKey_->text();
 	s.aiModel = model_->text();
 	s.aiEndpoint = endpoint_->text();
 	s.aiContextLines = contextLines_->value();

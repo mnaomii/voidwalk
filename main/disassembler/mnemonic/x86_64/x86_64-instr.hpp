@@ -71,11 +71,31 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[11], 
 		prefixEnd, opcodeEnd, immBegin, rexBegin
 	};
 
-	if (checks[isInvalid]) {
+	if (checks[isInvalid] || positions[opcodeEnd] == 0) {
 		instructionStr = "(bad)";
 		for (int i = 0; i < positions[opcodeEnd]; ++i)
 			machineCode += std::format("{:02x}", instructionBytes[i]);
 		return;
+	}
+
+	// CET landing pads: F3 0F 1E FA (ENDBR64) and F3 0F 1E FB (ENDBR32). Handled up
+	// front for two reasons. The opcode table is keyed by the opcode byte alone, so
+	// 0F 1E resolves to its base meaning - the reserved hint-NOP - and the F3 that
+	// promotes it to ENDBR is a mandatory prefix, not a REP. And the prefix loop
+	// below would print that F3 as "REP" before the opcode is ever looked at.
+	if (checks[has2Byte] && checks[hasModRM]
+	    && static_cast<uint8_t>(instructionBytes[positions[opcodeEnd] - 1]) == 0x1E) {
+
+		const uint8_t landing = static_cast<uint8_t>(instructionBytes[positions[opcodeEnd]]);
+		bool repPrefix = false;
+		for (int p = 0; checks[hasPrefix] && p < positions[prefixEnd]; ++p)
+			if (instructionBytes[p] == 0xF3) repPrefix = true;
+
+		if (repPrefix && (landing == 0xFA || landing == 0xFB)) {
+			instructionStr = (landing == 0xFA) ? "ENDBR64" : "ENDBR32";
+			machineCode = std::format("f3 0f 1e {:02x} ", landing);
+			return;
+		}
 	}
 
 	std::string segment = "", fmt = "";
@@ -140,11 +160,18 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[11], 
 	// Hand the resolver the whole ModRM byte (reg for groups, full byte for x87);
 	// when there is no ModRM the value is unused (the opcode is neither a group nor x87).
 	const uint8_t modrm = checks[hasModRM] ? static_cast<uint8_t>(instructionBytes[positions[opcodeEnd]]) : 0;
-	if (checks[has2Byte]) opcode = twoByteResolvedInfo(instructionBytes[positions[opcodeEnd] -1], modrm);
+	// A three-byte escape leaves the opcode in the 0F 38 / 0F 3A map, which the 0F
+	// table does not cover - take the same stand-in the byte-eater used, so the name
+	// and the length agree.
+	if (checks[hasAdditionalEscape])
+		opcode = x86_64_Mnemonic::threeByteRow(instructionBytes[positions[opcodeEnd] - 2] == 0x3a);
+	else if (checks[has2Byte]) opcode = twoByteResolvedInfo(instructionBytes[positions[opcodeEnd] -1], modrm);
 	else opcode = resolvedInfo(instructionBytes[positions[opcodeEnd] -1], modrm);
 		
 
 	machineCode += (checks[has2Byte]) ? "0f " : "";
+	if (checks[hasAdditionalEscape])
+		machineCode += std::format("{:02x} ", instructionBytes[positions[opcodeEnd] - 2]);
 	machineCode += std::format("{:02x} ", instructionBytes[positions[opcodeEnd] - 1]);
  	machineCode += (checks[hasModRM]) ? std::format("{:02x} ", instructionBytes[positions[opcodeEnd]]) : ""; // append the  ModRM byte
 
@@ -178,7 +205,7 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[11], 
 		if (checks[hasDisp]) {
 			displacement = checks[hasSIB] ? instructionBytes[positions[opcodeEnd] + 2] : instructionBytes[positions[opcodeEnd] + 1];
 			uint64_t aux = displacement;
-			if (mod == 0 && rm == 5) aux = static_cast<uint64_t>(static_cast<int32_t>(aux));
+			if ((mod & 7) == 0 && (rm & 7) == 5 && is64Bit) aux = static_cast<uint64_t>(static_cast<int32_t>(aux));
 			for (int k = 0; k < dispWidth; ++k)
 				fmt += std::format("{:02x} ", (displacement >> (8 * k)) & 0xff);
 
@@ -189,21 +216,21 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[11], 
 		
 		memory += "[";
 		if (checks[hasSIB]) {
-			if(! (base == 5 && mod == 0))
+			if(! ((base & 7) == 5 && (mod & 7) == 0))
 			memory += x86_64_Mnemonic::registerOf(base, checks[hasAddrSize], checks[hasREX], is64Bit);
 			if (index != static_cast<uint32_t>(REGISTER::SP)) {                      // index 100 = no index
-				memory += (!(base == 5 && mod == 0)) ? " + " : "";
+				memory += (!((base & 7) == 5 && (mod & 7) == 0)) ? " + " : "";
 				memory += x86_64_Mnemonic::registerOf(index, checks[hasAddrSize], checks[hasREX], is64Bit) + "*" + std::to_string(static_cast<int>(scale));
 			}
 		}
-		else if (!(mod == 0b00 && rm == (checks[hasAddrSize] ? 0b110 :  0b101))) {                                    // that form has no base register
+		else if (!((mod & 7) == 0b00 && (rm & 7) == (checks[hasAddrSize] ? 0b110 :  0b101))) {                                    // that form has no base register
 			memory += checks[hasAddrSize] ? x86_64_Mnemonic::registerOf16(rm, true):  x86_64_Mnemonic::registerOf(rm, checks[hasAddrSize], checks[hasREX], is64Bit);
 		}
 		if (checks[hasDisp]) {
 			// Nothing printed yet means there is no base register: the displacement is an
 			// absolute address, not an offset, so it stays unsigned.
 			if (memory.size() == 1) {
-				memory += (mod == 0 && rm == 5) ? "RIP + " : "";
+				memory += ( (mod & 7) == 0 && (rm & 7) == 5 && is64Bit) ? "RIP + " : "";
 				memory += std::format("{:#x}", displacement);
 			}
 			else {
@@ -248,7 +275,7 @@ inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[11], 
 
 		case ADDRESSING::E:
 		case ADDRESSING::M:		// memory
-			operands[i] = (mod == 0b11) ? x86_64_Mnemonic::registerOf(rm, op[i].size,checks[hasOpsize], checks[hasREX], rexBits[w]) : (segment + memory);
+			operands[i] = ((mod & 7) == 0b11) ? x86_64_Mnemonic::registerOf(rm, op[i].size,checks[hasOpsize], checks[hasREX], rexBits[w]) : (segment + memory);
 			if (mod != 0b11) segment = "";
 			break;
 
