@@ -1,88 +1,128 @@
 # voidwalk
 
-A C++20 binary analysis tool targeting **ELF** and **PE** executable formats. Automatically detects the binary format at load time and dispatches to the appropriate parser.
+Binary analysis for **ELF** and **PE** executables, built on its own **x86 / x86-64 disassembler** written from scratch (no disassembly library). Use it from a scriptable CLI, a terminal UI or a Qt 6 desktop GUI.
 
-**Platforms** - Linux and Windows.
+voidwalk started as a deep dive into how executables and machine code work, and is growing into a practical static and dynamic analysis toolkit for reverse engineers and security researchers.
 
-> **Status:** Active development. Supports decoding of both PE and ELF formats, and 
+**Platforms:** Linux and Windows (tested in CI). macOS is untested.
+**Status:** active development.
 
 ---
 
-## What Works Today
+## Features
 
-- **Format detection** - identifies ELF (`7F 45 4C 46`) and PE (`MZ` + PE signature) binaries from magic bytes and selects the correct parser automatically
-- **ELF section parsing** (x86 / x86_64)
-- **PE Section parsing** (x86 / x86_64)
-- **Architecture detection** - reports the target architecture (x86, x86_64, ARMv7, AArch64, etc.) from the ELF/PE header
-- **MMAP-backed binary reader** - `AddressSpace` provides random-access reads (`read_u8/16/32/64`) by mapping the executable into the memory (mmap) - File-backed random reads were *deprecated* for optimization reasons
-- **PE & ELF binary disassembly (x86)** - Decodes every machine code instruction in a subclass of *Instruction*.
-- **Console scripting interface** - print the decoded assembly to stdout/files, dump the hex of the executable..
-- **IA-32 decoding** - base instructions, twoByte, instruction groups, all implemented
-- **AMD64 decoding (!)** - extending upon the IA-32 ISA, still needs some bugfixes
-- **Async decoding (TUI & GUI only)** - Uses a separate thread to decode the instructions, in order for the GUI to be responsive. 
+**Loading**
+- Detects ELF or PE automatically from the magic bytes
+- Parses sections for ELF (32/64-bit) and PE (PE32/PE32+)
+- Detects the architecture: x86, x86-64, ARM32, AArch64
+- Memory-mapped, bounds-checked file access
 
+**x86 / x86-64 disassembler**
+- Prefixes and the full one-byte opcode map, including extension groups and the x87 FPU
+- The common `0F` instructions (`Jcc`, `SETcc`, `CMOVcc`, `MOVZX`/`MOVSX`, bit operations, `SYSCALL`, …) plus `ENDBR32`/`ENDBR64`
+- Long mode: REX, `R8`–`R15`, RIP-relative addressing, 64-bit operand defaults
+- Branch and call targets resolved to absolute addresses; raw bytes shown for every instruction
+- Sweeps the whole `.text` section, on a background thread in the TUI and GUI
+- On `/bin/ls` (x86-64, Debian 13), all 22,523 instructions start at the same addresses as in GNU `objdump`
 
-### Not yet implemented
+**Interfaces**
+- **CLI:** disassemble to stdout and to files; hex dump
+- **TUI:** disassembly, memory, registers and stack panes; open another file without restarting
+- **GUI:**
+  - fast, syntax-coloured disassembly
+  - symbol sidebar (call targets and strings)
+  - hex/ASCII memory view by file offset
+  - go-to address, drag-and-drop to open, dark and light themes
 
-- **Extended instructions set for IA-32** - such as AVX, SSE etc.
-- **ARM32/AArch64 architecture decoding**
-- **Debugging capabilities**  - in the near future.
-- **AI chatbot integration** - *opt-in* feature. Will be able to analyze the code and offer insight.
+**Not yet supported**
+- AVX/AVX-512 (VEX/EVEX) and SSE instructions
+- ARM32/AArch64 decoding (detected, but shown as raw bytes)
+- Symbol tables, import tables and the entry point; only `.text` is disassembled
+- The debugger, reassembly of instructions edited in the GUI, and the AI backend: their UI exists, their engines don't yet
+
+---
+
+## Requirements
+
+| Dependency | Needed for | Notes |
+|---|---|---|
+| CMake ≥ 3.21 | everything | |
+| C++20 compiler with `<format>` and `std::jthread` | everything | GCC 13+, Visual Studio 2022, or Clang with a standard library that has both |
+| [FTXUI](https://github.com/ArthurSonzogni/FTXUI) 6.1.9 | TUI | Downloaded automatically if not installed (needs `git` and network access) |
+| Qt 6 (Widgets, Svg) | GUI | Install it yourself: `qt6-base-dev qt6-svg-dev` on Debian/Ubuntu. On Windows, set `CMAKE_PREFIX_PATH` to your Qt install |
+
+The test suite needs neither Qt nor FTXUI.
+
+---
+
+## Building
+
+```sh
+git clone https://github.com/mnaomii/voidwalk.git
+cd voidwalk
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+```
+
+Binaries are written to `exec/`. A Visual Studio solution is also included in `.vs-project/`.
+
+| CMake option | Default | Effect |
+|---|---|---|
+| `VOIDWALK_BUILD_GUI` | `ON` | Qt 6 GUI (turn off if Qt isn't installed) |
+| `VOIDWALK_BUILD_TUI` | `ON` | FTXUI terminal UI |
+| `VOIDWALK_BUILD_TESTS` | `ON` | `voidwalk-tests` binary |
+| `VOIDWALK_SANITIZE` | `OFF` | AddressSanitizer + UndefinedBehaviorSanitizer |
+| `VOIDWALK_WERROR` | `OFF` | Treat warnings as errors |
+
+---
+
+## Usage
+
+```text
+voidwalk                              open the GUI
+voidwalk --gui [binary]               open the GUI, optionally loading <binary>
+voidwalk --tui <binary>               open the terminal UI
+voidwalk --print <binary> [out...]    disassemble to stdout (and to each extra file given)
+voidwalk --dump-hex <binary>          hex dump
+voidwalk --help                       show usage
+```
+
+Example: `voidwalk --print /bin/ls listing.asm` writes the disassembly to the terminal and to `listing.asm`.
+
+---
+
+## Testing
+
+```sh
+cmake --build build --target voidwalk-tests
+ctest --test-dir build --output-on-failure
+```
+
+The suite has more than 200 checks. They cover the file reader, ELF/PE parsing, IA-32 and AMD64 decoding, whole-sweep integrity, malformed input, the threaded decode, and a real system binary. Test inputs are generated when the suite runs, and CI runs it on Ubuntu and Windows on every push. For conclusive memory-safety results, configure with `-DVOIDWALK_SANITIZE=ON`.
+
 ---
 
 ## Architecture
 
-The project uses a polymorphic base class design with format-specific subclasses:
-
 ```
-Disassembler (abstract base)
-├── ELF
-└── PE
-
-
-Instruction (abstract)
-├── AArch64
-└── x86_64
-└── ARM32
-
-
-
+main/
+├── address-space/   memory-mapped file access
+├── disassembler/    ELF/PE parsers, x86 decoder and opcode tables
+├── miscellaneous/   format detection + disassembler factory
+├── TUI/  GUI/       frontends
+console-utils/       CLI commands
+tests/               test suite
 ```
 
-**Key design decisions:**
+- **Format subclasses:** `make_disassembler()` picks `ELF_Disassembler` or `PE_Disassembler` from the magic bytes. Each subclass routes decoding by architecture, so new formats and architectures are added as subclasses.
+- **Shared tables:** opcode maps are `constexpr` tables, used by both the decoder and the text renderer.
+- **Sessions:** the frontends reach the core only through a `Session`, which runs the decode on a worker thread.
 
-- **Factory instantiation** - `make_disassembler()` inspects the first bytes of the file and returns the matching subclass. New formats are added by subclassing, not by branching inside existing code.
-- **Parser dispatch** - bitness and architecture are handled by the ELF/PE disassemblers.
 ---
 
-## Build
+## License
 
-Builds with **Visual Studio** (MSVC) via the `.vcxproj` in `.vs-project/` or CMake via the `CMakeLists.txt`.
-
-```
-exec/voidwalk-tui.exe <path-to-binary>
-```
-
-Expects flags + exactly one path to an executable.
-Flags:
-``` text
-(--tui) -> launches the TUI
-(--gui) -> launches the GUI (default)
-(--run-tests) -> runs a set of tests which verify the correctness of the code
-(--print <executable> <file1> <file2> ..) -> prints the assembly to stdout and the specified files
-(--dump-hex <executable>) -> dumps the hex of the specified executable
-```
----
-
-## Vision
-
-The long-term goal is a complete binary analysis toolkit with both static and dynamic capabilities:
-
-- **Control flow visualization** - a jump tree representing basic blocks and branch targets, rendered in both CLI and an interactive GUI
-- **Emulated stack**
-- **Dynamic analysis** - runtime instruction tracing, branch outcome tracking, import call logging, and memory access monitoring
-- **Dual interface** - full CLI for scripting and a GUI with section browser, disassembly view, and jump tree visualizer
-- **Emulation for non-native apps** - architecturally incompatible apps will have their runtime emulated to mimic debugging capabilities
+GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 ---
 
@@ -93,7 +133,7 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 - [x] IA-32 instruction decoding support
 - [x] AMD64 instruction decoding support
 - [x] TUI
-- [ ] Tests
+- [x] Tests
 - [x] GUI
 - [x] Console scripting interface
 
@@ -109,3 +149,14 @@ The long-term goal is a complete binary analysis toolkit with both static and dy
 - [ ] AI-generated code explanation
 - [ ] Export analysis report to file
 - [ ] Simulated stack visualiser
+
+---
+
+## Vision
+
+A complete static and dynamic analysis toolkit, usable from the CLI, the terminal and the desktop:
+
+- **Debugger & dynamic analysis:** breakpoints, stepping, instruction tracing, branch and import-call logging, and memory-access monitoring. This is what the Run/Step controls and the register and stack panes in both UIs are for.
+- **Emulation for foreign architectures:** run user-mode programs built for another architecture (for example, ARM binaries on an x86 machine, and the reverse) in an emulator, so you can step through and inspect them like native code.
+- **Control-flow visualisation:** basic blocks and branch targets as a jump tree, in the CLI and as a zoomable, pannable view in the GUI.
+- **Opt-in AI code insight:** explanations of the disassembly on screen, off unless you enable it. The GUI's assistant pane and its settings already exist.
