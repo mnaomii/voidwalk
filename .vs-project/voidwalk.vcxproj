@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <!-- Single bundled voidwalk executable: core + TUI (FTXUI) + GUI (Qt6) + test
        harness. main/main.cpp dispatches by argv[1] into the gui, ui, or
@@ -117,126 +117,126 @@
   <!-- Qt Q_OBJECT headers run through moc. Keep this list exact: a Q_OBJECT
        header missing from QtMoc links with an undefined vtable/staticMetaObject. -->
   <ItemGroup>
-    <QtMoc Include="..\main\GUI\ai\ai_client.h" />
-    <QtMoc Include="..\main\GUI\dialogs\settings_dialog.h" />
-    <QtMoc Include="..\main\GUI\panes\disassembly_pane.h" />
-    <QtMoc Include="..\main\GUI\panes\registers_pane.h" />
-    <QtMoc Include="..\main\GUI\panes\stack_pane.h" />
-    <QtMoc Include="..\main\GUI\panes\memory_pane.h" />
-    <QtMoc Include="..\main\GUI\panes\ai_chat_pane.h" />
-    <QtMoc Include="..\main\GUI\panes\disasm_delegate.h" />
-    <QtMoc Include="..\main\GUI\panes\symbols_pane.h" />
-    <QtMoc Include="..\main\GUI\widgets\main_window.h" />
-    <QtMoc Include="..\main\GUI\widgets\welcome_widget.h" />
+    <QtMoc Include="..\src\gui\ai\ai_client.hpp" />
+    <QtMoc Include="..\src\gui\dialogs\settings_dialog.hpp" />
+    <QtMoc Include="..\src\gui\panes\disassembly_pane.hpp" />
+    <QtMoc Include="..\src\gui\panes\registers_pane.hpp" />
+    <QtMoc Include="..\src\gui\panes\stack_pane.hpp" />
+    <QtMoc Include="..\src\gui\panes\memory_pane.hpp" />
+    <QtMoc Include="..\src\gui\panes\ai_chat_pane.hpp" />
+    <QtMoc Include="..\src\gui\panes\disasm_delegate.hpp" />
+    <QtMoc Include="..\src\gui\panes\symbols_pane.hpp" />
+    <QtMoc Include="..\src\gui\main_window.hpp" />
+    <QtMoc Include="..\src\gui\welcome_widget.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <QtRcc Include="..\main\GUI\rsrc\mainWindow.qrc" />
+    <QtRcc Include="..\src\gui\rsrc\mainWindow.qrc" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="..\main\app.rc" />
+    <ResourceCompile Include="..\src\app.rc" />
   </ItemGroup>
   <ItemGroup>
     <!-- core / disassembler -->
-    <ClInclude Include="..\console-utils\delegate.hpp" />
-    <ClInclude Include="..\console-utils\hexReader.hpp" />
-    <ClInclude Include="..\console-utils\printToConsole.hpp" />
-    <ClInclude Include="..\main\address-space\address_space.hpp" />
-    <ClInclude Include="..\main\disassembler\disassembler.hpp" />
-    <ClInclude Include="..\main\disassembler\ELF\elf_disassembler.hpp" />
-    <ClInclude Include="..\main\disassembler\ELF\parsers\elf_section_map.hpp" />
-    <ClInclude Include="..\main\disassembler\miscellaneous\sections\base\header.hpp" />
-    <ClInclude Include="..\main\disassembler\mnemonic\AArch64\AArch64-instr.hpp" />
-    <ClInclude Include="..\main\disassembler\mnemonic\AArch64\AArch64-mnemonic.hpp" />
-    <ClInclude Include="..\main\disassembler\mnemonic\ARM32\ARM32-instr.hpp" />
-    <ClInclude Include="..\main\disassembler\mnemonic\ARM32\ARM32-mnemonic.hpp" />
-    <ClInclude Include="..\main\disassembler\mnemonic\instruction.hpp" />
-    <ClInclude Include="..\main\disassembler\mnemonic\x86_64\x86_64-instr.hpp" />
-    <ClInclude Include="..\main\disassembler\mnemonic\x86_64\x86_64-mnemonic.hpp" />
-    <ClInclude Include="..\main\disassembler\PE\parsers\pe_section_map.hpp" />
-    <ClInclude Include="..\main\disassembler\PE\pe_disassembler.hpp" />
-    <ClInclude Include="..\main\miscellaneous\loader.hpp" />
+    <ClInclude Include="..\src\cli\console.hpp" />
+    <ClInclude Include="..\src\cli\hex_reader.hpp" />
+    <ClInclude Include="..\src\cli\print_to_console.hpp" />
+    <ClInclude Include="..\src\address_space.hpp" />
+    <ClInclude Include="..\src\disassembler\disassembler.hpp" />
+    <ClInclude Include="..\src\disassembler\format\elf\elf_disassembler.hpp" />
+    <ClInclude Include="..\src\disassembler\format\elf\elf_sections.hpp" />
+    <ClInclude Include="..\src\disassembler\format\section.hpp" />
+    <ClInclude Include="..\src\arch\aarch64\aarch64_instruction.hpp" />
+    <ClInclude Include="..\src\arch\aarch64\aarch64_mnemonic.hpp" />
+    <ClInclude Include="..\src\arch\arm32\arm32_instruction.hpp" />
+    <ClInclude Include="..\src\arch\arm32\arm32_mnemonic.hpp" />
+    <ClInclude Include="..\src\arch\instruction.hpp" />
+    <ClInclude Include="..\src\arch\x86_64\x86_64_instruction.hpp" />
+    <ClInclude Include="..\src\arch\x86_64\x86_64_mnemonic.hpp" />
+    <ClInclude Include="..\src\disassembler\format\pe\pe_sections.hpp" />
+    <ClInclude Include="..\src\disassembler\format\pe\pe_disassembler.hpp" />
+    <ClInclude Include="..\src\disassembler\format\detect.hpp" />
     <!-- TUI -->
-    <ClInclude Include="..\main\TUI\model\session.h" />
-    <ClInclude Include="..\main\TUI\panes\panes.h" />
-    <ClInclude Include="..\main\TUI\runner\mainUI.h" />
-    <ClInclude Include="..\main\TUI\ui\ui.h" />
+    <ClInclude Include="..\src\tui\session.hpp" />
+    <ClInclude Include="..\src\tui\panes\panes.hpp" />
+    <ClInclude Include="..\src\tui\tui_main.hpp" />
+    <ClInclude Include="..\src\tui\ui.hpp" />
     <!-- GUI (non-moc headers) -->
-    <ClInclude Include="..\main\GUI\dialogs\settings.h" />
-    <ClInclude Include="..\main\GUI\model\gui_session.h" />
-    <ClInclude Include="..\main\GUI\model\symbols.h" />
-    <ClInclude Include="..\main\GUI\runner\gui_main.h" />
-    <ClInclude Include="..\main\GUI\theme\theme.h" />
-    <ClInclude Include="..\main\GUI\theme\theme_manager.h" />
-    <ClInclude Include="..\main\GUI\theme\icons.h" />
+    <ClInclude Include="..\src\gui\dialogs\settings.hpp" />
+    <ClInclude Include="..\src\gui\session.hpp" />
+    <ClInclude Include="..\src\gui\symbols.hpp" />
+    <ClInclude Include="..\src\gui\gui_main.hpp" />
+    <ClInclude Include="..\src\gui\theme\theme.hpp" />
+    <ClInclude Include="..\src\gui\theme\theme_manager.hpp" />
+    <ClInclude Include="..\src\gui\theme\icons.hpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- core / entry / tests -->
-    <ClCompile Include="..\main\address-space\address_space.cpp" />
-    <ClCompile Include="..\main\disassembler\disassembler.cpp" />
-    <ClCompile Include="..\main\disassembler\ELF\elf_disassembler.cpp" />
-    <ClCompile Include="..\main\disassembler\PE\pe_disassembler.cpp" />
-    <ClCompile Include="..\main\main.cpp" />
+    <ClCompile Include="..\src\address_space.cpp" />
+    <ClCompile Include="..\src\disassembler\disassembler.cpp" />
+    <ClCompile Include="..\src\disassembler\format\elf\elf_disassembler.cpp" />
+    <ClCompile Include="..\src\disassembler\format\pe\pe_disassembler.cpp" />
+    <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\tests\runner.cpp" />
     <!-- TUI -->
-    <ClCompile Include="..\main\TUI\model\session.cpp" />
-    <ClCompile Include="..\main\TUI\panes\disassembly_pane.cpp" />
-    <ClCompile Include="..\main\TUI\panes\memory_pane.cpp" />
-    <ClCompile Include="..\main\TUI\panes\registers_pane.cpp" />
-    <ClCompile Include="..\main\TUI\panes\stack_pane.cpp" />
-    <ClCompile Include="..\main\TUI\runner\mainUI.cpp" />
-    <ClCompile Include="..\main\TUI\ui\ui.cpp" />
+    <ClCompile Include="..\src\gui\session.cpp" />
+    <ClCompile Include="..\src\gui\panes\disassembly_pane.cpp" />
+    <ClCompile Include="..\src\gui\panes\memory_pane.cpp" />
+    <ClCompile Include="..\src\gui\panes\registers_pane.cpp" />
+    <ClCompile Include="..\src\gui\panes\stack_pane.cpp" />
+    <ClCompile Include="..\src\tui\tui_main.cpp" />
+    <ClCompile Include="..\src\tui\ui.cpp" />
     <!-- GUI. disassembly_pane / memory_pane / registers_pane / stack_pane share
          base names with the TUI panes, so their .obj would clobber the TUI ones
          in $(IntDir). Route every GUI object into an $(IntDir)GUI\ subdir. -->
-    <ClCompile Include="..\main\GUI\model\gui_session.cpp">
+    <ClCompile Include="..\src\gui\session.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\model\symbols.cpp">
+    <ClCompile Include="..\src\gui\symbols.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\ai\ai_client.cpp">
+    <ClCompile Include="..\src\gui\ai\ai_client.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\dialogs\settings_dialog.cpp">
+    <ClCompile Include="..\src\gui\dialogs\settings_dialog.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\panes\disassembly_pane.cpp">
+    <ClCompile Include="..\src\gui\panes\disassembly_pane.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\panes\registers_pane.cpp">
+    <ClCompile Include="..\src\gui\panes\registers_pane.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\panes\stack_pane.cpp">
+    <ClCompile Include="..\src\gui\panes\stack_pane.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\panes\memory_pane.cpp">
+    <ClCompile Include="..\src\gui\panes\memory_pane.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\panes\ai_chat_pane.cpp">
+    <ClCompile Include="..\src\gui\panes\ai_chat_pane.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\panes\disasm_delegate.cpp">
+    <ClCompile Include="..\src\gui\panes\disasm_delegate.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\panes\symbols_pane.cpp">
+    <ClCompile Include="..\src\gui\panes\symbols_pane.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\theme\theme.cpp">
+    <ClCompile Include="..\src\gui\theme\theme.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\theme\theme_manager.cpp">
+    <ClCompile Include="..\src\gui\theme\theme_manager.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\theme\icons.cpp">
+    <ClCompile Include="..\src\gui\theme\icons.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\widgets\main_window.cpp">
+    <ClCompile Include="..\src\gui\main_window.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\widgets\welcome_widget.cpp">
+    <ClCompile Include="..\src\gui\welcome_widget.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
-    <ClCompile Include="..\main\GUI\runner\gui_main.cpp">
+    <ClCompile Include="..\src\gui\gui_main.cpp">
       <ObjectFileName>$(IntDir)GUI\</ObjectFileName>
     </ClCompile>
   </ItemGroup>

@@ -1,21 +1,14 @@
 #include <iostream>
 
-#include "runner.hpp"
-#include "base.hpp"
-#include "console.hpp"
+#include "tests/runner.hpp"
+#include "tests/framework/base.hpp"
+#include "tests/framework/test_console.hpp"
 
-#include "address_space/address-space-tests.hpp"
-#include "disassembler/loader-tests.hpp"
-#include "disassembler/elf-sections-tests.hpp"
-#include "disassembler/pe-sections-tests.hpp"
-#include "disassembler/x86_64-tests/IA-32-tests.hpp"
-#include "disassembler/x86_64-tests/AMD64-tests.hpp"
-#include "disassembler/sweep-tests.hpp"
-#include "robustness/malformed-tests.hpp"
-#include "concurrency/async-decode-tests.hpp"
-#include "integration/real-binary-tests.hpp"
+#include "tests/suites.hpp"
+
 // ARM32 / AArch64 decoders are not implemented, so no suites exist for them yet
-// (tests/disassembler/ARM32-tests.hpp and AArch64-tests.hpp are deliberate stubs).
+// (tests/arch/arm32/arm32_tests.hpp and tests/arch/aarch64/aarch64_tests.hpp are
+// deliberate stubs, kept as placeholders for when those decoders land).
 
 // The suites are ordered by widening scope, so a failure is read top-down: a broken
 // AddressSpace explains a broken loader, which explains a broken sweep. Reading the
@@ -46,24 +39,24 @@ int runTests() {
     };
 
     // --- unit -------------------------------------------------------------
-    section("AddressSpace");    { AddressSpace_Tests  t; }
-    section("Loader");          { Loader_Tests        t; }
-    section("ELF sections");    { ELF_Sections_Tests  t; }
-    section("PE sections");     { PE_Sections_Tests   t; }
-    section("IA-32 decoder");   { IA_32_Tests         t; }
-    section("AMD64 decoder");   { AMD64_Tests         t; }
+    section("AddressSpace");    run_address_space_tests();
+    section("Loader");          run_loader_tests();
+    section("ELF sections");    run_elf_sections_tests();
+    section("PE sections");     run_pe_sections_tests();
+    section("IA-32 decoder");   run_ia32_tests();
+    section("AMD64 decoder");   run_amd64_tests();
 
     // --- whole-sweep invariants -------------------------------------------
-    section("Sweep integrity"); { Sweep_Tests         t; }
+    section("Sweep integrity"); run_sweep_tests();
 
     // --- hostile input ------------------------------------------------------
-    section("Robustness");      { Malformed_Tests     t; }
+    section("Robustness");      run_malformed_tests();
 
     // --- threading contract -------------------------------------------------
-    section("Async decode");    { AsyncDecode_Tests   t; }
+    section("Async decode");    run_async_decode_tests();
 
     // --- end to end ---------------------------------------------------------
-    section("Real binaries");   { RealBinary_Tests    t; }
+    section("Real binaries");   run_real_binary_tests();
 
     // --- summary ------------------------------------------------------------
     // The headline number is real failures. The known-defect count is printed next to
