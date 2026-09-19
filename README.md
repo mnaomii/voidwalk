@@ -49,7 +49,7 @@ voidwalk started as a deep dive into how executables and machine code work, and 
 | CMake ≥ 3.21 | everything | |
 | C++20 compiler with `<format>` and `std::jthread` | everything | GCC 13+, Visual Studio 2022, or Clang with a standard library that has both |
 | [FTXUI](https://github.com/ArthurSonzogni/FTXUI) 6.1.9 | TUI | Downloaded automatically if not installed (needs `git` and network access) |
-| Qt 6 (Widgets, Svg) | GUI | Install it yourself: `qt6-base-dev qt6-svg-dev` on Debian/Ubuntu. On Windows, set `CMAKE_PREFIX_PATH` to your Qt install |
+| Qt 6 (Widgets, Svg, Keychain) | GUI | Install it yourself: `qt6-base-dev qt6-svg-dev libqt6keychain1` on Debian/Ubuntu. On Windows, set `CMAKE_PREFIX_PATH` to your Qt install |
 
 The test suite needs neither Qt nor FTXUI.
 
