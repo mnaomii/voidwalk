@@ -104,19 +104,34 @@ The suite has more than 200 checks. They cover the file reader, ELF/PE parsing, 
 
 ## Architecture
 
+Four tiers. Every dependency points down; none point up or sideways.
+
 ```
-main/
-├── address-space/   memory-mapped file access
-├── disassembler/    ELF/PE parsers, x86 decoder and opcode tables
-├── miscellaneous/   format detection + disassembler factory
-├── TUI/  GUI/       frontends
-console-utils/       CLI commands
-tests/               test suite
+src/
+├── main.cpp              entry point, dispatches on argv[1]
+├── cli/  tui/  gui/      frontends
+├── analysis_session.*    shared view-model the frontends extend
+├── disassembler/         containers + the .text sweep
+│   └── format/           ELF and PE readers, section parsing
+├── arch/                 instruction sets behind the Decoder interface
+│   └── x86_64/ arm32/ aarch64/
+└── address_space.*       memory-mapped file access
+tests/                    mirrors src/, one suite per translation unit
 ```
 
-- **Format subclasses:** `make_disassembler()` picks `ELF_Disassembler` or `PE_Disassembler` from the magic bytes. Each subclass routes decoding by architecture, so new formats and architectures are added as subclasses.
-- **Shared tables:** opcode maps are `constexpr` tables, used by both the decoder and the text renderer.
-- **Sessions:** the frontends reach the core only through a `Session`, which runs the decode on a worker thread.
+- **`arch/` never includes from `disassembler/`.** That rule is what keeps an
+  instruction set out of the container parser. A new architecture is one
+  `Decoder` subclass plus one case in `makeDecoder()`.
+- **Format vs. architecture are separate axes.** `make_disassembler()` picks
+  `ELF_Disassembler` or `PE_Disassembler` from the magic bytes; each translates
+  its own machine number into an `Arch`, and everything downstream keys off that
+  enum. Neither reader knows how to decode an instruction.
+- **Shared tables:** opcode maps are `constexpr` tables built at compile time,
+  used by both the decoder and the text renderer.
+- **Sessions:** frontends reach the core only through `voidwalk::Session`, which
+  owns the decode worker. `gui::Session` and `tui::Session` add presentation only.
+- **Includes are root-relative.** Everything resolves against `src/` (or the repo
+  root for `tests/...`); there is no `../` in any include.
 
 ---
 

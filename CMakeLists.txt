@@ -30,20 +30,41 @@ foreach(config IN LISTS CMAKE_CONFIGURATION_TYPES)
 endforeach()
 
 # ---------------------------------------------------------------------------
-# voidwalk-core — format parsing shared by every frontend.
+# voidwalk-core — the analysis core shared by every frontend.
+#
+# Two tiers, and the dependency only ever points down:
+#
+#   src/address_space.*     raw mapped-file byte access; depends on nothing
+#   src/arch/               instruction sets behind the Decoder interface
+#   src/disassembler/       ELF/PE containers + the .text sweep
+#
+# src/arch/ must never include anything from src/disassembler/. That is the rule
+# that keeps an instruction set out of the container parser, which is where the x86
+# decoder used to live.
 # ---------------------------------------------------------------------------
 
 add_library(voidwalk-core STATIC
-    main/address-space/address_space.cpp
-    main/disassembler/disassembler.cpp
-    main/disassembler/ELF/elf_disassembler.cpp
-    main/disassembler/PE/pe_disassembler.cpp)
+    src/address_space.cpp
+    # arch tier - instruction sets. Depends on address_space only.
+    src/arch/decoder.cpp
+    src/arch/x86_64/x86_64_decoder.cpp
+    src/arch/x86_64/x86_64_tables.cpp
+    src/arch/arm32/arm32_decoder.cpp
+    src/arch/aarch64/aarch64_decoder.cpp
+    # disassembler tier - containers and the sweep. Depends on arch.
+    src/disassembler/disassembler.cpp
+    src/disassembler/format/elf/elf_disassembler.cpp
+    src/disassembler/format/pe/pe_disassembler.cpp
+    # frontend seam - the shared view-model both gui::Session and tui::Session extend
+    src/analysis_session.cpp)
 
-# Sources include each other by relative path; these roots let a frontend reach
-# "main/..." and "tests/..." regardless of where its own file sits.
+# Exactly two include roots, and every #include in the project is written relative
+# to one of them - no "../" anywhere. src/ is the product root, so a header moving
+# between tiers changes only its own path, never the includes inside it; the source
+# root is on the list purely so the test tree can say "tests/...".
 target_include_directories(voidwalk-core PUBLIC
-    "${CMAKE_SOURCE_DIR}"
-    "${CMAKE_SOURCE_DIR}/main")
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}")
 
 # The core (AddressSpace mutex) and every frontend (the decode worker runs on a
 # std::jthread) need the platform threading library. Linking it PUBLIC on the core
@@ -52,19 +73,19 @@ find_package(Threads REQUIRED)
 target_link_libraries(voidwalk-core PUBLIC Threads::Threads)
 
 # ---------------------------------------------------------------------------
-# voidwalk — one executable that bundles every frontend. main/main.cpp routes
+# voidwalk — one executable that bundles every frontend. src/main.cpp routes
 # by argv[1]:
 #   voidwalk --gui                -> Qt6 GUI     (needs VOIDWALK_BUILD_GUI)
 #   voidwalk --ui <bin> | <bin>   -> FTXUI TUI   (needs VOIDWALK_BUILD_TUI)
 # ---------------------------------------------------------------------------
 
 add_executable(voidwalk
-    main/main.cpp)
+    src/main.cpp)
 # app.rc is a Windows resource script (the app icon). It is only meaningful with an RC
 # compiler, so keep it off non-Windows configures - otherwise a Linux/macOS `cmake -B build`
 # fails at generation on an unknown RC source, which would break CI before it builds anything.
 if(WIN32)
-    target_sources(voidwalk PRIVATE main/app.rc)
+    target_sources(voidwalk PRIVATE src/app.rc)
 endif()
 target_link_libraries(voidwalk PRIVATE voidwalk-core)
 
@@ -89,15 +110,15 @@ if(VOIDWALK_BUILD_TUI)
     endif()
 
     target_sources(voidwalk PRIVATE
-        main/TUI/model/session.cpp
-        main/TUI/panes/disassembly_pane.cpp
-        main/TUI/panes/memory_pane.cpp
-        main/TUI/panes/registers_pane.cpp
-        main/TUI/panes/stack_pane.cpp
-        main/TUI/runner/mainUI.cpp
-        main/TUI/ui/ui.cpp)
+        src/tui/session.cpp
+        src/tui/panes/disassembly_pane.cpp
+        src/tui/panes/memory_pane.cpp
+        src/tui/panes/registers_pane.cpp
+        src/tui/panes/stack_pane.cpp
+        src/tui/tui_main.cpp
+        src/tui/ui.cpp)
 
-    # Gates the TUI include + default dispatch in main/main.cpp.
+    # Gates the TUI include + default dispatch in src/main.cpp.
     target_compile_definitions(voidwalk PRIVATE VOIDWALK_WITH_TUI)
 
     target_link_libraries(voidwalk PRIVATE
@@ -115,7 +136,7 @@ if(VOIDWALK_BUILD_GUI)
     # The voidwalk target already exists at this point, so
     # qt_standard_project_setup()'s variable tweaks would arrive too late to
     # affect it. Enable Qt autogen (moc/uic/rcc) on the target directly. AUTORCC
-    # is what processes main/GUI/rsrc/mainWindow.qrc; without it the build still
+    # is what processes src/gui/rsrc/mainWindow.qrc; without it the build still
     # links but every toolbar icon (icons.cpp reads ":/icons/<name>.svg") fails
     # to load at runtime.
     set_target_properties(voidwalk PROPERTIES
@@ -124,31 +145,31 @@ if(VOIDWALK_BUILD_GUI)
         AUTORCC ON)
 
     target_sources(voidwalk PRIVATE
-        main/GUI/runner/gui_main.cpp
-        main/GUI/model/gui_session.cpp
-        main/GUI/model/symbols.cpp
-        main/GUI/ai/ai_client.cpp
-        main/GUI/dialogs/settings_dialog.cpp
-        main/GUI/panes/ai_chat_pane.cpp
-        main/GUI/panes/column_fit.cpp
-        main/GUI/panes/disasm_delegate.cpp
-        main/GUI/panes/disassembly_pane.cpp
-        main/GUI/panes/memory_pane.cpp
-        main/GUI/panes/registers_pane.cpp
-        main/GUI/panes/stack_pane.cpp
-        main/GUI/panes/symbols_pane.cpp
-        main/GUI/theme/icons.cpp
-        main/GUI/theme/theme.cpp
-        main/GUI/theme/theme_manager.cpp
-        main/GUI/widgets/main_window.cpp
-        main/GUI/widgets/welcome_widget.cpp
-        main/GUI/rsrc/mainWindow.qrc)
+        src/gui/gui_main.cpp
+        src/gui/session.cpp
+        src/gui/symbols.cpp
+        src/gui/main_window.cpp
+        src/gui/welcome_widget.cpp
+        src/gui/ai/ai_client.cpp
+        src/gui/dialogs/settings_dialog.cpp
+        src/gui/panes/ai_chat_pane.cpp
+        src/gui/panes/column_fit.cpp
+        src/gui/panes/disasm_delegate.cpp
+        src/gui/panes/disassembly_pane.cpp
+        src/gui/panes/memory_pane.cpp
+        src/gui/panes/registers_pane.cpp
+        src/gui/panes/stack_pane.cpp
+        src/gui/panes/symbols_pane.cpp
+        src/gui/theme/icons.cpp
+        src/gui/theme/theme.cpp
+        src/gui/theme/theme_manager.cpp
+        src/gui/rsrc/mainWindow.qrc)
 
-    # main/GUI/widgets/mainWindow.{h,cpp}, main/GUI/runner/mainGUI.cpp and
-    # main/GUI/ui/mainWindow.ui are the superseded first pass - left out
-    # deliberately; do not add them back without reviving the .ui.
+    # The superseded first pass lives in src/gui/legacy/ (mainWindow.{h,cpp},
+    # mainGUI.cpp, mainWindow.ui). It is kept for reference and deliberately not
+    # compiled; do not add it back without reviving the .ui.
 
-    # Gates the GUI include + "--gui" dispatch in main/main.cpp.
+    # Gates the GUI include + "--gui" dispatch in src/main.cpp.
     target_compile_definitions(voidwalk PRIVATE VOIDWALK_WITH_GUI)
 
     target_link_libraries(voidwalk PRIVATE
@@ -170,9 +191,22 @@ endif()
 #   ctest --test-dir build --output-on-failure
 # ---------------------------------------------------------------------------
 if(VOIDWALK_BUILD_TESTS)
+    # One translation unit per suite, so they compile in parallel and editing one
+    # check does not rebuild the rest. tests/framework/ stays header-only: it is
+    # shared fixtures and the check macros, not suite bodies.
     add_executable(voidwalk-tests
-        tests/test_main.cpp
-        tests/runner.cpp)
+        tests/main.cpp
+        tests/runner.cpp
+        tests/address_space/address_space_tests.cpp
+        tests/arch/x86_64/amd64_tests.cpp
+        tests/arch/x86_64/ia32_tests.cpp
+        tests/concurrency/async_decode_tests.cpp
+        tests/disassembler/elf_sections_tests.cpp
+        tests/disassembler/loader_tests.cpp
+        tests/disassembler/pe_sections_tests.cpp
+        tests/disassembler/sweep_tests.cpp
+        tests/integration/real_binary_tests.cpp
+        tests/robustness/malformed_tests.cpp)
     target_link_libraries(voidwalk-tests PRIVATE voidwalk-core)
 
     add_test(NAME voidwalk-tests COMMAND voidwalk-tests)
