@@ -85,8 +85,8 @@ public:
         return ok;
     }
 
-    // A check that is KNOWN to fail because of an open defect. `ref` names the finding
-    // (e.g. "AUDIT.md B1") so the marker can be traced back to a written diagnosis.
+    // A check that is KNOWN to fail because of an open defect. `ref` names the defect
+    // (e.g. "instrDecodePos not reset") so the marker says what it is waiting on.
     //
     //   cond == false -> xfail: expected, reported, does NOT fail the build.
     //   cond == true  -> XPASS: the defect looks fixed. That IS a failure, because the

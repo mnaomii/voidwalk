@@ -8,11 +8,8 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMetaObject>
 #include <QTreeWidget>
 #include <QVBoxLayout>
-
-#include <utility>
 
 namespace gui {
 
@@ -97,17 +94,6 @@ void SymbolsPane::setTheme(const Theme& theme) {
 }
 
 void SymbolsPane::refresh() {
-	// Cancel whatever is in flight first: its result is about to be superseded, and
-	// joining here (rather than letting the assignment below do it after the new
-	// worker has started) keeps at most one scan running at a time.
-	scanThread_ = {};
-	// Bump the token unconditionally, before any early return. A scan can post its
-	// result and only then see the stop request, so the join above does not
-	// guarantee the queue is empty — and a stale result that still matched the
-	// token would be applied to whatever binary is loaded by the time it is
-	// delivered. Bumping here is what makes it unmatchable.
-	const uint64_t token = ++scanToken_;
-
 	if (!session_ || !session_->loaded()) {
 		symbols_.clear();
 		scanning_ = false;
@@ -116,36 +102,22 @@ void SymbolsPane::refresh() {
 	}
 
 	symbols_.clear();
-	scanning_ = true;
-	rebuild(); // "Scanning…" until the worker reports back
 
-	// Nothing worth scanning until the sweep has published its rows: a scan started
-	// now would walk a fraction of the binary and be thrown away by the one
-	// MainWindow starts on the decode's final tick. Leave the placeholder up.
-	if (session_->isDecoding()) return;
+	// The sweep is still running, so most rows do not exist yet: a scan started now
+	// would walk a fraction of the binary and be thrown away by the one
+	// MainWindow starts on the decode's final tick. Leave "Scanning…" up instead.
+	if (session_->isDecoding()) {
+		scanning_ = true;
+		rebuild();
+		return;
+	}
 
-	// A Snapshot owns shared_ptr copies of the disassembler and its address space
-	// and pins the row count, so the worker keeps reading a consistent binary even
-	// if the user opens another one mid-scan.
-	Snapshot snap = session_->snapshot();
-
-	scanThread_ = std::jthread(
-		[this, snap = std::move(snap), token](std::stop_token stop) {
-			std::vector<SymbolInfo> found = collectSymbols(snap, stop);
-			if (stop.stop_requested()) return;
-			// Hop back to the UI thread — QTreeWidget is not touchable from here.
-			// `this` stays a live QObject for as long as this thread runs, because
-			// scanThread_ is declared last and so is joined before the pane's own
-			// destruction gets any further.
-			QMetaObject::invokeMethod(this,
-				[this, token, found = std::move(found)]() mutable {
-					if (token != scanToken_) return; // superseded by a newer scan
-					symbols_ = std::move(found);
-					scanning_ = false;
-					rebuild();
-				},
-				Qt::QueuedConnection);
-		});
+	// Synchronous, on the UI thread. A Snapshot is no longer needed for thread
+	// safety, but it stays: it is the read-only row view collectSymbols() takes,
+	// and it pins the published row count so the scan cannot run past it.
+	symbols_ = collectSymbols(session_->snapshot());
+	scanning_ = false;
+	rebuild();
 }
 
 QTreeWidgetItem* SymbolsPane::addGroup(const QString& title, int count) {

@@ -16,9 +16,12 @@ class StackPane : public QWidget {
 public:
 	explicit StackPane(QWidget* parent = nullptr);
 
+	// Borrows `s`; the caller keeps ownership and must outlive this pane.
 	void setSession(Session* s) { session_ = s; }
 
 public slots:
+	// Rebuilds the table from Session::stack(). O(stack depth), which is 0 today.
+	// Called from MainWindow::refreshAll().
 	void refresh();
 
 private:

@@ -72,6 +72,8 @@ public:
 	// worker has published it by clearing `running`.
 	const std::string& decodeNote() const;
 
+	void compact();
+
 	// Raw file bytes, clamped at end-of-file; empty when nothing is loaded.
 	// NOTE: the offset is a *file offset*, while disassembly addresses are *virtual
 	// addresses*. They differ until a debugger provides a loaded image.

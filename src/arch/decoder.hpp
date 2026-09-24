@@ -27,7 +27,7 @@ public:
     virtual uint64_t decodeLine(AddressSpace& contents,
                                 uint64_t address,
                                 uint64_t vaddr,
-                                std::vector<std::unique_ptr<Instruction>>& decodedInstructions) = 0;
+                                InstructionStore& decodedInstructions) = 0;
 };
 
 } // namespace voidwalk

@@ -23,8 +23,7 @@ namespace gui {
 // (2) is a real exposure, not a hypothetical one. save() narrows the settings
 // file to owner-only on POSIX, which reduces the blast radius but is a
 // mitigation rather than a fix; the Settings dialog states the exposure and
-// points at (1). Replacing (2) with a credential store is the actual fix and is
-// tracked as H4 in AUDIT.md.
+// points at (1). Replacing (2) with a credential store is the actual fix.
 struct AppSettings {
 	QString theme = QStringLiteral("dark");                  // "dark" | "light"
 

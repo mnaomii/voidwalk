@@ -18,6 +18,17 @@ using voidwalk::Disassembler;
 using voidwalk::make_disassembler;
 
 
+// Disassembles argv[2] and writes the listing to stdout plus every path in
+// argv[3..argc), each opened truncating.
+//
+// An output path equal to the input is skipped with a warning on stderr rather
+// than treated as fatal - writing the listing over the binary being read would
+// corrupt the mapping mid-sweep.
+//
+// Throws std::invalid_argument when no file was given, and std::runtime_error
+// when an output file cannot be opened. Failures from the open or the sweep
+// itself (bad format, unimplemented architecture) are caught here and reported on
+// stderr, so this returns normally after a failed decode.
 inline void printToConsole(int argc, char** argv) {
     if (argc <= 2) throw std::invalid_argument("No file was provided.\n");
 

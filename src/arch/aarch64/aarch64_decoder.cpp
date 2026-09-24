@@ -6,7 +6,7 @@ namespace voidwalk {
 
 // Always throws: no AArch64 decoder exists yet.
 uint64_t AArch64Decoder::decodeLine(AddressSpace&, uint64_t, uint64_t,
-                          std::vector<std::unique_ptr<Instruction>>&) {
+                          InstructionStore&) {
     throw std::runtime_error("Not implemented yet.");
 }
 

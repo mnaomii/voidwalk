@@ -74,7 +74,7 @@ int runTests() {
 
     if (Tests::xfailed > 0)
         std::cout << "  " << Tests::xfailed
-                  << " known defect(s) still open (xfail) - see AUDIT.md.\n";
+                  << " known defect(s) still open (xfail).\n";
     if (Tests::xpassed > 0)
         std::cout << red << "  " << Tests::xpassed
                   << " known defect(s) now PASS - remove their expect_xfail markers."

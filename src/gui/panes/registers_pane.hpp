@@ -19,9 +19,13 @@ class RegistersPane : public QWidget {
 public:
 	explicit RegistersPane(QWidget* parent = nullptr);
 
+	// Borrows `s`; the caller keeps ownership and must outlive this pane.
 	void setSession(Session* s) { session_ = s; }
 
 public slots:
+	// Rebuilds the tree from Session::registers(), re-choosing 32- vs 64-bit names
+	// from Session::is64bit(). Fixed cost - the register set is a constant size.
+	// Called from MainWindow::refreshAll().
 	void refresh();
 
 private:

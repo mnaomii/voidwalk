@@ -28,6 +28,16 @@
 
 namespace voidwalk {
 
+// One decoded x86 / x86-64 instruction.
+//
+// Split of responsibility with X86Decoder: the decoder eats the byte stream and
+// works out the SHAPE of the instruction (which fields are present, where they
+// start, how wide they are); this class turns that shape plus the opcode tables
+// into the two strings Instruction holds. It re-reads nothing from the file, so
+// everything it needs arrives through decode()'s parameters.
+//
+// The static members below are thin forwarders to x86_64_Mnemonic, kept so the
+// renderer names one type rather than two.
 class x86_64: public Instruction{
 
 
@@ -58,6 +68,39 @@ static bool isPrefix(uint8_t op)										{ return !prefixTable()[op].empty(); }
 
 x86_64() {};
 
+// Renders the instruction X86Decoder just measured, filling machineCode and
+// instructionStr. Called exactly once per object, immediately after construction.
+//
+// Parameters are the decoder's scratch arrays, passed by reference rather than
+// packed into a struct because they never outlive the one call:
+//
+//   instructionBytes  the instruction's bytes in stream order - EXCEPT the
+//                     immediate slots, which hold the decoder's *resolved* value
+//                     (a rel8/16/32 has already been turned into its absolute
+//                     target vaddr). Use rawImmediates to print the encoded form.
+//   checks            presence flags, indexed by the flagsIdx enum below:
+//                     hasPrefix hasModRM hasSIB hasDisp hasImm has2Byte
+//                     hasOpsize(0x66) hasAddrSize(0x67) hasREX
+//                     hasAdditionalEscape(0F 38 / 0F 3A) isInvalid
+//   positions         indices into instructionBytes, by the positionsIdx enum:
+//                     prefixEnd (one past the last prefix), opcodeEnd (one past
+//                     the last opcode byte, so opcodeEnd-1 IS the opcode and
+//                     opcodeEnd is the ModRM), immBegin, rexBegin
+//   rexBits           the four REX bits, by the rexBitsIdx enum: b x r w.
+//                     Meaningless unless is64Bit && checks[hasREX]
+//   immWidth          bytes each immediate occupies in the stream (not its
+//                     printed width) - needed because a sign-extended imm8 prints
+//                     wide but encodes narrow
+//   dispWidth         bytes the displacement occupies in the stream
+//   rawImmediates     the encoded value of each relative operand, before the
+//                     decoder resolved it to an absolute target; 0 for operands
+//                     that are not relative. Only the hex dump uses these
+//   is64Bit           long mode. Selects REX handling, RIP-relative addressing
+//                     and the def64 defaults; false means IA-32
+//
+// Never throws and never fails: an instruction the decoder rejected
+// (checks[isInvalid], or no opcode found) renders as "(bad)" plus whatever bytes
+// were consumed. A sweep therefore always gets a row back.
 inline void decode( uint64_t (&instructionBytes)[15], const bool (&checks)[11], const int (&positions)[4], const bool (&rexBits)[4], const uint32_t (&immWidth)[3], const uint32_t& dispWidth, const uint64_t(&rawImmediates)[3], bool is64Bit) {
 	
 	uint8_t mod = 0, reg_op = 0, rm = 0, scale = 0, index = 0, base = 0;

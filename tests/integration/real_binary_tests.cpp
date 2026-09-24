@@ -54,8 +54,12 @@ class RealBinary_Tests : public Tests {
         const std::string arch = d->getArchitecture();
         expect(arch != "Unknown", "architecture is recognised (" + arch + ")");
 
-        const Header& text = d->getSections()._text;
-        if (!expect(text.getSize() > 0, ".text was located and is non-empty"))
+        // Every .text section counts: the sweep covers all of them.
+        const std::vector<Header>& texts = d->getSections()._text;
+        uint64_t size = 0;
+        for (const Header& t : texts)
+            size += t.getSize();
+        if (!expect(size > 0, ".text was located and is non-empty"))
             return;
 
         // A sweep of real code must not raise. decodeLine throws for an unimplemented
@@ -66,7 +70,6 @@ class RealBinary_Tests : public Tests {
         catch (const std::exception& e) { threw = e.what(); }
 
         const size_t count = d->getDecodedInstructions().size();
-        const uint64_t size = text.getSize();
 
         // Everything below is only meaningful for the architectures with a decoder.
         const bool haveDecoder = (arch == "x86" || arch == "x86_64");
@@ -75,9 +78,9 @@ class RealBinary_Tests : public Tests {
             return;
         }
 
-        // These were split by bitness while AUDIT.md B1 was open: 64-bit targets tripped
-        // REX register extension and were tracked as known failures, 32-bit ones were
-        // held to the real standard. B1 is fixed, so both are held to it now.
+        // These were split by bitness while the REX register-extension defect was open:
+        // 64-bit targets tripped it and were tracked as known failures, 32-bit ones were
+        // held to the real standard. It is fixed, so both are held to it now.
         auto check = [&](bool cond, const std::string& what) { expect(cond, what); };
 
         check(threw.empty(),
@@ -93,12 +96,23 @@ class RealBinary_Tests : public Tests {
                   + std::to_string(size) + " bytes of .text (floor "
                   + std::to_string(floorCount) + ")");
 
-        // Coverage: how much of .text the sweep actually walked.
+        // Coverage: how much of .text the sweep actually walked. Measured per section and
+        // summed - the gap between two code sections is not code, so first-to-last
+        // across all of them would count it as walked.
         if (count > 0) {
             const auto& addrs = d->getInstructionAddresses();
-            const uint64_t first = addrs.front();
-            const uint64_t last  = addrs.back();
-            const uint64_t walked = last - first;
+            uint64_t walked = 0;
+            for (const Header& t : texts) {
+                bool any = false;
+                uint64_t first = 0, last = 0;
+                for (uint64_t a : addrs) {
+                    if (a < t.getVaddr() || a - t.getVaddr() >= t.getSize()) continue;
+                    if (!any) first = a;
+                    last = a;
+                    any = true;
+                }
+                if (any) walked += last - first;
+            }
             const double pct = size ? (100.0 * double(walked) / double(size)) : 0.0;
             char buf[64];
             std::snprintf(buf, sizeof(buf), "%.1f%%", pct);

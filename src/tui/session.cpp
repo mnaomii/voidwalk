@@ -82,7 +82,7 @@ void Session::refresh() {
 		for (size_t i = builtInstrs_; i < ready; ++i) {
 			// Both vectors have >= ready elements (readyCount is published only once
 			// they are consistent), so index directly. Do NOT call addresses.size()
-			// here — that would race the worker's push_back on the same vector.
+			// here — that would race the worker's push_back on the same store.
 			std::string addr = hexAddr(addresses[i]) + "  ";
 			disasmLines_.push_back("  " + addr + decoded[i]->decodeLineString());
 		}
@@ -100,8 +100,11 @@ void Session::refresh() {
 	else {
 		disasmLines_.clear();
 		builtInstrs_ = 0;
-		const Header& text = disassembler_->getSections()._text;
-		uint64_t size = text.getSize();
+		// Every .text section, in table order. The row cap is shared across all of them.
+		const std::vector<Header>& texts = disassembler_->getSections()._text;
+		uint64_t size = 0;
+		for (const Header& text : texts)
+			size += text.getSize();
 		if (size == 0) {
 			disasmLines_.push_back("  [.text section not found or empty]");
 		}
@@ -113,13 +116,19 @@ void Session::refresh() {
 			disasmLines_.push_back("");
 
 			constexpr uint64_t kMaxPlaceholderRows = 512;
-			uint64_t rows = size < kMaxPlaceholderRows ? size : kMaxPlaceholderRows;
-			auto raw = bytes(text.getOffset(), rows);
-			uint64_t vaddr = text.getVaddr();
-			for (size_t i = 0; i < raw.size(); ++i) {
-				char line[64];
-				std::snprintf(line, sizeof(line), "%s  %02X", hexAddr(vaddr + i).c_str(), raw[i]);
-				disasmLines_.push_back(line);
+			uint64_t rows = 0; // bytes requested so far, across sections
+			for (const Header& text : texts) {
+				if (rows == kMaxPlaceholderRows) break;
+				const uint64_t budget = kMaxPlaceholderRows - rows;
+				const uint64_t want = text.getSize() < budget ? text.getSize() : budget;
+				auto raw = bytes(text.getOffset(), want);
+				uint64_t vaddr = text.getVaddr();
+				for (size_t i = 0; i < raw.size(); ++i) {
+					char line[64];
+					std::snprintf(line, sizeof(line), "%s  %02X", hexAddr(vaddr + i).c_str(), raw[i]);
+					disasmLines_.push_back(line);
+				}
+				rows += want;
 			}
 			if (size > rows)
 				disasmLines_.push_back("  ... (" + std::to_string(size - rows) + " more bytes)");
@@ -152,21 +161,13 @@ void Session::refresh() {
 	regRows_.push_back("[emulated - debugger WIP]");
 
 	// --- stack ------------------------------------------------------------
-	// virtStack is the core's simulated stack; empty until execution exists.
-	const auto& stack = disassembler_->getVirtStack();
-	if (stack.empty()) {
-		stackRows_.push_back("  <empty>");
-		stackRows_.push_back("");
-		stackRows_.push_back("  [stack simulation WIP -");
-		stackRows_.push_back("   fills once the debugger");
-		stackRows_.push_back("   can execute instructions]");
-	}
-	else {
-		for (size_t i = stack.size(); i-- > 0;) {
-			std::string marker = (i == stack.size() - 1) ? " <- esp" : "";
-			stackRows_.push_back(hexAddr(i * 8) + "  " + hex64(stack[i]) + marker);
-		}
-	}
+	// The core no longer keeps a simulated stack (Disassembler::virtStack was
+	// removed), so there is nothing to list until execution exists.
+	stackRows_.push_back("  <empty>");
+	stackRows_.push_back("");
+	stackRows_.push_back("  [stack simulation WIP -");
+	stackRows_.push_back("   fills once the debugger");
+	stackRows_.push_back("   can execute instructions]");
 }
 
 } // namespace tui

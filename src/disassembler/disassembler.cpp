@@ -13,41 +13,44 @@ void Disassembler::decode(std::stop_token stopToken) {
 	decodedInstructions.clear();
 	instructionAddresses.clear();
 
+	size_t worst{};
+	for (const auto _txt : baseSections._text)
+		worst += _txt.getSize();
+
+	decodedInstructions.reserveFor(worst);
+	instructionAddresses.reserveFor(worst);
 
 	readyCount.store(0, std::memory_order_relaxed);
 
-	const uint64_t start = baseSections._text.getOffset();
-	const uint64_t end = start + baseSections._text.getSize();
+	for (auto _txt : baseSections._text) {
+
+		const uint64_t start = _txt.getOffset();
+		const uint64_t end = start + _txt.getSize();
+
+		uint64_t ptr = start;
+		uint64_t vaddr = _txt.getVaddr();
+
+		while (ptr < end) {
+			if (stopToken.stop_requested()) break; // re-open / shutdown asked to bail
+
+			const uint64_t lineVaddr = vaddr;
+			uint64_t next = decodeLine(ptr, vaddr);
+
+			while (instructionAddresses.size() < decodedInstructions.size())
+				instructionAddresses.push_back(lineVaddr);
 
 
-	const auto worst = static_cast<size_t>(baseSections._text.getSize());
-	decodedInstructions.reserve(worst);
-	instructionAddresses.reserve(worst);
+			readyCount.store(decodedInstructions.size(), std::memory_order_release);
 
-	uint64_t ptr = start;
-	uint64_t vaddr = baseSections._text.getVaddr();
+			if (next <= ptr) break;
 
-	while (ptr < end) {
-		if (stopToken.stop_requested()) break; // re-open / shutdown asked to bail
+			emitDecodedLine();
 
-		const uint64_t lineVaddr = vaddr;
-		uint64_t next = decodeLine(ptr, vaddr);
+			vaddr += next - ptr;
+			ptr = next;
 
-		while (instructionAddresses.size() < decodedInstructions.size())
-			instructionAddresses.push_back(lineVaddr);
-
-
-		readyCount.store(decodedInstructions.size(), std::memory_order_release);
-
-		if (next <= ptr) break;
-
-		emitDecodedLine();
-
-		vaddr += next - ptr;
-		ptr = next;
-
+		}
 	}
-
 }
 
 
@@ -61,16 +64,20 @@ uint64_t Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
 }
 
 
-// prints the most recenlty decoded line to the embedded streams
-void Disassembler::emitDecodedLine() {
+	// prints the most recenlty decoded line to the embedded streams
+
+void Disassembler::emitDecodedLine(bool showVaddr) {
 
 	for(auto stream : outputStreams)
-		*stream << std::hex << std::setfill('0') << std::setw(8)
-		<< instructionAddresses[instrDecodePos] << ":  "
-		<< std::setfill(' ') << std::left << std::setw(24)
+	{
+		if (showVaddr)
+			*stream << std::hex << std::setfill('0') << std::setw(8)
+			<<   instructionAddresses[instrDecodePos]  << ":  ";
+
+		*stream << std::setfill(' ') << std::left << std::setw(24)
 		<< decodedInstructions[instrDecodePos]->getMachineCode() << ' '
 		<< decodedInstructions[instrDecodePos]->decodeLineString() << '\n';
-
+	}
 	instrDecodePos++;
 }
 

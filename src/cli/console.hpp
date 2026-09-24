@@ -6,8 +6,14 @@ namespace cli {
 
 
 
-// Entry point for the non-interactive modes (--print, --dump-hex).
-// Named start() to match gui::start / tui::start.
+// Entry point for the non-interactive modes. Named start() to match gui::start /
+// tui::start, and dispatched from main.cpp on argv[1].
+//
+//   --print    <binary> [outfile...]   disassemble to stdout and each outfile
+//   --dump-hex <binary>                hex dump to stdout
+//
+// Does nothing when argv[1] is neither. Throws std::invalid_argument when a mode
+// was named with no file after it; the handlers throw for their own failures.
 inline void start(int argc, char** argv) {
 	if (argc <= 1) return;
 

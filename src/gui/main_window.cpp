@@ -345,10 +345,13 @@ void MainWindow::openPath(const QString& path) {
 	// refresh() ran while ready was still 0, leaving the pane empty. So pull the
 	// finished result now: observing isDecoding()==false is the acquire that makes
 	// the whole decode visible, so this refresh() sees every row.
-	if (session_.isDecoding())
+	if (session_.isDecoding()) {
 		decodeTimer_->start();
-	else
+	}
+	else {
 		session_.refresh();
+		session_.compact();
+	}
 
 	refreshAll();
 	setStatus(QString::fromStdString(session_.status()));
@@ -364,6 +367,7 @@ void MainWindow::onDecodeTick() {
 		disasm_->refresh();
 		setCounts();
 	} else {
+		session_.compact();
 		refreshAll();          // final tick: everything reflects the completed decode
 		decodeTimer_->stop();
 	}

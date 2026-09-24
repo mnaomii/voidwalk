@@ -9,6 +9,24 @@
 
 namespace voidwalk {
 
+// The x86 / x86-64 encoding tables and the lookups over them.
+//
+// All static: this is a namespace with a class's access control, holding no state.
+// The tables themselves are built once in x86_64_tables.cpp and handed out by
+// const reference (see the accessor block below for why they are functions).
+//
+// Table layout mirrors the encoding's own structure:
+//   opcodeTable    the 256 one-byte opcodes
+//   twoByteTable   the 256 opcodes behind the 0F escape
+//   grp1..grp5     group escapes, selected by ModRM.reg
+//   x87Mem/Reg     the x87 maps, selected by the whole ModRM byte
+//
+// Callers should not index these directly. A raw row may be a group escape, whose
+// `text` is a placeholder - go through resolvedInfo() / twoByteResolvedInfo(),
+// which follow the escape to the real entry.
+//
+// The tables are shared between the 32- and 64-bit decode; entries that do not
+// exist in long mode are flagged isInvalid rather than removed.
 class x86_64_Mnemonic{
 public:
 
@@ -87,8 +105,20 @@ public:
 	static const Instruction::OpcodeInfo& groupEntryOf(uint32_t op, uint8_t reg);
 	static const std::array<Instruction::OpcodeInfo, 64>& x87MemTable();
 	static const std::array<Instruction::OpcodeInfo, 512>& x87RegTable();
+	// x87 (opcodes D8..DF): picks the memory map on mod != 11 and the register map
+	// otherwise, both keyed by the full ModRM byte rather than just reg.
 	static Instruction::OpcodeInfo x87ResolvedInfo(uint32_t op, uint8_t modrm);
+
+	// The real table row for one-byte opcode `op`. Follows a group escape through
+	// ModRM.reg and an x87 opcode through the whole ModRM byte; returns the plain
+	// row for everything else. Pass the entire ModRM byte, not just reg. `modrm` is
+	// unused when the opcode is neither a group nor x87, so 0 is fine there.
 	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t modrm, bool is64Bit = false);
+
+	// Stand-in row for the 0F 38 / 0F 3A three-byte maps, which are not tabulated.
+	// `hasImm8` selects the 0F 3A variant, whose encodings carry a trailing imm8.
+	// It exists so the length the decoder computes and the name the renderer prints
+	// stay consistent for opcodes neither of them really knows.
 	static const Instruction::OpcodeInfo& threeByteRow(bool hasImm8);
 	static const std::array<Instruction::OpcodeInfo, 256>& twoByteTable();
 	static const std::array<Instruction::OpcodeInfo, 8>& twoByteGroup8Table();

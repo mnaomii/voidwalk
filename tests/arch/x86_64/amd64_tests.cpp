@@ -1,18 +1,18 @@
 //
 // AMD64 (long-mode, is64Bit == true) decoder suite.
 //
-// Ground truth is audit-amd64-2026-08-24.md's decodes plus direct table traces. Focus
+// Ground truth is objdump's decodes plus direct table traces. Focus
 // areas are the long-mode-only mechanics that WORK today: REX.W width, RIP-relative
 // addressing, the SPL/BPL/SIL/DIL byte set, d64 default-64 promotion, and 64-bit invalid
 // opcodes.
 //
 // REX.R / REX.B register extension to R8..R15 (testRexRegisterExtension) was carried
-// here as expect_xfail while AUDIT.md B1 was open. B1 is fixed - registerOf() now bounds
+// here as expect_xfail while that defect was open. It is fixed - registerOf() now bounds
 // on the register index and the byte-register rule rather than on REX.W - so those cases
 // are plain expectations again, kept as the regression guard for it. Same for the two
-// E1 cases: ENDBR64 (testModernPrologue) and unknown-0F length (testUnknownOpcodeLength).
+// cases ENDBR64 (testModernPrologue) and unknown-0F length (testUnknownOpcodeLength).
 //
-// Worth keeping in mind if any of them regress: the fix originally prescribed for B1 -
+// Worth keeping in mind if any of them regress: the fix originally prescribed for it -
 // widening the bound to "(r > 15) || (r > 7 && !is64bit)" - is NOT sufficient. The
 // REX.B-without-REX.W case below is the one it still gets wrong.
 //
@@ -131,7 +131,7 @@ class AMD64_Tests : public Tests {
     // ---- group 3 (F6/F7) TEST immediate width -------------------------------
     // TEST Ev, Iz: the immediate is imm16/imm32, never imm64 - under REX.W it is an
     // imm32 sign-extended to 64 bits. The group entry used to inherit the outer row's
-    // `v`, so 48 F7 /0 read an 8-byte immediate and desynced the sweep (AUDIT.md D1).
+    // `v`, so 48 F7 /0 read an 8-byte immediate and desynced the sweep.
     // The F6 case guards the other direction: TEST Eb stays imm8.
     void testGroup3ImmediateWidth() {
         eq({0x48, 0xf7, 0xc0, 0x01, 0x00, 0x00, 0x00}, "TEST RAX, 0x1",  7, "48 f7 /0 REX.W takes imm32");
