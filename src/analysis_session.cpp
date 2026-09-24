@@ -95,6 +95,11 @@ const std::string& Session::decodeNote() const {
 	return decodeState_->note;
 }
 
+void Session::compact() {
+	if (!disassembler_ || isDecoding()) return;
+	disassembler_->compact();
+}
+
 // Raw file bytes, clamped at end-of-file.
 std::vector<uint8_t> Session::bytes(uint64_t offset, size_t count) const {
 	std::vector<uint8_t> out;
@@ -113,14 +118,18 @@ size_t Session::binarySize() const {
 	return space_ ? space_->size() : 0;
 }
 
-// File offset of .text, or 0.
+// File offset of the first .text section, or 0.
 uint64_t Session::textOffset() const {
-	return loaded() ? disassembler_->getSections()._text.getOffset() : 0;
+	if (!loaded()) return 0;
+	const auto& text = disassembler_->getSections()._text;
+	return text.empty() ? 0 : text.front().getOffset();
 }
 
-// Virtual address of .text, or 0.
+// Virtual address of the first .text section, or 0.
 uint64_t Session::textVaddr() const {
-	return loaded() ? disassembler_->getSections()._text.getVaddr() : 0;
+	if (!loaded()) return 0;
+	const auto& text = disassembler_->getSections()._text;
+	return text.empty() ? 0 : text.front().getVaddr();
 }
 
 } // namespace voidwalk

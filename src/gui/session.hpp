@@ -61,8 +61,8 @@ struct SectionInfo {
 // Reading it while the decode worker is still appending rests on exactly the
 // same invariant the UI thread already relies on: decode() reserves worst case
 // up front, so the backing vectors never reallocate, and rows_ never exceeds the
-// worker's published count. If that reserve is ever traded for growth (see G1 in
-// AUDIT.md), both readers need a different handoff, not just this one.
+// worker's published count. If that reserve is ever traded for growth, both
+// readers need a different handoff, not just this one.
 class Snapshot {
 public:
 	Snapshot() = default;

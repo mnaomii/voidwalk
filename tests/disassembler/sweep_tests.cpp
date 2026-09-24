@@ -24,6 +24,7 @@
 #include "tests/framework/fixtures.hpp"
 #include "disassembler/format/elf/elf_disassembler.hpp"
 
+#include <algorithm>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -79,11 +80,17 @@ class Sweep_Tests : public Tests {
         d.decode();
 
         Swept s;
-        s.textOff   = d.getSections()._text.getOffset();
-        s.textVaddr = d.getSections()._text.getVaddr();
-        s.textSize  = d.getSections()._text.getSize();
+        // The fixture has exactly one .text. If the parser found none, the fields stay
+        // zero and the invariants below fail loudly rather than this indexing past the end.
+        const auto& texts = d.getSections()._text;
+        if (!texts.empty()) {
+            s.textOff   = texts.front().getOffset();
+            s.textVaddr = texts.front().getVaddr();
+            s.textSize  = texts.front().getSize();
+        }
         s.ready     = d.readyInstructions();
-        s.addrs     = d.getInstructionAddresses();
+        const auto& swept = d.getInstructionAddresses();
+        s.addrs.assign(swept.begin(), swept.end());
         for (const auto& i : d.getDecodedInstructions()) {
             s.text.push_back(i->decodeLineString());
             s.machine.push_back(i->getMachineCode());
@@ -204,14 +211,17 @@ class Sweep_Tests : public Tests {
 
         d.decode();
         const size_t firstCount = d.getDecodedInstructions().size();
-        std::vector<uint64_t> firstAddrs = d.getInstructionAddresses();
+        const auto& firstStore = d.getInstructionAddresses();
+        std::vector<uint64_t> firstAddrs(firstStore.begin(), firstStore.end());
 
         d.decode();
         const size_t secondCount = d.getDecodedInstructions().size();
 
         expect_eq((long long)secondCount, (long long)firstCount,
                   "second decode() yields the same instruction count");
-        expect(d.getInstructionAddresses() == firstAddrs,
+        const auto& secondStore = d.getInstructionAddresses();
+        expect(secondStore.size() == firstAddrs.size()
+                   && std::equal(firstAddrs.begin(), firstAddrs.end(), secondStore.begin()),
                "second decode() yields identical addresses");
         expect_eq((long long)d.readyInstructions(), (long long)secondCount,
                   "readyInstructions() is reset and republished by the second decode()");

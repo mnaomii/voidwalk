@@ -68,11 +68,15 @@ const std::vector<uint64_t> kEmptyStack{};
 std::vector<SectionInfo> sectionsOf(const Disassembler& d) {
 	std::vector<SectionInfo> out;
 	const Sections& s = d.getSections();
-	auto add = [&out](const char* name, const Header& h) {
-		// Drop sections the parser never filled in (offset and size both zero) so
-		// the pane doesn't list a jump target that goes nowhere.
-		if (h.getOffset() == 0 && h.getSize() == 0) return;
-		out.push_back({name, h.getOffset(), h.getVaddr(), h.getSize()});
+	// One entry per section of each kind: a binary may have several (e.g. more than
+	// one .text), and each is its own jump target.
+	auto add = [&out](const char* name, const std::vector<Header>& list) {
+		for (const Header& h : list) {
+			// Drop sections the parser never filled in (offset and size both zero) so
+			// the pane doesn't list a jump target that goes nowhere.
+			if (h.getOffset() == 0 && h.getSize() == 0) continue;
+			out.push_back({name, h.getOffset(), h.getVaddr(), h.getSize()});
+		}
 	};
 	add(".text", s._text);
 	add(".data", s._data);
@@ -111,8 +115,11 @@ std::string Snapshot::rowText(size_t i) const {
 	return formatDisasmText(disassembler_->getDecodedInstructions()[i]->decodeLineString());
 }
 
+// Virtual address of the first .text section, or 0.
 uint64_t Snapshot::textVaddr() const {
-	return disassembler_ ? disassembler_->getSections()._text.getVaddr() : 0;
+	if (!disassembler_) return 0;
+	const auto& text = disassembler_->getSections()._text;
+	return text.empty() ? 0 : text.front().getVaddr();
 }
 
 std::vector<SectionInfo> Snapshot::sections() const {
@@ -139,8 +146,10 @@ const Registers_x86_64& Session::registers() const {
 	return loaded() ? disassembler_->getRegisters() : kZeroRegisters;
 }
 
+// The core no longer keeps a simulated stack (Disassembler::virtStack was removed),
+// so this is always empty - which is all it ever held, since nothing executes yet.
 const std::vector<uint64_t>& Session::stack() const {
-	return loaded() ? disassembler_->getVirtStack() : kEmptyStack;
+	return kEmptyStack;
 }
 
 std::vector<SectionInfo> Session::sections() const {
@@ -201,25 +210,30 @@ void Session::refresh() {
 // Raw-bytes fallback for a stub arch: no Instruction objects exist to read
 // through, so build a small capped set of "db 0x.." rows here. Bounded, so a huge
 // .text can't flood it. decodeNote()/decodedForReal() tell the pane to explain why.
+// Walks every .text section in table order; the byte cap is shared across all of them.
 void Session::buildFallback() {
 	fallbackRows_.clear();
-	const Header& text = disassembler_->getSections()._text;
-	if (text.getSize() == 0) return;
 	constexpr uint64_t kMaxBytes = 4096;
-	uint64_t total = text.getSize() < kMaxBytes ? text.getSize() : kMaxBytes;
-	auto raw = bytes(text.getOffset(), static_cast<size_t>(total));
-	for (size_t i = 0; i < raw.size(); i += 8) {
-		DisasmRow row;
-		row.vaddr = text.getVaddr() + i;
-		size_t n = raw.size() - i < 8 ? raw.size() - i : 8;
-		for (size_t b = 0; b < n; ++b)
-			row.bytes += (b ? " " : "") + hexByte(raw[i + b]);
-		// "db" is the usual spelling for a run of bytes no decoder claimed; leaving
-		// the text empty would read as a broken pane rather than "no decoder here".
-		row.text = "db ";
-		for (size_t b = 0; b < n; ++b)
-			row.text += (b ? ", 0x" : "0x") + hexByte(raw[i + b]);
-		fallbackRows_.push_back(std::move(row));
+	uint64_t budget = kMaxBytes;
+	for (const Header& text : disassembler_->getSections()._text) {
+		if (budget == 0) break;
+		if (text.getSize() == 0) continue;
+		uint64_t total = text.getSize() < budget ? text.getSize() : budget;
+		auto raw = bytes(text.getOffset(), static_cast<size_t>(total));
+		budget -= raw.size();
+		for (size_t i = 0; i < raw.size(); i += 8) {
+			DisasmRow row;
+			row.vaddr = text.getVaddr() + i;
+			size_t n = raw.size() - i < 8 ? raw.size() - i : 8;
+			for (size_t b = 0; b < n; ++b)
+				row.bytes += (b ? " " : "") + hexByte(raw[i + b]);
+			// "db" is the usual spelling for a run of bytes no decoder claimed; leaving
+			// the text empty would read as a broken pane rather than "no decoder here".
+			row.text = "db ";
+			for (size_t b = 0; b < n; ++b)
+				row.text += (b ? ", 0x" : "0x") + hexByte(raw[i + b]);
+			fallbackRows_.push_back(std::move(row));
+		}
 	}
 }
 

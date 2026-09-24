@@ -14,11 +14,15 @@ public:
 	explicit WelcomeWidget(QWidget* parent = nullptr);
 
 signals:
-	void openRequested();              // "Open binary…" button
-	void fileDropped(const QString& path);
+	void openRequested();                   // "Open binary…" button was clicked
+	void fileDropped(const QString& path);  // a local file was dropped on the widget
 
 protected:
+	// Accept a drag only when it carries local file URLs, so the cursor does not
+	// promise a drop the widget would then ignore.
 	void dragEnterEvent(QDragEnterEvent* event) override;
+
+	// Emits fileDropped with the first local path in the drop.
 	void dropEvent(QDropEvent* event) override;
 };
 

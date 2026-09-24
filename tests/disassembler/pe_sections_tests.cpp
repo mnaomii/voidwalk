@@ -10,8 +10,12 @@
 
 class PE_Sections_Tests : public Tests {
 
-    void check(const char* which, const Header& h,
+    void check(const char* which, const std::vector<Header>& list,
                const fixtures::SectionExpect& e, const std::string& label) {
+        // The fixture has exactly one section per bucket.
+        if (!expect_eq((long long)list.size(), 1, label + " " + which + " count"))
+            return;
+        const Header& h = list.front();
         expect_eq((long long)h.getVaddr(),  (long long)e.vaddr,  label + " " + which + " vaddr");
         expect_eq((long long)h.getOffset(), (long long)e.offset, label + " " + which + " offset");
         expect_eq((long long)h.getSize(),   (long long)e.size,   label + " " + which + " size");

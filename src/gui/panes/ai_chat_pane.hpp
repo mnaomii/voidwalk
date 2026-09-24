@@ -21,7 +21,11 @@ class AiChatPane : public QWidget {
 public:
 	explicit AiChatPane(QWidget* parent = nullptr);
 
+	// Borrows `s`; the caller keeps ownership and must outlive this pane.
 	void setSession(Session* s) { session_ = s; }
+
+	// Copies the settings. Re-read on every send, so a change takes effect on the
+	// next message without rebuilding the pane.
 	void setSettings(const AppSettings& s) { settings_ = s; }
 
 	// Takes ownership (reparents to this). Passing nullptr restores the stub.

@@ -3,8 +3,8 @@
 // Shared harness for the x86/x86-64 decoder suites (IA-32 and AMD64).
 //
 // It decodes a hand-written instruction stream straight out of a temp file - no
-// ELF/PE loader, no section parsing, no frontend. This is the "core probe" the
-// audits describe, wired up as a reusable fixture.
+// ELF/PE loader, no section parsing, no frontend. It is a core probe, wired up as a
+// reusable fixture.
 //
 // It used to have to be a probe *subclass* of Disassembler, with a no-op
 // setHeadersOffsets(), because the only way in was the protected member
@@ -40,7 +40,7 @@ public:
 
     Decoded run(bool is64Bit, uint64_t vaddr) {
         X86Decoder decoder(is64Bit);
-        std::vector<std::unique_ptr<Instruction>> decoded;
+        InstructionStore decoded;
         Decoded d;
         try {
             const uint64_t next = decoder.decodeLine(as_, 0, vaddr, decoded);

@@ -26,6 +26,7 @@ class MemoryPane : public QWidget {
 public:
 	explicit MemoryPane(QWidget* parent = nullptr);
 
+	// Borrows `s`; the caller keeps ownership and must outlive this pane.
 	void setSession(Session* s) { session_ = s; }
 
 	// Seek so `offset` is at the top of the view, then repaint. Leaves "see all"
@@ -33,6 +34,10 @@ public:
 	void gotoOffset(std::uint64_t offset);
 
 public slots:
+	// Re-renders the current window (or the whole file in "see all" mode) and
+	// rebuilds the section dropdown if the binary changed. Cost is the bytes on
+	// screen - except in "see all", which formats the entire file.
+	// Called from MainWindow::refreshAll().
 	void refresh();
 
 private:

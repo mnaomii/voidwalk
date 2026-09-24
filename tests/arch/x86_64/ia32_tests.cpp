@@ -1,8 +1,8 @@
 //
 // IA-32 (32-bit, is64Bit == false) decoder suite.
 //
-// Every expected string here is a decode the objdump audit (audit-objdump-2026-08-11.md
-// and its update banners) verified on-disk, or a direct trace of the current tables.
+// Every expected string here is a decode objdump verified on-disk, or a direct trace
+// of the current tables.
 // Comparisons are whitespace-insensitive (see norm()); we assert both the rendered line
 // and the instruction *length*, because in a linear sweep a wrong length desyncs every
 // later address.

@@ -5,7 +5,6 @@
 
 #include <QWidget>
 #include <cstdint>
-#include <thread>
 #include <vector>
 
 class QLabel;
@@ -24,13 +23,16 @@ namespace gui {
 // Contents come from collectSymbols() (model/symbols.h), so the pane needs no
 // core API of its own and empty groups simply don't render.
 //
-// The scan itself runs on a worker thread: it walks every decoded row and formats
-// a string for each, which on a large binary is seconds of frozen UI if done in
-// refresh(). refresh() takes a Session::Snapshot (safe to read off-thread), starts
-// the worker and returns; the result is posted back and applied here. A scan
-// superseded by a newer one is cancelled through its stop_token and its result
-// dropped by the token check, so an Open during a scan can never show the previous
-// binary's symbols.
+// The scan runs synchronously on the UI thread. It used to run on a worker, but
+// that made it a second reader of the core's instruction vectors, concurrent with
+// the UI thread — which blocks any post-decode compaction of those vectors (a
+// reallocation under a live reader is exactly the crash the reserve in decode()
+// exists to prevent). Running it here means that when refresh() returns, nothing
+// is reading the core but this thread.
+//
+// The cost is real: the scan walks every decoded row and formats a string for
+// each, so on a large binary refresh() blocks the UI for as long as that takes.
+// refresh() is called from MainWindow::refreshAll() on the decode's final tick.
 class SymbolsPane : public QWidget {
 	Q_OBJECT
 public:
@@ -57,15 +59,9 @@ private:
 	QTreeWidget* tree_ = nullptr;
 	std::vector<SymbolInfo> symbols_;
 
-	// UI thread only. scanToken_ is bumped per scan; a result carrying an older
-	// token belongs to a superseded scan and is discarded.
-	uint64_t scanToken_ = 0;
+	// True between the decode starting and the scan producing its rows, so rebuild()
+	// shows "Scanning…" instead of an empty sidebar. UI thread only.
 	bool scanning_ = false;
-
-	// Declared LAST so it is stopped and joined before anything the worker's
-	// completion handler touches — including this pane's QObject identity — is
-	// torn down.
-	std::jthread scanThread_;
 };
 
 } // namespace gui

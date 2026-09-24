@@ -255,7 +255,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Warnings.
 #
-# On by default rather than opt-in: several AUDIT.md findings are diagnosed by the
+# On by default rather than opt-in: several known defects are diagnosed by the
 # compiler for free - the discarded std::length_error (-Wunused-value), the varargs
 # type mismatch in the immediate-size fallback (-Wformat), the malformed bounds-check
 # line in readType (-Wmisleading-indentation), and the by-value PE_Sections parameter

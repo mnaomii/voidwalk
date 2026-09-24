@@ -56,7 +56,15 @@ private slots:
 	void onDebugStub();       // shared handler for the not-yet-implemented actions
 	void onEditsChanged();
 	void onGotoSubmitted();   // toolbar address field -> disasm_->navigateTo()
-	void onDecodeTick();      // polls the background decode, refreshes as it fills
+	// Decode poll, every decodeTimer_ interval (100 ms) while a sweep runs.
+	//
+	// Protocol, in order: ingest the rows published since the last tick; while the
+	// worker is still going refresh ONLY the disassembly and the counters, because
+	// the other panes are fixed at open and the symbol scan is a full walk of every
+	// row. On the tick that sees the worker stopped, compact the stores - this is
+	// the one moment the UI thread is provably the only reader - then refresh
+	// everything and stop the timer.
+	void onDecodeTick();
 
 private:
 	void buildActions();

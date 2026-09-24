@@ -14,7 +14,7 @@ namespace voidwalk {
 uint64_t X86Decoder::decodeLine(AddressSpace& contents,
                                 uint64_t address,
                                 uint64_t vaddr,
-                                std::vector<std::unique_ptr<Instruction>>& decodedInstructions) {
+                                InstructionStore& decodedInstructions) {
 	const bool is64Bit = is64Bit_;
 
 

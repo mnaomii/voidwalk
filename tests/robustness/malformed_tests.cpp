@@ -74,11 +74,11 @@ class Malformed_Tests : public Tests {
     // Both of these are legal byte sequences that a linear sweep meets in padding,
     // jump tables and data-in-text. Neither is exotic.
     void testInstructionStreams() {
-        // These two closed A1 and A2 between them. A1 was the out-of-bounds *write* of
-        // the REX byte past instructionBytes[15], fixed by the `cnt < 15` guard on the
-        // REX branch; that made the input fall through with positions[endOpcode] == 0
-        // into A2's read of instructionBytes[-1], which the `cnt < 15` guard on the
-        // whole opcode block now prevents. Both are regression guards, and they stay
+        // These two closed two defects between them. The first was the out-of-bounds
+        // *write* of the REX byte past instructionBytes[15], fixed by the `cnt < 15` guard
+        // on the REX branch; that made the input fall through with positions[endOpcode] == 0
+        // into the second, a read of instructionBytes[-1], which the `cnt < 15` guard on
+        // the whole opcode block now prevents. Both are regression guards, and they stay
         // separate because they diverge again the moment either guard regresses.
         //
         // They carry no `ref`, so they run in an uninstrumented build too - but the
@@ -264,7 +264,7 @@ class Malformed_Tests : public Tests {
         expect_xfail(outcome != isolate::Outcome::Crashed,
                      std::string("decode() twice with an output stream -> ")
                          + isolate::describe(outcome),
-                     "AUDIT.md E5 (instrDecodePos not reset, disassembler.cpp:398)");
+                     "instrDecodePos not reset (disassembler.cpp:398)");
     }
 
     void runAll() {

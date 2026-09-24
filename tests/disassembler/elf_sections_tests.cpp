@@ -2,7 +2,7 @@
 // ELF section-parsing suite. Builds a minimal but real ELF (32- and 64-bit) with a
 // section header table and a .shstrtab, then checks that ELF_Disassembler resolves the
 // section names and populates the base section headers with the right vaddr/offset/size.
-// A section that is absent from the table must stay zeroed.
+// A section that is absent from the table must leave its list empty.
 //
 #include "tests/framework/base.hpp"
 #include "tests/framework/fixtures.hpp"
@@ -18,13 +18,16 @@ class ELF_Sections_Tests : public Tests {
         const Sections& s = d.getSections();
 
         expect_eq(d.getArchitecture(), arch, label + " architecture");
-        expect_eq((long long)s._text.getVaddr(),  (long long)fx.text.vaddr,  label + " .text vaddr");
-        expect_eq((long long)s._text.getOffset(), (long long)fx.text.offset, label + " .text offset");
-        expect_eq((long long)s._text.getSize(),   (long long)fx.text.size,   label + " .text size");
-        // .bss is not present in the fixture's section table: it must stay default-zero,
-        // proving the parser only writes sections it actually finds.
-        expect_eq((long long)s._bss.getOffset(), 0, label + " absent .bss stays zero");
-        expect_eq((long long)s._bss.getSize(),   0, label + " absent .bss size zero");
+        // The fixture's section table has exactly one .text.
+        if (expect_eq((long long)s._text.size(), 1, label + " exactly one .text")) {
+            const Header& text = s._text.front();
+            expect_eq((long long)text.getVaddr(),  (long long)fx.text.vaddr,  label + " .text vaddr");
+            expect_eq((long long)text.getOffset(), (long long)fx.text.offset, label + " .text offset");
+            expect_eq((long long)text.getSize(),   (long long)fx.text.size,   label + " .text size");
+        }
+        // .bss is not present in the fixture's section table: its list must stay empty,
+        // proving the parser only records sections it actually finds.
+        expect_eq((long long)s._bss.size(), 0, label + " absent .bss stays empty");
     }
 
     void runAll() {

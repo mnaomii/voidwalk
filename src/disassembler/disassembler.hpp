@@ -6,6 +6,7 @@
 #include <atomic>
 #include <stop_token>
 #include "address_space.hpp"
+#include "chunk_store.hpp"
 #include "disassembler/format/section.hpp"
 #include "arch/arch.hpp"
 #include "arch/decoder.hpp"
@@ -18,8 +19,7 @@ namespace voidwalk {
 // The four sections every container has in common. Format-specific extras live in
 // the ELF_Sections / PE_Sections structs beside their own reader.
 struct Sections {
-    //std::vector<Header> _text, _data, _ronly, _bss;
-    Header _text, _data, _ronly, _bss;
+    std::vector<Header> _text, _data, _ronly, _bss;
 };
 
 
@@ -34,14 +34,13 @@ private:
     std::vector<std::ostream*> outputStreams;
 
 
-
 protected:
 
     uint64_t imageBase{};
 
-    std::vector<std::unique_ptr<Instruction>> decodedInstructions;
-    std::vector<uint64_t> instructionAddresses;
-    std::vector<uint64_t> virtStack;
+    InstructionStore decodedInstructions;
+    ChunkStore<uint64_t> instructionAddresses;
+    //std::vector<uint64_t> virtStack;
     Sections baseSections;
     uint64_t offset;
 
@@ -62,10 +61,11 @@ protected:
     std::atomic<size_t> readyCount{0};
 
 public:
-    Disassembler(AddressSpace& temp, const std::vector<std::ostream*>& stream) : contents(temp), arch(Arch::Unknown), offset(0x00), outputStreams(stream) {
+    Disassembler(AddressSpace& temp, const std::vector<std::ostream*>& stream)
+        : contents(temp), arch(Arch::Unknown), offset(0x00), outputStreams(stream) {};
 
-    };
-    void emitDecodedLine();
+    // Prints the last decoded line to all the specified streams.
+    void emitDecodedLine(bool showVaddr = true) ;
 
     // Returns the architecture's display name, e.g. "x86_64".
     std::string getArchitecture() const { return archName(arch); }
@@ -83,10 +83,18 @@ public:
 
     void decode(std::stop_token stopToken = {});
 
+    void compact() {
+        decodedInstructions.shrinkToFit();
+        instructionAddresses.shrinkToFit();
+    }
+
     const Registers_x86_64& getRegisters() const { return registers; }
-    const std::vector<uint64_t>& getVirtStack() const { return virtStack; }
-    const std::vector<std::unique_ptr<Instruction>>& getDecodedInstructions() const { return decodedInstructions; }
-    const std::vector<uint64_t>& getInstructionAddresses() const { return instructionAddresses; }
+    //const std::vector<uint64_t>& getVirtStack() const { return virtStack; }
+    // Both are chunked, not contiguous: the decode worker appends to them while the
+    // UI reads them, and a reallocation under a live reader is the one thing that
+    // cannot be allowed (see chunk_store.hpp). Index them only in [0, readyInstructions()).
+    const InstructionStore& getDecodedInstructions() const { return decodedInstructions; }
+    const ChunkStore<uint64_t>& getInstructionAddresses() const { return instructionAddresses; }
     const Sections& getSections() const { return baseSections; }
     AddressSpace& getAddressSpace() { return contents; }
 
