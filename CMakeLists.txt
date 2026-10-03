@@ -111,10 +111,13 @@ if(VOIDWALK_BUILD_TUI)
 
     target_sources(voidwalk PRIVATE
         src/tui/session.cpp
+        src/tui/syntax.cpp
+        src/tui/widgets.cpp
         src/tui/panes/disassembly_pane.cpp
-        src/tui/panes/memory_pane.cpp
+        src/tui/panes/symbols_pane.cpp
         src/tui/panes/registers_pane.cpp
         src/tui/panes/stack_pane.cpp
+        src/tui/panes/memory_pane.cpp
         src/tui/tui_main.cpp
         src/tui/ui.cpp)
 

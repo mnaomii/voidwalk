@@ -1,7 +1,6 @@
 #pragma once
 #include "analysis_session.hpp"
 
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -12,52 +11,84 @@ namespace tui {
 using voidwalk::AddressSpace;
 using voidwalk::Disassembler;
 using voidwalk::Header;
+using voidwalk::Instruction;
 using voidwalk::Registers_x86_64;
 using voidwalk::Sections;
 
-// The FTXUI view-model: voidwalk::Session plus the string rows the panes render.
-// Panes never touch AddressSpace or Disassembler. Anything the core cannot provide
-// yet is filled with a visible placeholder here.
+// Same shape as gui::SectionInfo, so the memory pane offers the same jump list.
+struct SectionInfo {
+	std::string name;
+	uint64_t offset = 0;
+	uint64_t vaddr = 0;
+	uint64_t size = 0;
+};
+
+// Same shape and spelling as gui::SymbolInfo (Imports stays empty until the
+// loader parses an import table - the sidebar hides an empty group).
+struct SymbolInfo {
+	enum class Kind { Function, Import, String };
+	Kind kind = Kind::Function;
+	std::string name;
+	uint64_t addr = 0;     // vaddr (functions) / file offset (strings)
+	std::string detail;    // right-hand column
+};
+
+// The FTXUI view-model. It now exposes structured rows - address, bytes, text,
+// flow, target - exactly like gui::Session, instead of one preformatted string per
+// row, so the TUI can draw the same five columns the Qt table does. Rows are still
+// read through to the core per call; nothing is copied.
 class Session : public voidwalk::Session {
 public:
 	Session() = default;
-
-	// Adopts an already-loaded binary (the startup path, where main() has opened the
-	// file to report errors before the UI exists) and starts decoding it.
 	Session(std::shared_ptr<AddressSpace> space,
 	        std::shared_ptr<Disassembler> disassembler,
 	        std::string filePath);
 
-	// Disassembly rows: one per decoded instruction, then any status / placeholder
-	// lines. A row is built only when asked for - instructions are read through to
-	// the core, never copied - so call disassemblyRow() for the rows on screen only.
-	size_t disassemblyRowCount() const { return shownInstrs_ + extraLines_.size(); }
-	std::string disassemblyRow(size_t i) const;
+	size_t rowCount() const;
+	uint64_t rowVaddr(size_t i) const;
+	std::string rowBytes(size_t i) const;   // "f3 0f 1e fa", trailing space trimmed
+	std::string rowText(size_t i) const;    // "mov    rax, rbx" - mnemonic padded to 7
+	Instruction::Flow rowFlow(size_t i) const;
+	uint64_t rowTarget(size_t i) const;
+	// The NOTES column: callee name for a direct call, "backward" for a backward jump.
+	std::string rowNote(size_t i) const;
 
-	// Emulated register rows, "name value" per line. Rebuilt by refresh().
-	const std::vector<std::string>& registerRows() const { return regRows_; }
+	// Last row whose vaddr <= `vaddr`, searched per .text run (gui navigateTo()).
+	size_t rowIndexFor(uint64_t vaddr) const;
 
-	// Vector register rows, "name value" per line, one list per group: MMX, SSE,
-	// AVX, AVX-512. Rebuilt by refresh(); the lists themselves stay put.
-	const std::array<std::vector<std::string>, 4>& vectorRegisterRows() const { return vecRows_; }
+	// One line shown above the rows when they are not (yet) real instructions:
+	// the stub-arch notice, a decode-stopped note. Empty when there is nothing to say.
+	const std::string& banner() const { return banner_; }
 
-	// Simulated stack rows, top of stack first. Rebuilt by refresh().
-	const std::vector<std::string>& stackRows() const { return stackRows_; }
+	const Registers_x86_64& registers() const;
+	std::vector<SectionInfo> sections() const;
 
-	// Re-derives all pane feeds from core state. Call after open() and after any
-	// future debugger step mutates registers/stack. O(1) for the disassembly: it
-	// only re-reads the worker's published instruction count.
+	// Functions + strings, collected once per decode after the worker finishes.
+	const std::vector<SymbolInfo>& symbols() const { return symbols_; }
+	bool scanningSymbols() const { return loaded() && symbolsGen_ != decodeGeneration(); }
+
 	void refresh();
 
-private:
-	// Drops the previous sweep's rows.
-	void onDecodeStarted() override;
+	// "entry" for the entry point, else "sub_<VADDR>" - gui::functionName's spelling.
+	static std::string functionName(uint64_t addr, uint64_t entry);
 
-	size_t shownInstrs_ = 0;               // instructions exposed (<= the worker's published count)
-	std::vector<std::string> extraLines_;  // status / placeholder lines after them
-	std::vector<std::string> regRows_;
-	std::array<std::vector<std::string>, 4> vecRows_;
-	std::vector<std::string> stackRows_;
+private:
+	struct FallbackRow {
+		uint64_t vaddr = 0;
+		std::string bytes;
+		std::string text;
+	};
+
+	void onDecodeStarted() override;
+	void buildFallback();
+	void collectSymbols();
+
+	bool real_ = false;
+	size_t shown_ = 0;
+	std::vector<FallbackRow> fallback_;
+	std::string banner_;
+	std::vector<SymbolInfo> symbols_;
+	uint64_t symbolsGen_ = ~0ull;
 };
 
 } // namespace tui
