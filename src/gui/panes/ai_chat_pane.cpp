@@ -1,5 +1,6 @@
 #include "gui/panes/ai_chat_pane.hpp"
 
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QPushButton>
@@ -83,8 +84,10 @@ QString AiChatPane::buildContext() const {
 	if (!session_ || !session_->loaded())
 		return QStringLiteral("No binary loaded.");
 
+	// The file name only: the full path would hand the backend the user name and
+	// directory layout for nothing.
 	const QString header = QString("File: %1\nFormat: %2\nArchitecture: %3")
-		.arg(QString::fromStdString(session_->filePath()),
+		.arg(QFileInfo(QString::fromStdString(session_->filePath())).fileName(),
 		     QString::fromStdString(session_->format()),
 		     QString::fromStdString(session_->architecture()));
 

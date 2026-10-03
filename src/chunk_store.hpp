@@ -63,8 +63,8 @@ public:
         ++size_;
     }
 
-    T& operator[](size_type i) { return (*blocks_[i / ChunkSize])[i % ChunkSize]; }
-    const T& operator[](size_type i) const { return (*blocks_[i / ChunkSize])[i % ChunkSize]; }
+    T& operator[](size_type index) { return (*blocks_[index / ChunkSize])[index % ChunkSize]; }
+    const T& operator[](size_type index) const { return (*blocks_[index / ChunkSize])[index % ChunkSize]; }
 
     T& front() { return (*this)[0]; }
     const T& front() const { return (*this)[0]; }
@@ -97,20 +97,20 @@ public:
         using reference = const T&;
 
         const_iterator() = default;
-        const_iterator(const ChunkStore* store, size_type i) : store_(store), i_(i) {}
+        const_iterator(const ChunkStore* store, size_type index) : store_(store), index_(index) {}
 
-        reference operator*() const { return (*store_)[i_]; }
-        pointer operator->() const { return &(*store_)[i_]; }
+        reference operator*() const { return (*store_)[index_]; }
+        pointer operator->() const { return &(*store_)[index_]; }
 
-        const_iterator& operator++() { ++i_; return *this; }
-        const_iterator operator++(int) { const_iterator prev = *this; ++i_; return prev; }
+        const_iterator& operator++() { ++index_; return *this; }
+        const_iterator operator++(int) { const_iterator previous = *this; ++index_; return previous; }
 
-        bool operator==(const const_iterator& other) const { return i_ == other.i_; }
-        bool operator!=(const const_iterator& other) const { return i_ != other.i_; }
+        bool operator==(const const_iterator& other) const { return index_ == other.index_; }
+        bool operator!=(const const_iterator& other) const { return index_ != other.index_; }
 
     private:
         const ChunkStore* store_ = nullptr;
-        size_type i_ = 0;
+        size_type index_ = 0;
     };
 
     const_iterator begin() const { return const_iterator(this, 0); }

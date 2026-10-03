@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <string>
 #include <cstring>
+#include <stdexcept>
 
 namespace voidwalk {
 
@@ -17,16 +18,24 @@ namespace voidwalk {
 // runtime_error: a catch clause written for runtime_error will let it through.
 // Callers that wrap file opening should catch std::exception.
 //
+// The one exception is FileChanged, below.
+//
 // Threading: const after construction. Concurrent reads from any number of
 // threads are safe; there are no writes.
+
+// Thrown by a read when the file shrank on disk after it was mapped (POSIX: the
+// read hit SIGBUS). A runtime_error, so the decoders' length_error catch - "the
+// instruction is truncated" - lets it through to the frontends, which exit.
+struct FileChanged : std::runtime_error { using std::runtime_error::runtime_error; };
+
 class AddressSpace {
 private:
 
-	// base pointer to array of mmap
-	void* base;
+	// start of the read-only file mapping
+	void* mappedData;
 
 	// max file size in bytes from metadata
-	size_t maxSize;
+	size_t fileSize;
 
 
 
@@ -37,16 +46,17 @@ public:
 	// Only instantiated for the four widths below - the definition lives in
 	// address_space.cpp, so any other T fails to link.
 	//
-	// Throws std::length_error if [offset, offset + sizeof(T)) leaves the file.
+	// Throws std::length_error if [offset, offset + sizeof(T)) leaves the file,
+	// FileChanged if the file was truncated on disk since it was mapped.
 	template <typename T>
 	T readType(uint64_t offset);
 
 
-	// Maps `filename` read-only for the object's lifetime.
+	// Maps `filePath` read-only for the object's lifetime.
 	//
 	// Throws std::length_error if the file cannot be opened or stat'd, if it is
 	// empty, or if the mapping fails.
-	AddressSpace(std::string filename);
+	AddressSpace(std::string filePath);
 
 	// Little-endian reads at a file offset, each bounds-checked.
 	// Throw std::length_error when the read would run past end-of-file - which is

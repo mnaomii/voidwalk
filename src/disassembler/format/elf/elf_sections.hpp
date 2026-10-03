@@ -13,10 +13,10 @@
 // between them on is64Bit(arch).
 //
 // Both walk the e_shnum entries at e_shoff, resolve each sh_name through the
-// .shstrtab section, and store the entries they recognise: appended to `base` (the
+// .shstrtab section, and store the entries they recognise: appended to `common` (the
 // four common sections - lists, since ELF allows a name to repeat) or assigned into
 // `extra` (the ELF-only ones, at most one each in practice). A section the file
-// does not have leaves its `base` list empty, or its `extra` Header all-zero.
+// does not have leaves its `common` list empty, or its `extra` Header all-zero.
 //
 // Section NAMES are the key, so a stripped or non-standard binary simply yields
 // fewer sections rather than an error.
@@ -28,58 +28,58 @@
 namespace voidwalk::elf {
 
 // What to do with a recognised section's Header. One type for both destinations -
-// a push_back into a `base` list or an assignment into an `extra` field - so a
+// a push_back into a `common` list or an assignment into an `extra` field - so a
 // single name -> Store map covers all of them.
 using Store = std::function<void(const Header&)>;
 
 // 32-bit ELF (ELFCLASS32). Offsets are the Elf32_Shdr layout.
-inline void parseSections32(Sections& base, ELF_Sections& extra, AddressSpace& data) {
+inline void parseSections32(Sections& common, ELF_Sections& extra, AddressSpace& data) {
 
 
-	uint64_t e_shoff = data.read_u32(0x20); // section header offset
-	uint64_t e_shentsize = data.read_u16(0x2e); // section header entry size
-	uint64_t e_shnum = data.read_u16(0x30); // section header nb. entries
-	uint64_t e_shstrndx = data.read_u16(0x32); // index into section names
+	uint64_t sectionTableOffset = data.read_u32(0x20); // e_shoff: section header offset
+	uint64_t sectionEntrySize = data.read_u16(0x2e);   // e_shentsize: section header entry size
+	uint64_t sectionCount = data.read_u16(0x30);       // e_shnum: section header nb. entries
+	uint64_t namesSectionIndex = data.read_u16(0x32);  // e_shstrndx: index into section names
 
-	uint32_t sh_name, sh_offset, sh_size, sh_addr;
+	uint32_t nameOffset, sectionOffset, sectionSize, sectionVaddr;
 
-	std::unordered_map<std::string, Store> section_map = {
-	{ ".text",    [&](const Header& h) { base._text.push_back(h);  } },
-	{ ".data",    [&](const Header& h) { base._data.push_back(h);  } },
-	{ ".rodata",  [&](const Header& h) { base._ronly.push_back(h); } },
-	{ ".bss",     [&](const Header& h) { base._bss.push_back(h);   } },
-	{ ".symtab",  [&](const Header& h) { extra._symtab = h;   } },
-	{ ".dynsym",  [&](const Header& h) { extra._dynsym = h;   } },
-	{ ".strtab",  [&](const Header& h) { extra._strtab = h;   } },
-	{ ".dynstr",  [&](const Header& h) { extra._dynstr = h;   } },
-	{ ".plt",     [&](const Header& h) { extra._plt = h;      } },
-	{ ".got",     [&](const Header& h) { extra._got = h;      } },
-	{ ".eh_frame",[&](const Header& h) { extra._eh_frame = h; } },
+	std::unordered_map<std::string, Store> sectionHandlers = {
+	{ ".text",    [&](const Header& header) { common.text.push_back(header);  } },
+	{ ".data",    [&](const Header& header) { common.data.push_back(header);  } },
+	{ ".rodata",  [&](const Header& header) { common.readOnly.push_back(header); } },
+	{ ".bss",     [&](const Header& header) { common.bss.push_back(header);   } },
+	{ ".symtab",  [&](const Header& header) { extra.symtab = header;   } },
+	{ ".dynsym",  [&](const Header& header) { extra.dynsym = header;   } },
+	{ ".strtab",  [&](const Header& header) { extra.strtab = header;   } },
+	{ ".dynstr",  [&](const Header& header) { extra.dynstr = header;   } },
+	{ ".plt",     [&](const Header& header) { extra.plt = header;      } },
+	{ ".got",     [&](const Header& header) { extra.got = header;      } },
+	{ ".eh_frame",[&](const Header& header) { extra.ehFrame = header; } },
 	};
 
-	uint64_t shstrtab_entry = e_shoff + e_shstrndx * e_shentsize;
-	uint64_t shstrtab_offset = data.read_u32(shstrtab_entry + 0x10);
+	uint64_t namesSectionEntry = sectionTableOffset + namesSectionIndex * sectionEntrySize;
+	uint64_t namesOffset = data.read_u32(namesSectionEntry + 0x10);
 
-	for (uint16_t count = 0; count < e_shnum; ++count) // going through the information of all sections
+	for (uint16_t sectionIndex = 0; sectionIndex < sectionCount; ++sectionIndex) // going through the information of all sections
 	{
-		sh_name = data.read_u32(e_shoff + e_shentsize * count);             // index in glossary
-		sh_offset = data.read_u32(e_shoff + e_shentsize * count + 0x10); 	// offset of section
-		sh_size = data.read_u32(e_shoff + e_shentsize * count + 0x14);    // size of said section
-		sh_addr = data.read_u32(e_shoff + e_shentsize * count + 0x0c);
+		nameOffset = data.read_u32(sectionTableOffset + sectionEntrySize * sectionIndex);            // sh_name: index in glossary
+		sectionOffset = data.read_u32(sectionTableOffset + sectionEntrySize * sectionIndex + 0x10);  // sh_offset: offset of section
+		sectionSize = data.read_u32(sectionTableOffset + sectionEntrySize * sectionIndex + 0x14);    // sh_size: size of said section
+		sectionVaddr = data.read_u32(sectionTableOffset + sectionEntrySize * sectionIndex + 0x0c);   // sh_addr
 
 
-		std::string section_name = "";
+		std::string sectionName = "";
 
 		for (uint64_t i = 0; ; ++i) {
-			char c = data.read_u8(shstrtab_offset + sh_name + i);
-			if (c == '\0') break;
-			section_name += c;
+			char nameChar = data.read_u8(namesOffset + nameOffset + i);
+			if (nameChar == '\0') break;
+			sectionName += nameChar;
 		}
 
 
-		auto it = section_map.find(section_name);
-		if (it != section_map.end())
-			it->second(Header(sh_addr, sh_offset, sh_size)); // Header(vaddr, offset, size)
+		auto it = sectionHandlers.find(sectionName);
+		if (it != sectionHandlers.end())
+			it->second(Header(sectionVaddr, sectionOffset, sectionSize)); // Header(vaddr, offset, size)
 
 	}
 
@@ -88,14 +88,14 @@ inline void parseSections32(Sections& base, ELF_Sections& extra, AddressSpace& d
 
 // 64-bit ELF (ELFCLASS64). Offsets are the Elf64_Shdr layout; otherwise identical
 // to parseSections32.
-inline void parseSections64(Sections& base, ELF_Sections& extra, AddressSpace& data) {
+inline void parseSections64(Sections& common, ELF_Sections& extra, AddressSpace& data) {
 
-	uint64_t e_shoff =		data.read_u64(0x28); // section header offset
-	uint64_t e_shentsize =	data.read_u16(0x3A); // size of one section header entry
-	uint64_t e_shnum =		data.read_u16(0x3C); // how many entries
-	uint64_t e_shstrndx =	data.read_u16(0x3E); // index of the section that holds section names
+	uint64_t sectionTableOffset = data.read_u64(0x28); // e_shoff: section header offset
+	uint64_t sectionEntrySize = data.read_u16(0x3A);   // e_shentsize: size of one section header entry
+	uint64_t sectionCount = data.read_u16(0x3C);       // e_shnum: how many entries
+	uint64_t namesSectionIndex = data.read_u16(0x3E);  // e_shstrndx: index of the section that holds section names
 
-	if (e_shoff == 0 && e_shnum == 0) { // sstrip-ed binary
+	if (sectionTableOffset == 0 && sectionCount == 0) { // sstrip-ed binary
 
 		// logic will go here
 
@@ -103,48 +103,48 @@ inline void parseSections64(Sections& base, ELF_Sections& extra, AddressSpace& d
 	}
 
 
-	uint64_t sh_name; uint64_t sh_offset, sh_size, sh_addr;
+	uint64_t nameOffset; uint64_t sectionOffset, sectionSize, sectionVaddr;
 
-	std::unordered_map<std::string, Store> section_map = {
-	{ ".text",    [&](const Header& h) { base._text.push_back(h);  } },
-	{ ".data",    [&](const Header& h) { base._data.push_back(h);  } },
-	{ ".rodata",  [&](const Header& h) { base._ronly.push_back(h); } },
-	{ ".bss",     [&](const Header& h) { base._bss.push_back(h);   } },
-	{ ".symtab",  [&](const Header& h) { extra._symtab = h;   } },
-	{ ".dynsym",  [&](const Header& h) { extra._dynsym = h;   } },
-	{ ".strtab",  [&](const Header& h) { extra._strtab = h;   } },
-	{ ".dynstr",  [&](const Header& h) { extra._dynstr = h;   } },
-	{ ".plt",     [&](const Header& h) { extra._plt = h;      } },
-	{ ".got",     [&](const Header& h) { extra._got = h;      } },
-	{ ".eh_frame",[&](const Header& h) { extra._eh_frame = h; } },
+	std::unordered_map<std::string, Store> sectionHandlers = {
+	{ ".text",    [&](const Header& header) { common.text.push_back(header);  } },
+	{ ".data",    [&](const Header& header) { common.data.push_back(header);  } },
+	{ ".rodata",  [&](const Header& header) { common.readOnly.push_back(header); } },
+	{ ".bss",     [&](const Header& header) { common.bss.push_back(header);   } },
+	{ ".symtab",  [&](const Header& header) { extra.symtab = header;   } },
+	{ ".dynsym",  [&](const Header& header) { extra.dynsym = header;   } },
+	{ ".strtab",  [&](const Header& header) { extra.strtab = header;   } },
+	{ ".dynstr",  [&](const Header& header) { extra.dynstr = header;   } },
+	{ ".plt",     [&](const Header& header) { extra.plt = header;      } },
+	{ ".got",     [&](const Header& header) { extra.got = header;      } },
+	{ ".eh_frame",[&](const Header& header) { extra.ehFrame = header; } },
 	};
 
 
-	uint64_t shstrtab_entry = e_shoff + e_shstrndx * e_shentsize;
-	uint64_t shstrtab_offset = data.read_u64(shstrtab_entry + 0x18);
+	uint64_t namesSectionEntry = sectionTableOffset + namesSectionIndex * sectionEntrySize;
+	uint64_t namesOffset = data.read_u64(namesSectionEntry + 0x18);
 
 
 	// parsing the section map
-	for (uint16_t count = 0; count < e_shnum; ++count) // going through the information of all sections
+	for (uint16_t sectionIndex = 0; sectionIndex < sectionCount; ++sectionIndex) // going through the information of all sections
 	{
 
-		sh_name = data.read_u32(e_shoff + e_shentsize * count);             // index in glossary
-		sh_offset = data.read_u64(e_shoff + e_shentsize * count + 0x18); 	// offset of section
-		sh_size = data.read_u64(e_shoff + e_shentsize * count + 0x20);    // size of said section
-		sh_addr = data.read_u64(e_shoff + e_shentsize * count + 0x10);
+		nameOffset = data.read_u32(sectionTableOffset + sectionEntrySize * sectionIndex);            // sh_name: index in glossary
+		sectionOffset = data.read_u64(sectionTableOffset + sectionEntrySize * sectionIndex + 0x18);  // sh_offset: offset of section
+		sectionSize = data.read_u64(sectionTableOffset + sectionEntrySize * sectionIndex + 0x20);    // sh_size: size of said section
+		sectionVaddr = data.read_u64(sectionTableOffset + sectionEntrySize * sectionIndex + 0x10);   // sh_addr
 
-		std::string section_name = "";
+		std::string sectionName = "";
 
 		for (uint64_t i = 0; ; ++i) {
-			char c = data.read_u8(shstrtab_offset + sh_name + i);
-			if (c == '\0') break;
-			section_name += c;
+			char nameChar = data.read_u8(namesOffset + nameOffset + i);
+			if (nameChar == '\0') break;
+			sectionName += nameChar;
 		}
 
 
-		auto it = section_map.find(section_name);
-		if (it != section_map.end())
-			it->second(Header(sh_addr, sh_offset, sh_size)); // Header(vaddr, offset, size)
+		auto it = sectionHandlers.find(sectionName);
+		if (it != sectionHandlers.end())
+			it->second(Header(sectionVaddr, sectionOffset, sectionSize)); // Header(vaddr, offset, size)
 
 	}
 

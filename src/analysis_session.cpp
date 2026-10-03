@@ -20,10 +20,10 @@ bool Session::open(const std::string& path) {
 		return false;
 	}
 
-	bool is_elf = false, is_pe = false;
-	determine_filetype(*newSpace, is_elf, is_pe);
+	bool isElf = false, isPe = false;
+	determine_filetype(*newSpace, isElf, isPe);
 
-	adopt(std::move(newSpace), std::move(newDisassembler), path, is_elf ? "ELF" : "PE");
+	adopt(std::move(newSpace), std::move(newDisassembler), path, isElf ? "ELF" : "PE");
 	setStatus("Loaded " + path);
 	return true;
 }
@@ -55,6 +55,7 @@ void Session::runDecode() {
 	// join above, it would be writing to its own object, kept alive by its own
 	// shared_ptr copy. Costs one allocation per opened binary.
 	decodeState_ = std::make_shared<DecodeState>();
+	++decodeGeneration_;
 	onDecodeStarted();
 	decodeState_->running.store(true, std::memory_order_release);
 
@@ -64,10 +65,15 @@ void Session::runDecode() {
 	// already stopped and joined above; decode() polls the stop_token each line, so
 	// that returns promptly.
 	decodeThread_ = std::jthread(
-		[disasm = disassembler_, space = space_, state = decodeState_](std::stop_token st) {
+		[disasm = disassembler_, space = space_, state = decodeState_](std::stop_token stopToken) {
 			(void)space; // held only to keep the AddressSpace alive under the worker
 			try {
-				disasm->decode(st);
+				disasm->decode(stopToken);
+			}
+			catch (const FileChanged& e) {
+				// Can't cross threads: flag it for throwIfFileChanged() on the UI thread.
+				state->note = e.what();
+				state->fileChanged = true;
 			}
 			catch (const std::exception& e) {
 				// Partial results survive: whatever decoded before the throw is kept.
@@ -88,6 +94,11 @@ bool Session::is64bit() const {
 	return loaded() && voidwalk::is64Bit(disassembler_->architecture());
 }
 
+void Session::throwIfFileChanged() const {
+	if (decodeState_ && !isDecoding() && decodeState_->fileChanged)
+		throw FileChanged(decodeState_->note);
+}
+
 // The worker's error message, readable only once the worker has stopped.
 const std::string& Session::decodeNote() const {
 	static const std::string kEmpty;
@@ -104,9 +115,9 @@ void Session::compact() {
 std::vector<uint8_t> Session::bytes(uint64_t offset, size_t count) const {
 	std::vector<uint8_t> out;
 	if (!space_) return out;
-	size_t max = space_->size();
-	if (offset >= max) return out;
-	if (count > max - offset) count = max - offset;
+	size_t fileSize = space_->size();
+	if (offset >= fileSize) return out;
+	if (count > fileSize - offset) count = fileSize - offset;
 	out.reserve(count);
 	for (size_t i = 0; i < count; ++i)
 		out.push_back(space_->read_u8(offset + i));
@@ -121,14 +132,14 @@ size_t Session::binarySize() const {
 // File offset of the first .text section, or 0.
 uint64_t Session::textOffset() const {
 	if (!loaded()) return 0;
-	const auto& text = disassembler_->getSections()._text;
+	const auto& text = disassembler_->getSections().text;
 	return text.empty() ? 0 : text.front().getOffset();
 }
 
 // Virtual address of the first .text section, or 0.
 uint64_t Session::textVaddr() const {
 	if (!loaded()) return 0;
-	const auto& text = disassembler_->getSections()._text;
+	const auto& text = disassembler_->getSections().text;
 	return text.empty() ? 0 : text.front().getVaddr();
 }
 

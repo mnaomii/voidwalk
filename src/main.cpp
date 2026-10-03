@@ -30,6 +30,15 @@ using voidwalk::AddressSpace;
 using voidwalk::Disassembler;
 using voidwalk::make_disassembler;
 
+// An exception's message as one clean line: the core's messages carry their own
+// "[voidwalk] : " prefix and a trailing newline, which would double up with ours.
+static std::string message(const std::exception& e) {
+    std::string m = e.what();
+    if (m.rfind("[voidwalk] : ", 0) == 0) m.erase(0, 13);
+    while (!m.empty() && (m.back() == '\n' || m.back() == ' ')) m.pop_back();
+    return m;
+}
+
 static void printHelp(const char* exe) {
     std::cout <<
         "voidwalk - binary analysis tool for ELF and PE executables.\n"
@@ -37,7 +46,7 @@ static void printHelp(const char* exe) {
         "Usage:\n"
         "  " << exe << " [--gui]                       open the GUI (default when no\n"
         "                                       arguments are given)\n"
-        "  " << exe << " --tui <binary>                open the terminal UI on <binary>\n"
+        "  " << exe << " [--tui] <binary>              open the terminal UI on <binary>\n"
         "  " << exe << " --print <binary> [out...]     disassemble to stdout, and to each\n"
         "                                       additional file given\n"
         "  " << exe << " --dump-hex <binary>           hex dump of <binary>\n"
@@ -68,20 +77,30 @@ static int run(int argc, char** argv) {
         return 0;
     }
 
-    if (mode != "--gui" && mode != "--tui")
-    {
-        // console() throws for a missing/unopenable file, and printToConsole()
-        // throws for an output stream it cannot create. Both used to escape
-        // main() and abort the process; report them and exit non-zero instead.
-        try {
+    // A usage error says how to get help; any other failure just says what failed.
+    // Both exit 1.
+    try {
+        if (mode == "--print" || mode == "--dump-hex") {
             cli::start(argc, argv);
+            return 0;
         }
-        catch (const std::exception& e) {
-            std::cerr << "voidwalk: " << e.what()
-                      << "Try '" << exe << " --help' for usage.\n";
-            return 1;
+        // "--tui <binary>", or a bare "<binary>": exactly one path either way.
+        if (mode != "--gui") {
+            const bool bare = mode.empty() || mode[0] != '-';
+            if (!bare && mode != "--tui")
+                throw std::invalid_argument("unknown option '" + mode + "'");
+            if (argc != (bare ? 2 : 3))
+                throw std::invalid_argument(bare ? "expected a single <binary>"
+                                                 : "--tui takes exactly one <binary>");
         }
-        return 0;
+    }
+    catch (const std::invalid_argument& e) {
+        std::cerr << "voidwalk: " << message(e) << "\nTry '" << exe << " --help' for usage.\n";
+        return 1;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "voidwalk: " << message(e) << "\n";
+        return 1;
     }
 
 
@@ -96,14 +115,14 @@ static int run(int argc, char** argv) {
 #endif
     }
 
-    // The TUI and the test harness both need the target file opened up front.
+    // The TUI needs the target file opened up front.
 
     std::shared_ptr<AddressSpace> data;
     try {
         data = std::make_shared<AddressSpace>(argv[argc - 1]);
     }
     catch (const std::exception& e) {
-        std::cerr << "voidwalk: cannot open " << argv[argc - 1] << " - " << e.what() << "\n";
+        std::cerr << "voidwalk: cannot open " << argv[argc - 1] << " - " << message(e) << "\n";
         return 1;
     }
 
@@ -116,25 +135,18 @@ static int run(int argc, char** argv) {
         // Was a fixed "Corrupt file." with a zero exit status, which reported
         // an unsupported architecture and a truncated header identically - and
         // told the shell the run had succeeded.
-        std::cerr << "voidwalk: cannot parse " << argv[argc - 1] << " - " << e.what() << "\n";
+        std::cerr << "voidwalk: cannot parse " << argv[argc - 1] << " - " << message(e) << "\n";
         return 1;
     }
-//    if (mode == "--run-tests") {      NEEDS OVERHAUL
-//        runTests(argc, argv, disassembler);
- //       return 0;
-//    }
-
-    // "--ui" or a bare <binary> argument: the TUI is the default interface
+    // "--tui <binary>" or a bare <binary>: the TUI is the default interface
 #ifdef VOIDWALK_WITH_TUI
-    if( mode == "--tui")
     return tui::start(argc, argv, status, data, disassembler);
 #else
     std::cout << "Analyzing file " << argv[argc - 1] << status
               << " Architecture -> " << disassembler->getArchitecture() << "\n\n"
-              << "(TUI not built in this configuration - use the voidwalk-tui project.)\n";
-#endif
-
+              << "(TUI not built in this configuration (enable VOIDWALK_BUILD_TUI).)\n";
     return 0;
+#endif
 }
 
 int main(int argc, char** argv) {
@@ -146,7 +158,7 @@ int main(int argc, char** argv) {
         return run(argc, argv);
     }
     catch (const std::exception& e) {
-        std::cerr << "voidwalk: unhandled error - " << e.what() << "\n";
+        std::cerr << "voidwalk: unhandled error - " << message(e) << "\n";
         return 1;
     }
     catch (...) {

@@ -29,10 +29,10 @@ class PE_Sections_Tests : public Tests {
         const Sections& s = d.getSections();
 
         expect_eq(d.getArchitecture(), arch, label + " architecture");
-        check(".text (CODE)",   s._text,  fx.text,   label);
-        check(".data (DATA)",   s._data,  fx.data,   label);
-        check(".rdata (RODATA)",s._ronly, fx.rodata, label);
-        check(".bss (BSS)",     s._bss,   fx.bss,    label);
+        check(".text (CODE)",   s.text,  fx.text,   label);
+        check(".data (DATA)",   s.data,  fx.data,   label);
+        check(".rdata (RODATA)",s.readOnly, fx.rodata, label);
+        check(".bss (BSS)",     s.bss,   fx.bss,    label);
     }
 
     void runAll() {

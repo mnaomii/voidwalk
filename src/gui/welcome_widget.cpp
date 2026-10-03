@@ -1,19 +1,13 @@
 #include "gui/welcome_widget.hpp"
 
-#include <QDragEnterEvent>
-#include <QDropEvent>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMimeData>
 #include <QPushButton>
-#include <QUrl>
 #include <QVBoxLayout>
 
 namespace gui {
 
 WelcomeWidget::WelcomeWidget(QWidget* parent) : QWidget(parent) {
-	setAcceptDrops(true);
-
 	auto* badge = new QLabel(QStringLiteral("01"), this);
 	badge->setObjectName(QStringLiteral("welcomeBadge"));
 	badge->setFixedSize(72, 72);
@@ -57,17 +51,6 @@ WelcomeWidget::WelcomeWidget(QWidget* parent) : QWidget(parent) {
 	layout->addStretch();
 	layout->addLayout(column);
 	layout->addStretch();
-}
-
-void WelcomeWidget::dragEnterEvent(QDragEnterEvent* event) {
-	if (event->mimeData()->hasUrls())
-		event->acceptProposedAction();
-}
-
-void WelcomeWidget::dropEvent(QDropEvent* event) {
-	const QList<QUrl> urls = event->mimeData()->urls();
-	if (!urls.isEmpty() && urls.first().isLocalFile())
-		emit fileDropped(urls.first().toLocalFile());
 }
 
 } // namespace gui

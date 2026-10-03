@@ -5,14 +5,14 @@
 namespace voidwalk {
 
 // PE-only sections, beyond the four in Sections. Parsed and stored, but nothing
-// reads them yet - _idata is what an import table would be built from.
+// reads them yet - idata is what an import table would be built from.
 //
 // Any section the file lacks stays default-constructed (all zero).
 struct PE_Sections {
-    Header _idata,  // import directory
-           _edata,  // export directory
-           _rsrc,   // resources
-           _pdata;  // exception / unwind data
+    Header idata,   // import directory
+           edata,   // export directory
+           rsrc,    // resources
+           pdata;   // exception / unwind data
 };
 
 // Disassembler for PE containers.
@@ -27,10 +27,10 @@ private:
 
     // File offset of the PE signature, read from the DOS header at 0x3C. Every
     // other header offset in this format is relative to it.
-    uint32_t e_lfanew;
+    uint32_t peHeaderOffset;
     // uint64_t* _reloc - use for rebasing
 
-    // Fills baseSections from the PE section table and sets imageBase.
+    // Fills commonSections from the PE section table and sets imageBase.
     // Throws std::runtime_error if the architecture was not recognised.
     void setHeadersOffsets() override;
 public:

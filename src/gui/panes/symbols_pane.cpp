@@ -1,8 +1,10 @@
 #include "gui/panes/symbols_pane.hpp"
 
 #include "gui/panes/column_fit.hpp"
+#include "gui/theme/icons.hpp"
 #include "gui/theme/theme.hpp"
 
+#include <QAction>
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -16,6 +18,7 @@ namespace gui {
 namespace {
 constexpr int kRowHeight = 25;      // matches the disassembly row rhythm
 constexpr int kAddrRole = Qt::UserRole + 1;
+constexpr int kStringRole = Qt::UserRole + 2;   // true: kAddrRole is a file offset
 } // namespace
 
 SymbolsPane::SymbolsPane(QWidget* parent) : QWidget(parent) {
@@ -43,9 +46,21 @@ SymbolsPane::SymbolsPane(QWidget* parent) : QWidget(parent) {
 	filter_ = new QLineEdit(this);
 	filter_->setObjectName(QStringLiteral("symbolsFilter"));
 	filter_->setPlaceholderText(tr("Filter"));
-	filter_->setClearButtonEnabled(true);
-	connect(filter_, &QLineEdit::textChanged, this, [this] { rebuild(); });
-	layout->addWidget(filter_);
+	// Our own clear button rather than setClearButtonEnabled(), whose icon comes from
+	// the desktop's icon theme (a red disc on GNOME) instead of the app's flat set.
+	clearAct_ = filter_->addAction(QIcon(), QLineEdit::TrailingPosition);
+	clearAct_->setVisible(false);
+	connect(clearAct_, &QAction::triggered, filter_, &QLineEdit::clear);
+	connect(filter_, &QLineEdit::textChanged, this, [this](const QString& text) {
+		clearAct_->setVisible(!text.isEmpty());
+		rebuild();
+	});
+	// The gap around the field lives here, not in the QSS: QLineEdit places its side
+	// buttons by the widget's full rect, so a QSS margin pushed the button past the border.
+	auto* filterRow = new QHBoxLayout;
+	filterRow->setContentsMargins(10, 8, 10, 8);
+	filterRow->addWidget(filter_);
+	layout->addLayout(filterRow);
 
 	tree_ = new QTreeWidget(this);
 	tree_->setObjectName(QStringLiteral("symbolsTree"));
@@ -74,22 +89,23 @@ SymbolsPane::SymbolsPane(QWidget* parent) : QWidget(parent) {
 	tree_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 	layout->addWidget(tree_, 1);
 
-	connect(tree_, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem* item, int) {
+	auto activate = [this](QTreeWidgetItem* item) {
 		if (!item || !item->data(0, kAddrRole).isValid()) return; // group header
-		emit navigateRequested(item->data(0, kAddrRole).toULongLong());
-	});
+		const uint64_t addr = item->data(0, kAddrRole).toULongLong();
+		if (item->data(0, kStringRole).toBool()) emit memoryRequested(addr);
+		else emit navigateRequested(addr);
+	};
+	connect(tree_, &QTreeWidget::itemActivated, this, [activate](QTreeWidgetItem* item, int) { activate(item); });
 	// Single click navigates too: the sidebar is a navigator, not a file picker,
 	// so requiring a double click would put a beat between intent and jump.
-	connect(tree_, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item, int) {
-		if (!item || !item->data(0, kAddrRole).isValid()) return;
-		emit navigateRequested(item->data(0, kAddrRole).toULongLong());
-	});
+	connect(tree_, &QTreeWidget::itemClicked, this, [activate](QTreeWidgetItem* item, int) { activate(item); });
 
 	countLabel_ = count;
 }
 
 void SymbolsPane::setTheme(const Theme& theme) {
 	theme_ = theme;
+	clearAct_->setIcon(Icons::icon(QStringLiteral("clear")));   // re-fetched: a theme switch recolors the set
 	rebuild();
 }
 
@@ -184,11 +200,12 @@ void SymbolsPane::rebuild() {
 			row->setText(1, QString::fromStdString(sym->detail));
 			row->setForeground(1, theme_.textGhost);
 			row->setData(0, kAddrRole, QVariant::fromValue<qulonglong>(sym->addr));
+			row->setData(0, kStringRole, sym->kind == SymbolInfo::Kind::String);
 			row->setSizeHint(0, QSize(0, kRowHeight));
 			// Name as well as address: the name is what gets elided in a narrow
 			// sidebar, and a string literal's tail is the half worth reading.
-			const QString addr = QStringLiteral("0x%1")
-				.arg(sym->addr, 8, 16, QLatin1Char('0')).toUpper();
+			const QString addr = (sym->kind == SymbolInfo::Kind::String ? tr("file offset ") : QString())
+				+ QStringLiteral("0x%1").arg(sym->addr, 8, 16, QLatin1Char('0')).toUpper();
 			row->setToolTip(0, QString::fromStdString(sym->name) + QStringLiteral("\n") + addr);
 			row->setToolTip(1, addr);
 			++shown;

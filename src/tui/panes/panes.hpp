@@ -11,17 +11,19 @@
 
 namespace tui {
 
-// Scrollable list of Session::disassemblyLines(); highlights selected row.
+// Scrollable list of Session::disassemblyRow()s; highlights selected row.
 ftxui::Component DisassemblyPane(Session& session);
 
-// Session::registerRows(); short, but still scrollable on tiny terminals.
+// Session::registerRows(), then the vector register groups as Collapsibles,
+// closed by default. Scrollable on tiny terminals.
 ftxui::Component RegistersPane(Session& session);
 
 // Scrollable Session::stackRows(), top of stack first.
 ftxui::Component StackPane(Session& session);
 
 // Hexdump of the whole binary via Session::bytes(): offset | 16 hex | ascii.
-// Arrow keys / PageUp / PageDown / Home scroll by row; starts at .text.
+// Arrow keys / PageUp / PageDown / Home scroll by row; starts at .text, and again
+// at the new .text whenever a binary is (re)opened.
 ftxui::Component MemoryPane(Session& session);
 
 } // namespace tui

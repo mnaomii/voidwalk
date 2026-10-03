@@ -9,7 +9,7 @@ class Arm32Decoder : public Decoder {
 public:
     // Always throws std::runtime_error("Not implemented yet.").
     uint64_t decodeLine(AddressSpace& contents,
-                        uint64_t address,
+                        uint64_t fileOffset,
                         uint64_t vaddr,
                         InstructionStore& decodedInstructions) override;
 };

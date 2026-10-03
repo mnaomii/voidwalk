@@ -1,10 +1,8 @@
 #pragma once
-#include "arch/instruction.hpp"
 #include <cstdint>
 #include <array>
 #include <string>
 #include <string_view>
-#include <stdexcept>
 
 
 namespace voidwalk {
@@ -18,6 +16,10 @@ namespace voidwalk {
 // Table layout mirrors the encoding's own structure:
 //   opcodeTable    the 256 one-byte opcodes
 //   twoByteTable   the 256 opcodes behind the 0F escape
+//   prefixedTable  the 0F rows a 66 / F3 / F2 mandatory prefix selects (SSE, POPCNT...)
+//   threeByteTable the 0F 38 / 0F 3A rows (SSSE3's MMX forms, SSE4.1, SSE4.2)
+//   threeDNowTable 3DNow!, keyed by the byte after 0F 0F's operands
+//   vexTable       the VEX-encoded rows (AVX, AVX2, FMA, BMI1/2)
 //   grp1..grp5     group escapes, selected by ModRM.reg
 //   x87Mem/Reg     the x87 maps, selected by the whole ModRM byte
 //
@@ -30,223 +32,28 @@ namespace voidwalk {
 class x86_64_Mnemonic{
 public:
 
-	// Reg number -> name at a given operand size. size b picks the 8-bit set (AL..BH),
-	// where reg 4..7 alias to AH/CH/DH/BH instead of SP/BP/SI/DI; size w is always 16-bit;
-	// size v/z is 32-bit unless a 0x66 prefix (opsize16) drops it to 16-bit. Callers hand
-	// E/G registers the operand size and the memory base/index the address size, so the two
-	// no longer share one flag.
-
-	static std::string registerOf16(uint16_t r, bool hasAddrSize) {
-
-		static constexpr std::string_view addr16[] = {"BX + SI","BX + DI","BP + SI","BP + DI","SI","DI","BP","BX"}; 
-		return hasAddrSize ? std::string(addr16[r]) : "";
-	}
-
-	static std::string registerOf(const uint16_t& r, const uint8_t size, const bool& is16bit,  const bool& hasREX, const bool& is64bit = false) {
-		static constexpr std::string_view r8_32 [] = { "AL","CL","DL","BL",
-														"AH","CH","DH","BH" };
-
-		static constexpr std::string_view r8_64[] = {  "AL","CL","DL","BL" ,
-													   "SPL", "BPL", "SIL", "DIL",
-													   "R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B" };
-
-		static constexpr std::string_view r16[] = { "AX","CX","DX","BX","SP","BP","SI","DI" ,
-													"R8W", "R9W", "R10W", "R11W", "R12W", "R13W", "R14W", "R15W" };
-
-		static constexpr std::string_view r32[] = { "EAX","ECX","EDX","EBX","ESP","EBP","ESI","EDI",
-											"R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D" };
-
-		static constexpr std::string_view r64[] = { "RAX","RCX","RDX","RBX","RSP","RBP","RSI","RDI",
-											"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15" };
-
-		if (r > 15 || (r > 7 && static_cast<SIZE>(size) == SIZE::b && !hasREX))
-			throw std::runtime_error("Malformed expression detected..");
-
-
-		switch (static_cast<SIZE>(size)) {
-		case SIZE::b: return (hasREX) ? std::string(r8_64[r]) : std::string(r8_32[r]);
-		case SIZE::w: return std::string(r16[r]);
-		default:      return is64bit ? std::string(r64[r])                                 // v/z: REX.W(64) >
-		                   : (is16bit ? std::string(r16[r]) : std::string(r32[r]));        //      0x66(16) > 32
-		}
-	}
-
-	// Legacy two-arg form: a bare is16bit flag means "default operand size, 16 or 32".
-	// Kept so existing callers keep working; it cannot reach the 8-bit set (pass a size for that).
-	static std::string registerOf(uint16_t r, bool is16bit, bool hasREX, bool is64bit = false) {
-		return registerOf(r, static_cast<uint8_t>(SIZE::v), is16bit, hasREX, is64bit);
-	}
-
-
-	// ModRM.reg as a segment register (MOV Ew,Sw / MOV Sw,Ew). reg 6 and 7 name no
-	// segment register, so the encoding is invalid - but a linear sweep of .text runs
-	// over data and over opcodes we cannot decode yet, so invalid encodings are normal
-	// and must not kill the run. Mark them the way objdump does instead of throwing.
-	static std::string segmentOf(uint16_t r) {
-		constexpr std::string_view names[8] = { "ES", "CS", "SS", "DS", "FS", "GS", "(bad)", "(bad)" };
-		return std::string(names[r & 0x07]);
-	}
-
-	// ---------------------------------------------------------------------
-	// Opcode tables. Defined in x86_64_tables.cpp - see that file for why.
-	//
-	// Each accessor returns a reference to a function-local `static constexpr`
-	// array, so the table is built at compile time and the call is a plain
-	// address load with no guard variable.
-	// ---------------------------------------------------------------------
-	static const std::array<std::string_view, 256>& prefixTable();
-	static const std::array<Instruction::OpcodeInfo, 256>& opcodeTable();
-	static const std::array<Instruction::OpcodeInfo, 8>& grp1Table();
-	static const std::array<Instruction::OpcodeInfo, 8>& grp2Table();
-	static const std::array<Instruction::OpcodeInfo, 8>& grp3Table();
-	static const std::array<Instruction::OpcodeInfo, 8>& grp4Table();
-	static const std::array<Instruction::OpcodeInfo, 8>& grp5Table();
-	static const std::array<Instruction::OpcodeInfo, 8>& groupTableOf(uint32_t op);
-	static const Instruction::OpcodeInfo& groupEntryOf(uint32_t op, uint8_t reg);
-	static const std::array<Instruction::OpcodeInfo, 64>& x87MemTable();
-	static const std::array<Instruction::OpcodeInfo, 512>& x87RegTable();
-	// x87 (opcodes D8..DF): picks the memory map on mod != 11 and the register map
-	// otherwise, both keyed by the full ModRM byte rather than just reg.
-	static Instruction::OpcodeInfo x87ResolvedInfo(uint32_t op, uint8_t modrm);
-
-	// The real table row for one-byte opcode `op`. Follows a group escape through
-	// ModRM.reg and an x87 opcode through the whole ModRM byte; returns the plain
-	// row for everything else. Pass the entire ModRM byte, not just reg. `modrm` is
-	// unused when the opcode is neither a group nor x87, so 0 is fine there.
-	static Instruction::OpcodeInfo resolvedInfo(uint32_t op, uint8_t modrm, bool is64Bit = false);
-
-	// Stand-in row for the 0F 38 / 0F 3A three-byte maps, which are not tabulated.
-	// `hasImm8` selects the 0F 3A variant, whose encodings carry a trailing imm8.
-	// It exists so the length the decoder computes and the name the renderer prints
-	// stay consistent for opcodes neither of them really knows.
-	static const Instruction::OpcodeInfo& threeByteRow(bool hasImm8);
-	static const std::array<Instruction::OpcodeInfo, 256>& twoByteTable();
-	static const std::array<Instruction::OpcodeInfo, 8>& twoByteGroup8Table();
-	static const std::array<Instruction::OpcodeInfo, 8>& twoByteGroupTableOf(uint32_t op2);
-	static Instruction::OpcodeInfo twoByteResolvedInfo(uint32_t op2, uint8_t modrm);
-
-
-
-
-
-
-
-
-	// > 0 when the opcode is a group: the mnemonic must still be resolved from ModRM.reg.
-	static int groupNoOf(uint32_t op) { return opcodeTable()[op].groupNo; }
-	static bool isGroup(uint32_t op) { return opcodeTable()[op].groupNo > 0; }
-
-	// An immediate is present iff some operand is decoded from the instruction stream:
-	// I (immediate), J (rel), A (far ptr), O (moffs). Replaces the old hasImmediateByte flag.
-	static bool hasImmediate(const Instruction::OpcodeInfo& info) {
-		auto isImm = [](uint8_t m) {
-			return m == static_cast<uint8_t>(ADDRESSING::I)
-			    || m == static_cast<uint8_t>(ADDRESSING::J)
-			    || m == static_cast<uint8_t>(ADDRESSING::A)
-			    || m == static_cast<uint8_t>(ADDRESSING::O);
-		};
-		return isImm(info.op[0].addressingMode) || isImm(info.op[1].addressingMode) || isImm(info.op[2].addressingMode);
-	}
-
-
-
-		// No group entry's mnemonic moves with the operand size, so the 16-bit name is always empty here.
-#define G(reg,text, hasRM, op1, op2, op3, group) n[reg] = Instruction::OpcodeInfo{text,"", hasRM, op1, op2, op3, group}
-#define GT(reg,text,group) G(reg, text, true, NOP_, NOP_, NOP_, group)
-#define a(name) static_cast<uint8_t>(ADDRESSING::name)
-#define s(name) static_cast<uint8_t>(SIZE::name)
-#define OP(mode,sz,val,val16) Instruction::TableOperand{ a(mode), s(sz), false, val, val, val16 }
-#define NOP_ OP(None,None,"","")
-
-	// 0x80-0x83
-
-	// 0xC0/0xC1 (by Ib), 0xD0-0xD3 (by 1 / by CL). /6 SAL is an undocumented alias of /4 SHL.
-
-	// 0xF6 (Eb) / 0xF7 (Ev). Only /0 and /1 take an immediate; /1 is an undocumented
-	// alias of /0. /4../7 use AL/eAX implicitly - that is not encoded here. A size of None
-	// on the operands means "the width the outer row records" (b for 0xF6, v for 0xF7) -
-	// except the immediate, which resolvedInfo() caps at z: 0xF7 is TEST Ev, Iz.
-
-	// 0xFE. /2../7 are illegal.
-
-	// 0xFF. /3 and /5 are the far forms (m16:32); /7 is illegal.
-
-#undef NOP_
-#undef OP
-#undef s
-#undef a
-#undef GT
-#undef G
-
-
-	// The group table an opcode extends. Throws if the opcode is not a group.
-
-
-
-	// --- x87 FPU instructions
-
-	// Memory forms, indexed (op-0xD8)*8 + reg. Empty rows (invalid /reg) stay "(bad)".
-
-	// Register forms (mod == 11), indexed (op-0xD8)*64 + (ModRM & 0x3F), i.e. reg*8+rm.
-	// Regular families (a reg selects the op, rm selects ST(i)) are filled by a loop;
-	// the E0-FF individuals (one mnemonic per rm, mostly no operand) are set explicitly.
-
-
-	static bool isX87(uint32_t op) { return op >= 0xD8 && op <= 0xDF; }
-
-	// Full-ModRM resolution for an x87 escape opcode: memory row by reg, or the
-	// register row by the whole reg:rm pair.
-
-	// Merge the flat one-byte row with the entry ModRM selects. Takes the WHOLE ModRM
-	// byte now: groups still key on reg (bits 3-5), but x87 needs the full byte, so the
-	// dispatch happens here rather than in the caller.
-
-
-	// Two-byte (0F-escape) opcode map. A SEPARATE 256-entry table keyed by the byte
-	// after 0F: 0F B6 is MOVZX, unrelated to one-byte B6. Never index opcodeTable()
-	// with an 0F pair - that array is 0x00-0xFF and 0x0Fxx runs off the end.
-	//
-	// First cut: the integer opcodes compilers actually emit. Unpopulated slots are
-	// filled in at the end of this function with hasRMByte = true and the name
-	// "(bad)" - see the comment there. Deferred: naming the SSE / mandatory-prefix
-	// forms (66/F2/F3 0F xx), the three-byte 0F 38 / 0F 3A maps, and groups
-	// 6/7/9/15/16. Only group 8 (0F BA) is wired, because it carries an imm8.
-
-	// Stand-in rows for the three-byte maps (0F 38 xx / 0F 3A xx), which are not built
-	// yet. No name, but the right shape: 0F 38 rows are ModRM-addressed with no
-	// immediate, 0F 3A rows are ModRM + imm8. Enough to stay length-correct through
-	// SSSE3/SSE4 code (PSHUFB, PALIGNR, PCMPISTRI...) instead of desynchronising on
-	// the first one.
-
-
-	// 0F BA group 8: /4 BT /5 BTS /6 BTR /7 BTC (/0../3 illegal). Names only - the
-	// operands (Ev, Ib) come from the outer 0F BA row, like one-byte grp1/2.
-
-
-	static bool isTwoByteGroup(uint32_t op2) { return twoByteTable()[op2].groupNo > 0; }
-
-
-	// Same contract as resolvedInfo(), for the 0F map: a plain row for a non-group
-	// opcode, or that row merged with the group entry ModRM.reg selects. Takes the
-	// whole ModRM byte to match resolvedInfo()'s shape; the 0F map has no x87, so it
-	// just extracts reg. Go through this from both the byte-eater and the printer so
-	// they agree on length.
-
-
 //   E=modrm r/m, G=modrm reg, I=imm, J=rel offset, O=moffs, S=seg reg, M=memory,
 //   A=far ptr, Z=register in low 3 bits of opcode (+r), AL/eAX/DX/CL/One=implicit
+//   X/Y=string source [rSI] / destination [rDI]
 //   ST=x87 operand whose text is baked into value (ST / ST(i) / AX): the renderer's
-//   value short-circuit prints it verbatim, so no operand-switch case is needed - the
+//   value fallback prints it verbatim, so no operand-switch case is needed - the
 //   mode only has to be non-None (so it joins) and non-immediate (so it eats no bytes).
+//   V=XMM in ModRM.reg, W=XMM or memory in ModRM.rm, P=MMX in ModRM.reg, Q=MMX or memory in ModRM.rm
+//   H=VEX.vvvv register, L=vector register in imm8[7:4], VSIB=memory with a vector index (gathers)
+//   V/W/H/L are YMM under VEX.L unless sized dq; H sized y is a general register
 enum class ADDRESSING : uint8_t {
 	None, E, G, I, J, O, S, M, A, Z, AL, eAX, DX, CL, One,
 	eCX, eDX, eBX, eSP, eBP, eSI, eDI,
 	ES, CS, SS, DS,
 	X, Y, F,
 	DL, BL, AH, CH, DH, BH,
-	ST
+	ST,
+	V, W, P, Q,
+	H, L, VSIB
 };
-enum class SIZE : uint8_t { None, b, w, v, z, p, a, bs };   // b=8 w=16 v=16/32 z=imm16/32 p=far a=bound; bs=imm8 sign-extended to operand size (83/6B/6A)
+// b=8 w=16 d=32 v=16/32/64 (operand size) z=16/32 (never 64) p=far a=bound;
+// bs=imm8 sign-extended to operand size (83/6B/6A); y=32/64 (never 16); dq=always XMM, even under VEX.L
+enum class SIZE : uint8_t { None, b, w, v, z, p, a, bs, d, y, dq };
 
 enum class REGISTER : uint16_t {
 	AX = 0x00,
@@ -291,6 +98,258 @@ enum class Prefix : uint16_t {
 
 
 };
+
+	// One operand slot of an opcode-table row. Purely static table data - it
+	// describes what the operand IS, never what a particular instruction decoded to.
+	struct TableOperand {
+		ADDRESSING addressingMode;   // E, G, I, J, M, Z, None, ...
+		SIZE       size;             // b, v, z, bs, ... (None = inherit)
+
+		// Text of an operand the row names outright - "AL", "DX", "1", "ST(1)". Empty
+		// when the operand comes from the bytes, or (eAX-class, X/Y) from the operand
+		// or address width.
+		std::string_view value;
+	};
+
+	// One row of an opcode table: everything known about an opcode before any
+	// instruction bytes are looked at.
+	struct OpcodeInfo {
+
+		// Long-mode default operand size.
+		//   None  32-bit default, REX.W promotes to 64
+		//   d64   64-bit default, but a 0x66 prefix drops it to 16 (PUSH/POP)
+		//   f64   forced 64-bit, 0x66 ignored entirely (near branches)
+		// Ignored by a 32-bit decode.
+		enum class Default64 { None, d64, f64 };
+
+		std::string_view text;    // default mnemonic
+		std::string_view text16;  // mnemonic at 16-bit operand size; empty means use `text`
+		bool hasRMByte;           // a ModRM byte follows the opcode
+
+		// Up to three operands, in printed order. The first slot whose
+		// addressingMode is ADDRESSING::None ends the list.
+		TableOperand operands[3];
+
+		// > 0 when this opcode is a group escape whose real meaning comes from
+		// ModRM.reg (or the whole ModRM byte, for x87); -1 when it is not a group.
+		// Callers must resolve through resolvedInfo() rather than reading this row.
+		int groupNumber;
+
+		// The opcode does not exist in 64-bit mode. The tables are shared with the
+		// 32-bit decode, which ignores this.
+		bool isInvalid;
+
+		std::string_view text64;  // mnemonic at 64-bit operand size; empty means use `text`
+		Default64 default64;
+
+		// The 66 / F3 / F2 this row takes as part of its opcode (prefixedTable rows);
+		// 0 for none. Such a prefix is neither printed nor applied to the operand size.
+		uint8_t mandatoryPrefix;
+
+		// VEX rows: the vvvv register is an extra operand right after the first one, of
+		// the same class and width (VADDPS ymm1, ymm2, ymm3). Rows that put it anywhere
+		// else name it outright with an H operand.
+		bool nds = false;
+	};
+
+	// SIMD details the decoder found; the renderer needs them to pick the name.
+	struct Simd {
+		uint8_t map = 0;        // which opcode table: 0 = one-byte, 1 = 0F, 2 = 0F 38, 3 = 0F 3A
+		uint8_t pp = 0;         // which prefix column: 0 = none, 1 = 66, 2 = F3, 3 = F2
+		bool mandatory = false; // the 66/F3/F2 was part of the opcode, not a normal prefix
+		uint8_t vex = 0;        // AVX: 0xC4 or 0xC5, AVX-512: 0x62, otherwise 0
+		uint8_t vvvv = 0;       // AVX: number of the extra register
+		uint8_t L = 0;          // AVX: 0 = XMM, 1 = YMM
+		uint8_t W = 0;          // AVX: 1 picks a row's text64 name (PD over PS, Q over D)
+	};
+
+	// Register `regNumber` (0-15, REX bits already folded in) at `bits` wide. Without a REX
+	// prefix 8-bit regs 4-7 are AH/CH/DH/BH; with any REX they are SPL/BPL/SIL/DIL.
+	// Never throws: an index the encoding cannot produce names "(bad)".
+	static std::string registerOf(unsigned regNumber, unsigned bits, bool hasREX) {
+		static constexpr std::string_view r8[] = { "AL","CL","DL","BL","AH","CH","DH","BH" };
+
+		static constexpr std::string_view r8Rex[] = { "AL","CL","DL","BL" ,
+													   "SPL", "BPL", "SIL", "DIL",
+													   "R8B", "R9B", "R10B", "R11B", "R12B", "R13B", "R14B", "R15B" };
+
+		static constexpr std::string_view r16[] = { "AX","CX","DX","BX","SP","BP","SI","DI" ,
+													"R8W", "R9W", "R10W", "R11W", "R12W", "R13W", "R14W", "R15W" };
+
+		static constexpr std::string_view r32[] = { "EAX","ECX","EDX","EBX","ESP","EBP","ESI","EDI",
+											"R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D" };
+
+		static constexpr std::string_view r64[] = { "RAX","RCX","RDX","RBX","RSP","RBP","RSI","RDI",
+											"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15" };
+
+		if (regNumber > 15 || (bits == 8 && !hasREX && regNumber > 7)) return "(bad)";
+
+		switch (bits) {
+		case 8:  return std::string(hasREX ? r8Rex[regNumber] : r8[regNumber]);
+		case 16: return std::string(r16[regNumber]);
+		case 64: return std::string(r64[regNumber]);
+		default: return std::string(r32[regNumber]);
+		}
+	}
+
+
+	// ModRM.reg as a segment register (MOV Ew,Sw / MOV Sw,Ew). reg 6 and 7 name no
+	// segment register, so the encoding is invalid - but a linear sweep of .text runs
+	// over data and over opcodes we cannot decode yet, so invalid encodings are normal
+	// and must not kill the run. Mark them the way objdump does instead of throwing.
+	static std::string segmentOf(uint16_t regNumber) {
+		constexpr std::string_view names[8] = { "ES", "CS", "SS", "DS", "FS", "GS", "(bad)", "(bad)" };
+		return std::string(names[regNumber & 0x07]);
+	}
+
+	// ---------------------------------------------------------------------
+	// Opcode tables. Defined in x86_64_tables.cpp - see that file for why.
+	//
+	// Each accessor returns a reference to a function-local `static constexpr`
+	// array, so the table is built at compile time and the call is a plain
+	// address load with no guard variable.
+	// ---------------------------------------------------------------------
+	static const std::array<std::string_view, 256>& prefixTable();
+	static const std::array<OpcodeInfo, 256>& opcodeTable();
+	static const std::array<OpcodeInfo, 8>& grp1Table();
+	static const std::array<OpcodeInfo, 8>& grp2Table();
+	static const std::array<OpcodeInfo, 8>& grp3Table();
+	static const std::array<OpcodeInfo, 8>& grp4Table();
+	static const std::array<OpcodeInfo, 8>& grp5Table();
+	static const std::array<OpcodeInfo, 8>& groupTableOf(uint32_t opcode);
+	static const OpcodeInfo& groupEntryOf(uint32_t opcode, uint8_t reg);
+	static const std::array<OpcodeInfo, 64>& x87MemTable();
+	static const std::array<OpcodeInfo, 512>& x87RegTable();
+	// x87 (opcodes D8..DF): picks the memory map on mod != 11 and the register map
+	// otherwise, both keyed by the full ModRM byte rather than just reg.
+	static OpcodeInfo x87ResolvedInfo(uint32_t opcode, uint8_t modRM);
+
+	// The real table row for one-byte opcode `opcode`. Follows a group escape through
+	// ModRM.reg and an x87 opcode through the whole ModRM byte; returns the plain
+	// row for everything else. Pass the entire ModRM byte, not just reg. `modRM` is
+	// unused when the opcode is neither a group nor x87, so 0 is fine there.
+	static OpcodeInfo resolvedInfo(uint32_t opcode, uint8_t modRM, bool is64Bit = false);
+
+	// Stand-in row for a 0F 38 / 0F 3A opcode (legacy or VEX) the tables do not name.
+	// `hasImm8` selects the 0F 3A variant, whose encodings carry a trailing imm8.
+	// It exists so the length the decoder computes and the name the renderer prints
+	// stay consistent for opcodes neither of them really knows.
+	static const OpcodeInfo& threeByteRow(bool hasImm8);
+	// The 0F 38 / 0F 3A rows, indexed ((map - 2) * 2 + slot) * 256 + opcode, slot 0 = no
+	// prefix (SSSE3's MMX forms), 1 = 66 (SSE4.1 / SSE4.2).
+	static const std::array<OpcodeInfo, 1024>& threeByteTable();
+	// The real row for `opcode` in simd.map 2 (0F 38) or 3 (0F 3A) under the simd.pp
+	// column; threeByteRow() for one the tables do not name.
+	static OpcodeInfo threeByteResolvedInfo(uint8_t opcode, const Simd& simd);
+	// 3DNow! (0F 0F /r ib), indexed by that trailing byte, which is the real opcode.
+	static const std::array<OpcodeInfo, 256>& threeDNowTable();
+	// VEX rows, indexed ((map - 1) * 4 + pp) * 256 + opcode: map is VEX.mmmmm (1 = 0F,
+	// 2 = 0F 38, 3 = 0F 3A), pp is VEX.pp (0 none, 1 = 66, 2 = F3, 3 = F2). A row's
+	// text64 is its name under VEX.W1.
+	static const std::array<OpcodeInfo, 3072>& vexTable();
+	// The real VEX row: the vexTable() row at simd.map / simd.pp with its group and
+	// ModRM / L / W special cases resolved; threeByteRow() for one the table does not name.
+	static OpcodeInfo vexResolvedInfo(uint8_t opcode, uint8_t modRM, const Simd& simd);
+	static const std::array<OpcodeInfo, 256>& twoByteTable();
+	// The 0F rows behind a mandatory prefix, indexed (pp - 1) * 256 + opcode, pp being
+	// the Simd column (1 = 66, 2 = F3, 3 = F2). An empty `text` means the prefix selects
+	// nothing there.
+	static const std::array<OpcodeInfo, 768>& prefixedTable();
+	// The 0F groups, indexed (groupNumber - 8) * 8 + ModRM.reg. 0F AE's register forms
+	// (the fences) sit under the pseudo group 17, 0F 0D (3DNow! PREFETCH) under 18, and
+	// the VEX groups past it: 19-21 VEX 0F 71-73, 22 VEX 0F AE, 23 VEX 0F 38 F3 (BMI1).
+	static const std::array<OpcodeInfo, 128>& twoByteGroupTable();
+	// The real 0F row for `opcode`: the prefixedTable row when the simd.pp column (the
+	// 66 / F3 / F2 in force) selects one, else the plain row; then any group resolved
+	// through `modRM`. Check mandatoryPrefix on the result for whether the prefix was taken.
+	static OpcodeInfo twoByteResolvedInfo(uint32_t opcode, uint8_t modRM, const Simd& simd);
+
+
+
+	// > 0 when the opcode is a group: the mnemonic must still be resolved from ModRM.reg.
+	static int groupNoOf(uint32_t opcode) { return opcodeTable()[opcode].groupNumber; }
+	static bool isGroup(uint32_t opcode) { return opcodeTable()[opcode].groupNumber > 0; }
+
+	// A legacy prefix: LOCK, REP/REPNE, a segment override, 66 or 67. REX is not one.
+	static bool isPrefix(uint8_t opcode) { return !prefixTable()[opcode].empty(); }
+
+
+
+		// No group entry's mnemonic moves with the operand size, so the 16-bit name is always empty here.
+#define G(reg,text, hasRM, op1, op2, op3, group) n[reg] = OpcodeInfo{text,"", hasRM, op1, op2, op3, group}
+#define GT(reg,text,group) G(reg, text, true, NOP_, NOP_, NOP_, group)
+#define a(name) ADDRESSING::name
+#define s(name) SIZE::name
+#define OP(mode,sz,val) TableOperand{ a(mode), s(sz), val }
+#define NOP_ OP(None,None,"")
+
+	// 0x80-0x83
+
+	// 0xC0/0xC1 (by Ib), 0xD0-0xD3 (by 1 / by CL). /6 SAL is an undocumented alias of /4 SHL.
+
+	// 0xF6 (Eb) / 0xF7 (Ev). Only /0 and /1 take an immediate; /1 is an undocumented
+	// alias of /0. /4../7 use AL/eAX implicitly - that is not encoded here. A size of None
+	// on the operands means "the width the outer row records" (b for 0xF6, v for 0xF7) -
+	// except the immediate, which resolvedInfo() caps at z: 0xF7 is TEST Ev, Iz.
+
+	// 0xFE. /2../7 are illegal.
+
+	// 0xFF. /3 and /5 are the far forms (m16:32); /7 is illegal.
+
+#undef NOP_
+#undef OP
+#undef s
+#undef a
+#undef GT
+#undef G
+
+
+	// The group table an opcode extends. Throws if the opcode is not a group.
+
+
+
+	// --- x87 FPU instructions
+
+	// Memory forms, indexed (op-0xD8)*8 + reg. Empty rows (invalid /reg) stay "(bad)".
+
+	// Register forms (mod == 11), indexed (op-0xD8)*64 + (ModRM & 0x3F), i.e. reg*8+rm.
+	// Regular families (a reg selects the op, rm selects ST(i)) are filled by a loop;
+	// the E0-FF individuals (one mnemonic per rm, mostly no operand) are set explicitly.
+
+
+	static bool isX87(uint32_t opcode) { return opcode >= 0xD8 && opcode <= 0xDF; }
+
+	// Full-ModRM resolution for an x87 escape opcode: memory row by reg, or the
+	// register row by the whole reg:rm pair.
+
+	// Merge the flat one-byte row with the entry ModRM selects. Takes the WHOLE ModRM
+	// byte now: groups still key on reg (bits 3-5), but x87 needs the full byte, so the
+	// dispatch happens here rather than in the caller.
+
+
+	// Two-byte (0F-escape) opcode map. A SEPARATE 256-entry table keyed by the byte
+	// after 0F: 0F B6 is MOVZX, unrelated to one-byte B6. Never index opcodeTable()
+	// with an 0F pair - that array is 0x00-0xFF and 0x0Fxx runs off the end.
+	//
+	// Unpopulated slots are filled in at the end of this function with hasRMByte =
+	// true and the name "(bad)" - see the comment there. Deferred: groups 6/7/9.
+
+	// Stand-in rows for the three-byte maps (0F 38 xx / 0F 3A xx) where they are not
+	// named. No name, but the right shape: 0F 38 rows are ModRM-addressed with no
+	// immediate, 0F 3A rows are ModRM + imm8. Enough to stay length-correct through
+	// an extension the tables do not cover (AES, SHA...) instead of desynchronising.
+
+
+	// 0F BA group 8: /4 BT /5 BTS /6 BTR /7 BTC (/0../3 illegal). Names only - the
+	// operands (Ev, Ib) come from the outer 0F BA row, like one-byte grp1/2.
+
+
+	// Same contract as resolvedInfo(), for the 0F map: a plain row for a non-group
+	// opcode, or that row merged with the group entry ModRM.reg selects. Takes the
+	// whole ModRM byte to match resolvedInfo()'s shape; the 0F map has no x87, so it
+	// just extracts reg. Go through this from both the byte-eater and the printer so
+	// they agree on length.
+
 
 enum class OPCODE : uint32_t { // value is orientative
 	ADD_EbGb = 0x00,
@@ -623,7 +682,7 @@ enum class OPCODE : uint32_t { // value is orientative
 
 };
 
+
 };
 
 } // namespace voidwalk
-

@@ -22,19 +22,19 @@ namespace voidwalk {
 //
 // Reads nothing past a bounds check, so a file too short to hold the magic simply
 // matches nothing.
-inline void determine_filetype(AddressSpace& contents, bool& is_elf, bool& is_pe) {
+inline void determine_filetype(AddressSpace& contents, bool& isElf, bool& isPe) {
 
         if (contents.size() >= 4 && contents.read_u8(0) == 0x7F && contents.read_u8(1) == 0x45 &&
-            contents.read_u8(2) == 0x4C && contents.read_u8(3) == 0x46) is_elf = true;
+            contents.read_u8(2) == 0x4C && contents.read_u8(3) == 0x46) isElf = true;
         else if (contents.size() >= 2 && contents.read_u8(0) == 0x4D && contents.read_u8(1) == 0x5A) { // ms-dos compat line
-            uint32_t pe_header_offset = contents.read_u32(0x3C); // PE header offset pointer
-            if (pe_header_offset <= contents.size() - 4 &&
-                contents.read_u32(pe_header_offset) == 0x00004550) is_pe = true;
+            uint32_t peHeaderOffset = contents.read_u32(0x3C); // PE header offset pointer
+            if (peHeaderOffset <= contents.size() - 4 &&
+                contents.read_u32(peHeaderOffset) == 0x00004550) isPe = true;
         }
 
 }
 
-// Constructs the disassembler matching `data`'s format into `*d`, and returns the
+// Constructs the disassembler matching `data`'s format into `*disassembler`, and returns the
 // detection message the frontends put in their status bar.
 //
 // `outputs` is forwarded to the Disassembler: every decoded line is written to
@@ -46,21 +46,21 @@ inline void determine_filetype(AddressSpace& contents, bool& is_elf, bool& is_pe
 //
 // Throws std::runtime_error if the file is neither ELF nor PE, and whatever the
 // format reader throws for a header it cannot parse.
-inline std::string make_disassembler(AddressSpace& data, std::shared_ptr<Disassembler>* d, std::vector<std::ostream*> outputs = {}) {
-    bool is_elf = false, is_pe = false;
+inline std::string make_disassembler(AddressSpace& data, std::shared_ptr<Disassembler>* disassembler, std::vector<std::ostream*> outputs = {}) {
+    bool isElf = false, isPe = false;
 
-    determine_filetype(data, is_elf, is_pe);
+    determine_filetype(data, isElf, isPe);
 
     //if (outputs.empty()) outputs = std::vector<std::ostream*>{ &std::cout };
 
-    if (is_elf) {
+    if (isElf) {
 
-        *d = std::make_shared<ELF_Disassembler>(data, outputs);
+        *disassembler = std::make_shared<ELF_Disassembler>(data, outputs);
         return  "\nELF Binary detected..\n";
     }
-    if (is_pe) {
+    if (isPe) {
 
-        *d = std::make_shared<PE_Disassembler>(data, outputs);
+        *disassembler = std::make_shared<PE_Disassembler>(data, outputs);
         return  "\nPE Binary detected..\n";
     }
     throw std::runtime_error("Not an ELF or PE binary.");

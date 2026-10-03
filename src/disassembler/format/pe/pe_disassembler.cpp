@@ -22,12 +22,14 @@ Arch archOfPeMachine(uint16_t machine) {
 
 PE_Disassembler::PE_Disassembler(AddressSpace& data, const std::vector<std::ostream*>& outputs) : Disassembler(data, outputs) {
 
-	this->e_lfanew = contents.read_u32(0x3C);
+	this->peHeaderOffset = contents.read_u32(0x3C);
 
 	// The COFF Machine field is 16 bits; read as u32 and narrowed, as before.
-	this->setArch(archOfPeMachine(static_cast<uint16_t>(contents.read_u32(e_lfanew + 4))));
+	this->setArch(archOfPeMachine(static_cast<uint16_t>(contents.read_u32(peHeaderOffset + 4))));
 
 	this->setHeadersOffsets();
+	// AddressOfEntryPoint: an RVA 16 bytes into the optional header, same in PE32 and PE32+.
+	this->entryAddress = imageBase + contents.read_u32(peHeaderOffset + 24 + 16);
 }
 
 void PE_Disassembler::setHeadersOffsets() {
@@ -35,9 +37,9 @@ void PE_Disassembler::setHeadersOffsets() {
 		throw std::runtime_error("Architecture not recognized.\n");
 
 	if (voidwalk::is64Bit(this->arch))
-		pe::parseSections64(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase);
+		pe::parseSections64(this->commonSections, this->extraSections, this->contents, this->peHeaderOffset, imageBase);
 	else
-		pe::parseSections32(this->baseSections, this->extraSections, this->contents, this->e_lfanew, imageBase);
+		pe::parseSections32(this->commonSections, this->extraSections, this->contents, this->peHeaderOffset, imageBase);
 }
 
 } // namespace voidwalk

@@ -2,6 +2,7 @@
 
 #include "gui/panes/column_fit.hpp"
 #include "gui/panes/disasm_delegate.hpp"
+#include "gui/symbols.hpp"
 
 #include <QAbstractItemView>
 #include <QFontMetrics>
@@ -9,9 +10,6 @@
 #include <QLabel>
 #include <QTableView>
 #include <QVBoxLayout>
-#include <algorithm>
-#include <cctype>
-#include <sstream>
 
 namespace gui {
 
@@ -27,22 +25,6 @@ constexpr int kNotesWidth = 150;
 // still leaves a grab handle you can find.
 constexpr int kMinSectionWidth = 26;
 
-// Parses "call 0x00401160" / "jb 0x401014" into mnemonic + numeric target.
-bool staticTarget(const std::string& text, std::string* mnemonic, uint64_t* target) {
-	std::istringstream is(text);
-	std::string op, arg;
-	if (!(is >> op >> arg)) return false;
-	std::transform(op.begin(), op.end(), op.begin(),
-		[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-	*mnemonic = op;
-	if (arg.rfind("0x", 0) != 0) return false;
-	try {
-		*target = std::stoull(arg.substr(2), nullptr, 16);
-	} catch (...) {
-		return false;
-	}
-	return true;
-}
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -90,25 +72,25 @@ int DisasmModel::columnCount(const QModelIndex& parent) const {
 QString DisasmModel::noteFor(int i) const {
 	if (!session_) return {};
 	const auto idx = static_cast<std::size_t>(i);
-	if (idx >= session_->rowCount()) return {};
+	const uint64_t target = session_->rowTarget(idx);
+	if (target == 0) return {};   // not a branch, or an indirect one
 
-	std::string mnemonic;
-	uint64_t target = 0;
-	if (!staticTarget(session_->rowText(idx), &mnemonic, &target)) return {};
-
-	if (mnemonic == "call")
-		return QStringLiteral("sub_%1").arg(target, 6, 16, QLatin1Char('0')).toLower();
-	// Jumps: say which way, which is what you actually scan for reading a loop.
-	// Backwards to an address already on screen = a loop.
-	if (mnemonic.size() > 1 && mnemonic.front() == 'j') {
-		if (target < session_->rowVaddr(idx)) return tr("loop");
-		return QString();
+	switch (session_->rowFlow(idx)) {
+	case Instruction::Flow::Call:
+		return QString::fromStdString(functionName(target, session_->entryPoint()));
+	case Instruction::Flow::Jump:
+	case Instruction::Flow::CondJump:
+		// Direction is a fact; calling every backward jump a loop would be a guess.
+		return target < session_->rowVaddr(idx) ? tr("backward") : QString();
+	default:
+		return {};
 	}
-	return {};
 }
 
 QVariant DisasmModel::data(const QModelIndex& index, int role) const {
 	if (!session_ || !index.isValid()) return {};
+	if (role == DisassemblyPane::FlowRole)
+		return static_cast<int>(session_->rowFlow(static_cast<std::size_t>(index.row())));
 	// ToolTipRole answers with the same string as DisplayRole: the delegate asks
 	// for it only when it had to clip the cell, so the tooltip is the unclipped
 	// text and nothing more.
@@ -292,18 +274,37 @@ void DisassemblyPane::refresh() {
 void DisassemblyPane::navigateTo(uint64_t vaddr) {
 	if (!session_) return;
 	// Only rows the view knows about (rowCount) are navigable; row vaddrs are read
-	// through to the core. Addresses ascend, so stop at the first one past vaddr.
-	const int shown = model_->rowCount();
-	if (shown <= 0) return;
-	int best = -1;
-	for (int i = 0; i < shown; ++i) {
-		if (session_->rowVaddr(static_cast<std::size_t>(i)) <= vaddr) best = i;
-		else break;
-	}
-	if (best < 0) best = 0;
+	// through to the core.
+	const std::size_t shown = static_cast<std::size_t>(model_->rowCount());
+	if (shown == 0) return;
+	auto at = [this](std::size_t i) { return session_->rowVaddr(i); };
+	// First index in [lo, hi) where `pred` turns false; pred must be true-then-false.
+	auto split = [](std::size_t lo, std::size_t hi, auto pred) {
+		while (lo < hi) {
+			const std::size_t mid = lo + (hi - lo) / 2;
+			if (pred(mid)) lo = mid + 1; else hi = mid;
+		}
+		return lo;
+	};
 
-	view_->selectRow(best);
-	view_->scrollTo(model_->index(best, ColInstruction), QAbstractItemView::PositionAtCenter);
+	// The rows are one ascending run per .text section, in section-table order, and
+	// each run's rows all start inside that section. So each run's end is a binary
+	// search, and so is its last row <= vaddr; the best of those is the target.
+	std::size_t best = 0, start = 0;
+	uint64_t bestVaddr = 0;
+	for (const SectionInfo& s : session_->sections()) {
+		if (s.name != ".text" || start >= shown) continue;
+		const std::size_t end = split(start, shown, [&](std::size_t i) {
+			return at(i) >= s.vaddr && at(i) - s.vaddr < s.size;
+		});
+		const std::size_t k = split(start, end, [&](std::size_t i) { return at(i) <= vaddr; });
+		if (k > start && at(k - 1) >= bestVaddr) { best = k - 1; bestVaddr = at(best); }
+		start = end;
+	}
+	const int row = static_cast<int>(best);
+
+	view_->selectRow(row);
+	view_->scrollTo(model_->index(row, ColInstruction), QAbstractItemView::PositionAtCenter);
 	view_->setFocus(Qt::OtherFocusReason);
 }
 

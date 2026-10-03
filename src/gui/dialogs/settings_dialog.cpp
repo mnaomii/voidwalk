@@ -56,11 +56,11 @@ SettingsDialog::SettingsDialog(const AppSettings& current, QWidget* parent)
 	} else {
 		const QString store = AppSettings::storeLocation();
 		keyNote->setText(store.isEmpty()
-			? tr("Saved in plain text in the registry under HKCU. Set %1 in the "
-			     "environment instead to keep it off disk.")
+			? tr("Saved in plain text in the registry under HKCU, and dropped while the "
+			     "pane is disabled. Set %1 in the environment instead to keep it off disk.")
 				.arg(QLatin1String(AppSettings::kApiKeyEnvVar))
-			: tr("Saved in plain text in %1 (owner-readable only). Set %2 in the "
-			     "environment instead to keep it off disk.")
+			: tr("Saved in plain text in %1 (owner-readable only), and dropped while the "
+			     "pane is disabled. Set %2 in the environment instead to keep it off disk.")
 				.arg(store, QLatin1String(AppSettings::kApiKeyEnvVar)));
 	}
 	form->addRow(QString(), keyNote);

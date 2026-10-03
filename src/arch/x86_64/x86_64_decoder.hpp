@@ -11,9 +11,9 @@ public:
     explicit X86Decoder(bool is64Bit) : is64Bit_(is64Bit) {}
 
     // Decodes one instruction. See Decoder::decodeLine for the full contract.
-    // Returns `address` unchanged when the instruction runs past end-of-file.
+    // Returns `fileOffset` unchanged when the instruction runs past end-of-file.
     uint64_t decodeLine(AddressSpace& contents,
-                        uint64_t address,
+                        uint64_t fileOffset,
                         uint64_t vaddr,
                         InstructionStore& decodedInstructions) override;
 

@@ -14,14 +14,14 @@ namespace voidwalk {
 //
 // Any section the file lacks stays default-constructed (all zero).
 struct ELF_Sections {
-    Header _symtab,   // static symbol table
-           _dynsym,   // dynamic symbol table
-           _strtab,   // string table for _symtab
-           _dynstr,   // string table for _dynsym
-           _plt,      // procedure linkage table (import thunks)
-           _got,      // global offset table
-           _rel,      // never populated: no parser writes this field
-           _eh_frame; // unwind information
+    Header symtab,   // static symbol table
+           dynsym,   // dynamic symbol table
+           strtab,   // string table for symtab
+           dynstr,   // string table for dynsym
+           plt,      // procedure linkage table (import thunks)
+           got,      // global offset table
+           rel,      // never populated: no parser writes this field
+           ehFrame;  // unwind information
 };
 
 
@@ -35,7 +35,7 @@ class ELF_Disassembler : public Disassembler {
 private:
     ELF_Sections extraSections;
 
-    // Fills baseSections and extraSections from the ELF section header table.
+    // Fills commonSections and extraSections from the ELF section header table.
     // Throws std::runtime_error if the architecture was not recognised.
     void setHeadersOffsets() override;
 
