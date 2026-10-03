@@ -5,356 +5,198 @@
 
 namespace voidwalk {
 
-// Decodes one x86/x86-64 instruction: prefixes, REX, opcode (including the 0F and
-// 0F 38 / 0F 3A escapes), ModRM, SIB, displacement and immediates, then appends the
-// rendered Instruction to `decodedInstructions`.
+// Decodes one x86/x86-64 instruction: prefixes, REX or VEX, opcode (including the 0F
+// and 0F 38 / 0F 3A escapes), ModRM, SIB, displacement and immediates, resolves it into
+// one x86_64::Fields and appends the rendered Instruction to `decodedInstructions`.
 //
-// Returns the offset just past the instruction, or `address` unchanged if the
-// instruction ran past end-of-file. Never reads more than 15 bytes.
+// Returns the offset just past the instruction, or `fileOffset` unchanged if the
+// instruction ran past end-of-file. Never reads more than 15 bytes: one that needs
+// more is a "(bad)" row of the 15 it had.
 uint64_t X86Decoder::decodeLine(AddressSpace& contents,
-                                uint64_t address,
+                                uint64_t fileOffset,
                                 uint64_t vaddr,
                                 InstructionStore& decodedInstructions) {
-	const bool is64Bit = is64Bit_;
+	using M = x86_64_Mnemonic;
+	using ADDRESSING = M::ADDRESSING;
+	using SIZE = M::SIZE;
+	using Default64 = M::OpcodeInfo::Default64;
+	struct TooLong {};
 
+	x86_64::Fields fields;
+	M::Simd simd;
+	fields.is64Bit = is64Bit_;
 
-	uint64_t instructionBytes[15]{}; // originalDisp = 0; // instr cap of 15 bytes
-	uint8_t tmp = 0x0;
-	uint8_t cnt = 0;
-	uint32_t immWidth[3]{}, dispWidth = 0;   // bytes this immediate/disp occupies in the stream
-
-	uint64_t rawImmediates[3]{};
-
-
-	uint64_t initAddress = address;
-
-
-	bool rexBits[4]{};
-	int positions[4]{};
-	bool checks[11]{};
-
-
-
-	enum flagsIdx {
-		hasPrefix, hasModRM, hasSIB, hasDisp, hasImm, has2Byte, hasOpsize, hasAddrSize, hasREX, hasAdditionalEscape, isInvalid
+	// Every byte goes through here, so fields.bytes always holds exactly what was consumed.
+	auto nextByte = [&]() -> uint8_t {
+		if (fields.length == 15) throw TooLong{};
+		fields.bytes[fields.length] = contents.read_u8(fileOffset + fields.length);
+		return fields.bytes[fields.length++];
 	};
-
-	enum rexBitsIdx {
-		b, x, r, w
+	auto readLittleEndian = [&](unsigned byteCount) {   // little-endian, byteCount bytes
+		uint64_t value = 0;
+		for (unsigned i = 0; i < byteCount; ++i) value |= static_cast<uint64_t>(nextByte()) << (8 * i);
+		return value;
 	};
-
-	enum positionsIdx {
-		endPrefix, endOpcode, immBegin, rexBegin
+	auto signExtend = [](uint64_t value, unsigned byteCount) { const unsigned shift = 64 - 8 * byteCount; return static_cast<int64_t>(value << shift) >> shift; };
+	auto mask = [](unsigned bits) { return (bits == 64) ? ~0ull : (1ull << bits) - 1; };
+	auto emit = [&] {
+		decodedInstructions.push_back(std::make_unique<x86_64>(fields,simd));
+		return fileOffset + fields.length;   // address where the next instr begins
 	};
-
 
 	try {
-		tmp = static_cast<uint64_t>(contents.read_u8(address++));
-
-
-		// --- PREFIXES
-		while (x86_64::isPrefix(tmp) && cnt < 15) {
-			checks[hasPrefix] = true;
-			switch (tmp) {
-			case 0x66:
-				checks[hasOpsize] = true; break;
-
-			case 0x67:
-				checks[hasAddrSize] = true; break;
-			default:
-				break;
+		// --- PREFIXES. A REX counts only as the last byte before the opcode: the CPU
+		// ignores one followed by a legacy prefix, and the last of several wins.
+		bool hasOpSizePrefix = false, hasAddrSizePrefix = false;
+		uint8_t currentByte = nextByte();
+		for (;; currentByte = nextByte()) {
+			if (is64Bit_ && (currentByte & 0xF0) == 0x40) { fields.rexPrefix = currentByte; continue; }
+			if (!M::isPrefix(currentByte)) break;
+			fields.rexPrefix = 0;
+			switch (currentByte) {
+			case 0x66: hasOpSizePrefix = true; break;
+			case 0x67: hasAddrSizePrefix = true; break;
+			case 0xF0: fields.hasLock = true; break;
+			case 0xF2: case 0xF3: fields.repPrefix = currentByte; break;
+			default: fields.segmentPrefix = currentByte; break;
 			}
-
-			instructionBytes[cnt++] = tmp;
-			tmp = static_cast<uint64_t>(contents.read_u8(address++));
-
 		}
 
-		positions[endPrefix] = cnt; // past the last prefix
-
-
-		// --- VEX will go here..
-
-		// --- REX
-
-
-
-		if (is64Bit && tmp >= 0x40 && tmp <= 0x4f && cnt < 15)
-		{
-				checks[hasREX] = true;
-
-				instructionBytes[cnt++] = tmp; 
-
-				tmp = static_cast<uint64_t>(contents.read_u8(address++));
-				
-				positions[rexBegin] = cnt - 1; // *exactly* the last REX position - where the REX reading should start
-
-				auto aux = instructionBytes[positions[rexBegin]];
-				int cnt_aux = 0;
-				while (aux != 0b0100) { // filling the rex struct with its individual values
-					rexBits[cnt_aux] = aux & 0b1;
-					aux >>= 1;
-					cnt_aux++;
-				}
-				if (rexBits[w]) checks[hasOpsize] = false;  // REX.W nullifies OpsizePFX if present
-			
+		// --- OPCODE
+		fields.opcode = currentByte;
+		if (currentByte == 0x0F) {
+			simd.map = 1;
+			fields.opcode = nextByte();
+			// 0F 38 / 0F 3A are escapes into the three-byte maps: the byte after them is
+			// the opcode, not a ModRM.
+			if (fields.opcode == 0x38 || fields.opcode == 0x3A) {
+				simd.map = (fields.opcode == 0x38) ? 2 : 3;
+				fields.opcode = nextByte();
+			}
+			// In these maps a 66 / F2 / F3 may be the opcode's mandatory prefix rather than
+			// a modifier (F2/F3 win over 66): the column the row lookup tries.
+			simd.pp = (fields.repPrefix == 0xF2) ? 3 : (fields.repPrefix == 0xF3) ? 2 : hasOpSizePrefix ? 1 : 0;
+		}
+		// C4 / C5 open a 3- / 2-byte VEX prefix: always in long mode, and in legacy mode
+		// when the next byte cannot be LES / LDS's ModRM (those take memory, mod != 11).
+		else if ((currentByte == 0xC4 || currentByte == 0xC5) && (is64Bit_ || contents.read_u8(fileOffset + fields.length) >= 0xC0)) {
+			const bool threeByteVex = currentByte == 0xC4;
+			const uint8_t vex1 = nextByte();
+			const uint8_t vex2 = threeByteVex ? nextByte() : vex1;   // C5's one byte is laid out like C4's second
+			simd.vex = currentByte;
+			simd.map = threeByteVex ? (vex1 & 0x1F) : 1;
+			simd.pp = vex2 & 0x03;
+			simd.W = threeByteVex && (vex2 & 0x80);
+			simd.L = (vex2 >> 2) & 1;
+			simd.vvvv = (~vex2 >> 3) & (is64Bit_ ? 15 : 7);
+			// R, X, B are stored inverted. Folded into a REX they extend ModRM and SIB as usual.
+			if (is64Bit_) fields.rexPrefix = 0x40 | simd.W << 3 | ((~vex1 >> 5) & (threeByteVex ? 7 : 4));
+			if (simd.map < 1 || simd.map > 3) {
+				fields.isInvalid = true;
+				return emit();
+			}
+			fields.opcode = nextByte();
+		}
+		else if (is64Bit_ && M::opcodeTable()[currentByte].isInvalid) {
+			fields.isInvalid = true;
+			return emit();
 		}
 
-		if (cnt < 15) {
+		// --- MOD R/M, then the real row it selects.
+		const bool hasModRM = simd.vex ? !(simd.map == 1 && fields.opcode == 0x77)   // all but VZEROUPPER / VZEROALL
+		                    : (simd.map == 0) ? M::opcodeTable()[fields.opcode].hasRMByte
+		                    : (simd.map == 1) ? M::twoByteTable()[fields.opcode].hasRMByte
+		                    : true;   // every 0F 38 / 0F 3A opcode
+		uint8_t modRM = 0;
+		if (hasModRM) {
+			modRM = nextByte();
+			fields.hasModRM = true;
+			fields.mod = modRM >> 6;
+			fields.reg = ((modRM >> 3) & 7) | (fields.rexPrefix & 4) << 1;   // REX.R
+			fields.rm  = (modRM & 7) | (fields.rexPrefix & 1) << 3;          // REX.B
+		}
+		// Pass the whole ModRM byte: groups key on reg internally, x87 needs it all.
+		fields.info = simd.vex ? M::vexResolvedInfo(fields.opcode, modRM, simd)
+		       : (simd.map == 0) ? M::resolvedInfo(fields.opcode, modRM, is64Bit_)
+		       : (simd.map == 1) ? M::twoByteResolvedInfo(fields.opcode, modRM, simd)
+		       : M::threeByteResolvedInfo(fields.opcode, simd);
 
-			// --- OPCODE
+		// --- WIDTHS. A mandatory prefix is part of the opcode: it neither prints nor resizes.
+		// VEX.pp always is one; a legacy column only when the row took it. Untaken, it is no column.
+		simd.mandatory = simd.vex ? simd.pp != 0 : fields.info.mandatoryPrefix != 0;
+		if (!simd.mandatory) simd.pp = 0;
+		else if (simd.pp == 1) hasOpSizePrefix = false;
+		else fields.repPrefix = 0;
+		const bool rexW = fields.rexPrefix & 8;
+		const Default64 default64 = is64Bit_ ? fields.info.default64 : Default64::None;
+		fields.opSize = (rexW || default64 == Default64::f64) ? 64 : hasOpSizePrefix ? 16 : (default64 == Default64::d64) ? 64 : 32;
+		// Long mode's 67 selects 32-bit addressing; only legacy mode drops to 16.
+		fields.addrSize = is64Bit_ ? (hasAddrSizePrefix ? 32 : 64) : (hasAddrSizePrefix ? 16 : 32);
 
-			if (x86_64_Mnemonic::opcodeTable()[tmp].isInvalid && cnt < 15 && is64Bit) {
-				checks[isInvalid] = true;
-				instructionBytes[cnt++] = tmp;
+		// --- SIB / DISPLACEMENT
+		if (fields.hasModRM && fields.mod != 3) {
+			const uint8_t rmField = modRM & 7;
+			unsigned displacementSize = (fields.mod == 1) ? 1 : 0;
+			if (fields.addrSize == 16) {
+				if (fields.mod == 2 || (fields.mod == 0 && rmField == 6)) displacementSize = 2;
 			}
 			else {
-				instructionBytes[cnt++] = tmp;
-
-				if (tmp == 0x0f) {
-					checks[has2Byte] = true;
-					tmp = contents.read_u8(address++);
-
-					// 3rd operand byte - further escape opcodes : sse, avx, vex ISA's etc
-				if(cnt<15)
-					  instructionBytes[cnt++] = tmp;
-
-					// 0F 38 / 0F 3A are escapes into the three-byte maps: the byte after
-					// them is the opcode, not a ModRM. Eat it here, or the ModRM read
-					// below swallows the opcode and every length from this point on is
-					// wrong. The maps themselves are not built yet - threeByteRow()
-					// supplies the shape so the sweep stays aligned regardless.
-					if ((tmp == 0x38 || tmp == 0x3a) && cnt < 15) {
-						checks[hasAdditionalEscape] = true;
-						instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++));
-					}
-
+				if (rmField == 4) {
+					const uint8_t sib = nextByte();
+					fields.hasSIB = true;
+					fields.scale = 1 << (sib >> 6);                        // 00/01/10/11 -> *1/*2/*4/*8
+					fields.index = ((sib >> 3) & 7) | (fields.rexPrefix & 2) << 2;    // REX.X
+					fields.base  = (sib & 7) | (fields.rexPrefix & 1) << 3;           // REX.B
 				}
-
+				if (fields.mod == 2 || (fields.mod == 0 && (rmField == 5 || (fields.hasSIB && (fields.base & 7) == 5)))) displacementSize = 4;
 			}
-
-			positions[endOpcode] = cnt; // past the last opcode byte
-		}
-
-		if (cnt<15) { // continue instruction processing
-			uint64_t opcode = instructionBytes[positions[endOpcode] - 1];
-
-
-
-			// After a three-byte escape, `opcode` is a byte from the 0F 38 / 0F 3A map -
-			// indexing twoByteTable() with it would read an unrelated row, so take the
-			// stand-in shape instead. instructionBytes[endOpcode - 2] is the escape byte.
-			const Instruction::OpcodeInfo& outer = checks[hasAdditionalEscape]
-				? x86_64_Mnemonic::threeByteRow(instructionBytes[positions[endOpcode] - 2] == 0x3a)
-				: ( checks[has2Byte]
-					? x86_64_Mnemonic::twoByteTable()[opcode]
-					: ( (is64Bit && opcode == 0x63) ? x86_64_Mnemonic::resolvedInfo(0x63, 0,true) : x86_64_Mnemonic::opcodeTable()[opcode]) );
-
-			Instruction::OpcodeInfo opcodeInfo = outer;
-
-			if (opcodeInfo.def64 == Instruction::OpcodeInfo::Default64::f64 && is64Bit) checks[hasOpsize] = false;
-
-			// --- MOD R/M
-			uint8_t mod = 0x0, reg_op = 0x0, rm = 0x0;
-			if (outer.hasRMByte && cnt < 15 && !checks[isInvalid]) {
-				checks[hasModRM] = true;
-				instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // getting ModR/M byte
-
-				const uint8_t modrm = static_cast<uint8_t>(instructionBytes[cnt - 1]);
-				mod = ((modrm & 0b11000000) >> 6);
-				//reg_op = ((modrm & 0b00111000) >> 3);
-				rm = (modrm & 0b00000111);
-
-				// Pass the whole ModRM byte: groups key on reg internally, x87 needs it all.
-				// Three-byte rows have no group to resolve against - keep the shape.
-				opcodeInfo = checks[hasAdditionalEscape]
-					? outer
-					: ( checks[has2Byte]
-						? x86_64_Mnemonic::twoByteResolvedInfo(static_cast<uint32_t>(opcode), modrm)
-						: x86_64_Mnemonic::resolvedInfo(static_cast<uint32_t>(opcode), modrm, is64Bit) );
-
-
-				// --- SIB
-				if (mod != 0b11 && rm == 0b100 && cnt < 15 && ((is64Bit)? true : !checks[hasAddrSize])) {
-					instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u8(address++)); // read sib;
-					checks[hasSIB] = true;
-
-				}
-
-
-				// --- DISPLACEMENT
-				checks[hasDisp] = true;
-				switch (mod) {
-					case 0b01:
-						if (cnt < 15) {
-							instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int8_t>(contents.read_u8(address++)));
-							dispWidth = 1;
-						}
-						else checks[hasDisp] = false;
-						break;
-					case 0b10:
-						if (cnt < 15) {
-							if (!checks[hasAddrSize]) { // disp32/16: already the full width
-								instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int32_t>(contents.read_u32(address)));
-								address += 2;
-							}
-							else instructionBytes[cnt++] = static_cast<uint64_t>(static_cast<int16_t>(contents.read_u16(address)));
-
-							dispWidth = 2;
-							if (!checks[hasAddrSize])
-								dispWidth += 2;
-							address += 2;
-						}
-						else checks[hasDisp] = false;
-						break;
-					case 0b00:
-						if (cnt >= 15) checks[hasDisp] = false;
-						else if (rm == (checks[hasAddrSize] ? 0b110 : 0b101)
-							|| (!checks[hasAddrSize] && rm == 0b100 && (instructionBytes[positions[endOpcode] + 1] & 0b00000111) == 0b101)) {
-
-							dispWidth = 2;
-							if (!checks[hasAddrSize])
-								dispWidth += 2;
-
-
-							if (dispWidth == 2) {	// absolute address, no base register
-								instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u16(address));
-								address += 2;
-							}
-							else if (dispWidth == 4) {
-								instructionBytes[cnt++] = static_cast<uint64_t>(contents.read_u32(address));
-								address += 4;
-							}
-
-
-							break;
-							}
-
-					default:
-						checks[hasDisp] = false;
-						break;
-				}
-			}
-
-
-			int j = 0;
-			// --- IMMEDIATE(s)
-			if (x86_64_Mnemonic::hasImmediate(opcodeInfo) && cnt < 15 && !checks[isInvalid]) { // set immediate field
-				checks[hasImm] = true;
-				positions[immBegin] = cnt;
-
-				uint8_t immSize = 0;
-				uint8_t immAddr = 0;
-
-				bool pick[] = { false, false, false };
-#define cast(name) static_cast<uint8_t>(name)
-
-				for (int i = 0; i < 3; ++i)
-					switch (opcodeInfo.op[i].addressingMode) {
-						case cast(x86_64::ADDRESSING::I):
-						case cast(x86_64::ADDRESSING::J):
-						case cast(x86_64::ADDRESSING::A):
-						case cast(x86_64::ADDRESSING::O):
-							pick[i] = true;
-							break;
-
-						default:
-							break;
-					}
-
-
-				for (int i = 0; i < 3; ++i)
-					if (pick[i]) {
-
-						immSize = opcodeInfo.op[i].size;
-						immAddr = opcodeInfo.op[i].addressingMode;
-
-						const bool isRelative = (immAddr == static_cast<uint8_t>(x86_64::ADDRESSING::J));
-
-						switch (immSize) {
-							case cast(x86_64::SIZE::b): case cast(x86_64::SIZE::bs): immWidth[j] = 1; break;   // bs occupies 1 byte too
-							case cast(x86_64::SIZE::w): immWidth[j] = 2; break;
-							case cast(x86_64::SIZE::v):
-
-								if (rexBits[w])
-								{
-									immWidth[j] = 8;
-									if (checks[hasOpsize] && opcodeInfo.def64 == Instruction::OpcodeInfo::Default64::d64)
-										immWidth[j] = 2;
-								}
-								else immWidth[j] = checks[hasOpsize] ? 2 : 4; break;
-
-							case cast(x86_64::SIZE::z):
-								immWidth[j] = checks[hasOpsize] ? 2 : 4; break;
-							case cast(x86_64::SIZE::p): immWidth[j] = checks[hasOpsize] ? 4 : 6; break;
-							default:
-								fprintf(stderr, "Immediate x86_64::SIZE not implemented yet (opcode %llx)\n", opcode);
-								break;
-						}
-
-						if (immAddr == cast(x86_64::ADDRESSING::O))
-							immWidth[j] = is64Bit ? (checks[hasAddrSize] ? 4 : 8) : (checks[hasAddrSize] ? 2 : 4);
-
-						int64_t value = 0;
-						switch (immWidth[j]) {
-							case 1:
-								value = isRelative ? static_cast<int8_t>(contents.read_u8(address))
-									: static_cast<uint64_t>(contents.read_u8(address));
-								break;
-							case 2:
-								value = isRelative ? static_cast<int16_t>(contents.read_u16(address))
-									: static_cast<uint64_t>(contents.read_u16(address));
-								break;
-							case 4:
-								value = isRelative ? static_cast<int32_t>(contents.read_u32(address))
-									: static_cast<uint64_t>(contents.read_u32(address));
-								break;
-							case 6: {
-								uint32_t off = contents.read_u32(address);
-								uint16_t seg = contents.read_u16(address + 4);
-								value = (static_cast<uint64_t>(seg) << 32) | off;
-								break;
-							}
-							case 8:
-								value = contents.read_u64(address);
-						}
-
-						// Sign extension of Imm8, based on the custom Size::bs
-
-						if (immSize == cast(x86_64::SIZE::bs)) {
-							value = static_cast<int8_t>(value);
-							if (is64Bit && rexBits[w]) value = static_cast<uint64_t>(value);
-							else if (checks[hasOpsize]) value = static_cast<uint16_t>(value);
-							else value = static_cast<uint32_t>(value);
-						}
-
-
-						address += immWidth[j++];
-
-						// rel is counted from the END of the instruction, so resolve the target only once
-						// every byte of it has been consumed - address - initAddress is now its full length.
-						//originalDisp = value;
-						if(cnt<15){
-							instructionBytes[cnt] = isRelative
-								? static_cast<uint64_t>(vaddr + (address - initAddress) + value)
-								: static_cast<uint64_t>(value);
-						rawImmediates[cnt - positions[immBegin]] = (isRelative) ? value : 0x0;
-						++cnt;
-						}
-					}
+			if (displacementSize) {
+				fields.hasDisplacement = true;
+				fields.displacement = signExtend(readLittleEndian(displacementSize), displacementSize);
 			}
 		}
 
-		auto instruction = std::make_unique<x86_64>();
-		instruction->decode(instructionBytes, checks, positions, rexBits, immWidth, dispWidth, rawImmediates, is64Bit);
-		decodedInstructions.push_back(std::move(instruction));
+		// 3DNow! (0F 0F /r ib): the trailing byte is no immediate but the real opcode.
+		if (!simd.vex && simd.map == 1 && fields.opcode == 0x0F) fields.info = M::threeDNowTable()[nextByte()];
 
-		return address; // address where the next instr begins
-#undef cast
+		// --- IMMEDIATE(s), in operand order. L is a register number in an imm8's top bits.
+		int immIndex = 0;
+		for (const auto& operand : fields.info.operands) {
+			const ADDRESSING mode = operand.addressingMode;
+			if ((mode != ADDRESSING::I && mode != ADDRESSING::J && mode != ADDRESSING::A && mode != ADDRESSING::O && mode != ADDRESSING::L) || immIndex == 2)
+				continue;
 
+			unsigned byteCount;
+			switch (operand.size) {
+			case SIZE::b: case SIZE::bs: byteCount = 1; break;   // bs occupies 1 byte too
+			case SIZE::w: byteCount = 2; break;
+			case SIZE::d: byteCount = 4; break;
+			case SIZE::v: byteCount = rexW ? 8 : (fields.opSize == 16) ? 2 : 4; break;
+			default:      byteCount = (fields.opSize == 16) ? 2 : 4; break;   // z, and p's offset
+			}
+			if (mode == ADDRESSING::O) byteCount = fields.addrSize / 8;
+
+			uint64_t value = readLittleEndian(byteCount);
+			if (mode == ADDRESSING::A)
+				value |= readLittleEndian(2) << 32;   // ptr16:16 / ptr16:32: the segment follows the offset
+			else if (mode == ADDRESSING::J) {
+				// rel is counted from the END of the instruction - it is always the last
+				// field, so fields.length is now the full length. IP wraps at the operand width.
+				value = vaddr + fields.length + signExtend(value, byteCount);
+				if (!is64Bit_) value &= mask(fields.opSize == 16 ? 16 : 32);
+			}
+			else if (mode == ADDRESSING::I && (operand.size == SIZE::bs || (operand.size == SIZE::z && fields.opSize == 64)))
+				value = static_cast<uint64_t>(signExtend(value, byteCount)) & mask(fields.opSize);   // the CPU sign-extends these
+			fields.immediates[immIndex++] = value;
+		}
+
+		return emit();
 	}
-	catch (std::length_error& ) { return initAddress; }
-
+	catch (const std::length_error&) { return fileOffset; }
+	catch (const TooLong&) {
+		fields.isInvalid = true;
+		return emit();
+	}
 }
 
 } // namespace voidwalk

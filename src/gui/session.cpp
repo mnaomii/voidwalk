@@ -19,7 +19,7 @@ std::string hexByte(uint8_t b) {
 }
 
 // The core renders a decoded line as "<MNEMONIC> \t<operands>" — a literal space
-// followed by a tab (see x86_64::decode). The tab draws unevenly in the Qt
+// followed by a tab (see the x86_64 constructor). The tab draws unevenly in the Qt
 // delegate (QPainter gives it a font-dependent, near-random advance) and leaves
 // trailing whitespace on operand-less rows like RET. We can't touch the decoder,
 // so tidy the string here: split on the tab, trim both halves, and re-join with
@@ -78,10 +78,10 @@ std::vector<SectionInfo> sectionsOf(const Disassembler& d) {
 			out.push_back({name, h.getOffset(), h.getVaddr(), h.getSize()});
 		}
 	};
-	add(".text", s._text);
-	add(".data", s._data);
-	add(".rodata", s._ronly);
-	add(".bss", s._bss);
+	add(".text", s.text);
+	add(".data", s.data);
+	add(".rodata", s.readOnly);
+	add(".bss", s.bss);
 	return out;
 }
 
@@ -115,11 +115,18 @@ std::string Snapshot::rowText(size_t i) const {
 	return formatDisasmText(disassembler_->getDecodedInstructions()[i]->decodeLineString());
 }
 
-// Virtual address of the first .text section, or 0.
-uint64_t Snapshot::textVaddr() const {
-	if (!disassembler_) return 0;
-	const auto& text = disassembler_->getSections()._text;
-	return text.empty() ? 0 : text.front().getVaddr();
+Instruction::Flow Snapshot::rowFlow(size_t i) const {
+	if (!disassembler_ || i >= rows_) return Instruction::Flow::None;
+	return disassembler_->getDecodedInstructions()[i]->flow();
+}
+
+uint64_t Snapshot::rowTarget(size_t i) const {
+	if (!disassembler_ || i >= rows_) return 0;
+	return disassembler_->getDecodedInstructions()[i]->target();
+}
+
+uint64_t Snapshot::entryPoint() const {
+	return disassembler_ ? disassembler_->entryPoint() : 0;
 }
 
 std::vector<SectionInfo> Snapshot::sections() const {
@@ -132,14 +139,12 @@ std::vector<uint8_t> Snapshot::bytes(uint64_t offset, size_t count) const {
 	return bytesOf(*space_, offset, count);
 }
 
-// Drops the previous sweep's view state and bumps the generation counter so the
-// disassembly view resets rather than diffing row counts. Rows are read through to
-// the core, so there is nothing else to drop.
+// Drops the previous sweep's view state. Rows are read through to the core, so
+// there is nothing else to drop.
 void Session::onDecodeStarted() {
 	shownRows_ = 0;
 	fallbackRows_.clear();
 	decodedForReal_ = false;
-	++decodeGen_;
 }
 
 const Registers_x86_64& Session::registers() const {
@@ -181,6 +186,7 @@ std::string Session::applyPatches(const std::vector<std::pair<size_t, std::strin
 }
 
 void Session::refresh() {
+	throwIfFileChanged();
 	if (!loaded()) {
 		decodedForReal_ = false;
 		shownRows_ = 0;
@@ -215,7 +221,7 @@ void Session::buildFallback() {
 	fallbackRows_.clear();
 	constexpr uint64_t kMaxBytes = 4096;
 	uint64_t budget = kMaxBytes;
-	for (const Header& text : disassembler_->getSections()._text) {
+	for (const Header& text : disassembler_->getSections().text) {
 		if (budget == 0) break;
 		if (text.getSize() == 0) continue;
 		uint64_t total = text.getSize() < budget ? text.getSize() : budget;
@@ -259,6 +265,16 @@ std::string Session::rowBytes(size_t i) const {
 	std::string b = disassembler_->getDecodedInstructions()[i]->getMachineCode();
 	while (!b.empty() && b.back() == ' ') b.pop_back(); // trim the trailing separator
 	return b;
+}
+
+Instruction::Flow Session::rowFlow(size_t i) const {
+	if (!loaded() || !decodedForReal_ || i >= shownRows_) return Instruction::Flow::None;
+	return disassembler_->getDecodedInstructions()[i]->flow();
+}
+
+uint64_t Session::rowTarget(size_t i) const {
+	if (!loaded() || !decodedForReal_ || i >= shownRows_) return 0;
+	return disassembler_->getDecodedInstructions()[i]->target();
 }
 
 std::string Session::rowText(size_t i) const {

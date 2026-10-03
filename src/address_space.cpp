@@ -1,4 +1,5 @@
 #include "address_space.hpp"
+#include <atomic>
 #include <stdexcept>
 
 
@@ -14,64 +15,86 @@
 	#include <sys/mman.h>
 	#include <fcntl.h>
 	#include <unistd.h>
+	#include <csetjmp>
+	#include <csignal>
 
 #endif
 
 namespace voidwalk {
 
-AddressSpace::AddressSpace(std::string filename) : base(nullptr), maxSize(0){ // using mmap - ability to rewind in the file efficiently
+#ifndef _WIN32
+// Set only while this thread is inside readType's memcpy.
+static thread_local sigjmp_buf* sigbusJump = nullptr;
+
+// A read touched a page the file no longer has (it shrank on disk): jump back into
+// readType, which throws FileChanged. Any other SIGBUS restores the default action,
+// so the faulting instruction re-runs and kills the process as before.
+static void onSigbus(int) {
+	if (sigbusJump) siglongjmp(*sigbusJump, 1);
+	signal(SIGBUS, SIG_DFL);
+}
+#endif
+
+AddressSpace::AddressSpace(std::string filePath) : mappedData(nullptr), fileSize(0){ // using mmap - ability to rewind in the file efficiently
 
 	
 #ifdef _WIN32
 	
 	// open file / get descriptor
-	HANDLE f = CreateFileA(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	HANDLE fileHandle = CreateFileA(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 
-	if (f == INVALID_HANDLE_VALUE) throw std::length_error("[voidwalk] : Invalid file.\n");
+	if (fileHandle == INVALID_HANDLE_VALUE) throw std::length_error("[voidwalk] : Inaccessible file.\n");
 
-	LARGE_INTEGER size;
-	if (!GetFileSizeEx(f, &size))
+	LARGE_INTEGER sizeInfo;
+	if (!GetFileSizeEx(fileHandle, &sizeInfo))
 	{
-		CloseHandle(f); 
-		throw std::length_error("[voidwalk] : Invalid file.\n");
+		CloseHandle(fileHandle); 
+		throw std::length_error("[voidwalk] : Empty file.\n");
 	}
 
 
 	// get filesize in bytes
-	maxSize = size.QuadPart;
+	fileSize = sizeInfo.QuadPart;
 
 	// windows equivalent of mmap
-	HANDLE fMap = CreateFileMapping(f, nullptr, PAGE_READONLY, 0, 0, nullptr);
-	if (fMap == nullptr) throw std::length_error("[voidwalk] : Invalid file.\n");
-	base = MapViewOfFile(fMap, FILE_MAP_READ, 0, 0, 0);
+	HANDLE mappingHandle = CreateFileMapping(fileHandle, nullptr, PAGE_READONLY, 0, 0, nullptr);
+	if (mappingHandle == nullptr) throw std::length_error("[voidwalk] : Invalid file.\n");
+	mappedData = MapViewOfFile(mappingHandle, FILE_MAP_READ, 0, 0, 0);
 
 	// close handles
-	CloseHandle(f); CloseHandle(fMap);
+	CloseHandle(fileHandle); CloseHandle(mappingHandle);
 
-	if (!base) throw std::length_error("[voidwalk] : cannot map file.\n");
+	if (!mappedData) throw std::length_error("[voidwalk] : Cannot map file.\n");
 
 
 #else // POSIX ( macOS, Linux )
 	
 
 	// open a file / get the descriptor
-	int f = open(filename.c_str(), O_RDONLY);
-	if (f < 0) throw std::length_error("[voidwalk] : Invalid file.\n");
+	int fileDescriptor = open(filePath.c_str(), O_RDONLY | O_NONBLOCK);
+	if (fileDescriptor < 0) throw std::length_error("[voidwalk] : Inaccessible file.\n");
 
-	struct stat st;
-	if ( fstat(f, &st) < 0) {
-		close(f);
+	struct stat fileStats;
+	if ( fstat(fileDescriptor, &fileStats) < 0 || !S_ISREG(fileStats.st_mode)) { // reject empty / non-regular files
+		close(fileDescriptor);
 		throw std::length_error("[voidwalk] : Invalid file.\n");
 	}
 
 	// get the size in bytes from the stats
-	this->maxSize = st.st_size;
-	if (maxSize == 0) {close(f); throw std::length_error("[voidwalk] : Invalid file.\n");}
+	this->fileSize = fileStats.st_size;
+	if (fileSize == 0) {close(fileDescriptor); throw std::length_error("[voidwalk] : Empty file.\n");}
 
-	base = mmap(nullptr, maxSize, PROT_READ, MAP_PRIVATE, f, 0);
-	close(f);
+	mappedData = mmap(nullptr, fileSize, PROT_READ, MAP_PRIVATE, fileDescriptor, 0);
+	close(fileDescriptor);
 
-	if (base == MAP_FAILED) throw std::length_error("[voidwalk] : cannot map file.\n");
+	if (mappedData == MAP_FAILED) throw std::length_error("[voidwalk] : Cannot map file.\n");
+
+	// SA_NODEFER: siglongjmp leaves the handler without unblocking SIGBUS, so it must
+	// never be blocked in the first place, or the next truncation kills the process.
+	struct sigaction sigbusAction{};
+	sigbusAction.sa_handler = onSigbus;
+	sigbusAction.sa_flags = SA_NODEFER;
+	sigaction(SIGBUS, &sigbusAction, nullptr);
 
 #endif
 
@@ -81,18 +104,18 @@ AddressSpace::AddressSpace(std::string filename) : base(nullptr), maxSize(0){ //
 AddressSpace::~AddressSpace() {
 #ifdef _WIN32
 	
-	UnmapViewOfFile(base);
+	UnmapViewOfFile(mappedData);
 
 #else // POSIX
 
-	munmap(base, maxSize);
+	munmap(mappedData, fileSize);
 
 #endif
 }
 
 
 size_t AddressSpace::size() noexcept {
-	return maxSize;
+	return fileSize;
 }
 
 
@@ -100,10 +123,23 @@ template <typename T>
 T AddressSpace::readType(uint64_t offset) {
 
 
-	if (offset > maxSize || sizeof(T) > maxSize - offset) throw std::length_error("[voidwalk] : Invalid offset.\n");
-	T val{};
-	std::memcpy(&val, static_cast<const char*>(base) + offset, sizeof(T));
-	return val;
+	if (offset > fileSize || sizeof(T) > fileSize - offset) throw std::length_error("[voidwalk] : Invalid offset.\n");
+	T value{};
+#ifndef _WIN32
+	sigjmp_buf jumpBuffer;
+	if (sigsetjmp(jumpBuffer, 0)) {   // returns 1 here when onSigbus jumps back
+		sigbusJump = nullptr;
+		throw FileChanged("[voidwalk] : file changed on disk.\n");
+	}
+	sigbusJump = &jumpBuffer;
+	std::atomic_signal_fence(std::memory_order_seq_cst); // keep the read after the arm
+#endif
+	std::memcpy(&value, static_cast<const char*>(mappedData) + offset, sizeof(T));
+#ifndef _WIN32
+	std::atomic_signal_fence(std::memory_order_seq_cst); // ...and before the disarm
+	sigbusJump = nullptr;
+#endif
+	return value;
 }
 
 uint8_t AddressSpace::read_u8(uint64_t offset) {

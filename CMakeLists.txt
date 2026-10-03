@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# The single voidwalk binary dispatches by argv[1]: --gui or --ui/<binary>. Each
+# The single voidwalk binary dispatches by argv[1]: --gui, or --tui/<binary>. Each
 # frontend is compiled in only when its option is ON. The test suite is a SEPARATE
 # executable (voidwalk-tests) so it builds and runs with neither Qt nor FTXUI - that is
 # what CI compiles.
@@ -76,7 +76,7 @@ target_link_libraries(voidwalk-core PUBLIC Threads::Threads)
 # voidwalk — one executable that bundles every frontend. src/main.cpp routes
 # by argv[1]:
 #   voidwalk --gui                -> Qt6 GUI     (needs VOIDWALK_BUILD_GUI)
-#   voidwalk --ui <bin> | <bin>   -> FTXUI TUI   (needs VOIDWALK_BUILD_TUI)
+#   voidwalk --tui <bin> | <bin>  -> FTXUI TUI   (needs VOIDWALK_BUILD_TUI)
 # ---------------------------------------------------------------------------
 
 add_executable(voidwalk

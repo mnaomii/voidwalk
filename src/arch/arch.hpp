@@ -17,10 +17,10 @@ enum class Arch {
     AArch64,
 };
 
-// Returns the display name of `a`: "x86", "x86_64", "ARM32", "AArch64", or
+// Returns the display name of `arch`: "x86", "x86_64", "ARM32", "AArch64", or
 // "Unknown". These strings appear in CLI/TUI/GUI output and in test expectations.
-inline std::string archName(Arch a) {
-    switch (a) {
+inline std::string archName(Arch arch) {
+    switch (arch) {
         case Arch::X86:     return "x86";
         case Arch::ARM32:   return "ARM32";
         case Arch::X86_64:  return "x86_64";
@@ -29,14 +29,14 @@ inline std::string archName(Arch a) {
     }
 }
 
-// Returns true when `a` uses the 64-bit variant of its container's section
+// Returns true when `arch` uses the 64-bit variant of its container's section
 // headers. Both format readers branch on this to pick a section parser.
-inline bool is64Bit(Arch a) {
-    return a == Arch::X86_64 || a == Arch::AArch64;
+inline bool is64Bit(Arch arch) {
+    return arch == Arch::X86_64 || arch == Arch::AArch64;
 }
 
-// Returns the decoder for `a`, or nullptr when no decoder exists for it.
+// Returns the decoder for `arch`, or nullptr when no decoder exists for it.
 // Defined in src/arch/decoder.cpp.
-std::unique_ptr<Decoder> makeDecoder(Arch a);
+std::unique_ptr<Decoder> makeDecoder(Arch arch);
 
 } // namespace voidwalk

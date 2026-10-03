@@ -7,6 +7,7 @@
 #include <QPixmap>
 #include <QStyleFactory>
 #include <QSvgRenderer>
+#include <QTemporaryDir>
 
 namespace gui {
 
@@ -32,8 +33,9 @@ const char kTriDownSvg[] =
 const char kSidebarSvg[] =
 	R"SVG(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="1.7" y="2.7" width="12.6" height="10.6" rx="1.5" fill="none" stroke="#000000" stroke-width="1.4"/><rect x="5.6" y="2.7" width="1.4" height="10.6" fill="#000000"/></svg>)SVG";
 
-// Recolor a glyph to `color`, cache it as a PNG under the temp dir, and return a
-// QSS-friendly (forward-slash) path. Rendered at exactly `px` — the size the QSS
+// Recolor a glyph to `color`, cache it as a PNG in a private per-process temp dir,
+// and return a QSS-friendly (forward-slash) path. Private (mode 0700, unpredictable
+// name) so nothing another user planted there can be followed. Rendered at exactly `px` — the size the QSS
 // draws it at. The filename keys on glyph + size + color so a theme switch
 // reuses files. On failure returns an empty string; the QSS url() then simply
 // draws nothing (no worse than the missing glyph before).
@@ -48,10 +50,11 @@ QString makeGlyph(const char* svg, const QColor& color, const QString& name, int
 	renderer.render(&painter);
 	painter.end();
 
-	const QString dir = QDir::tempPath() + QStringLiteral("/voidwalk-glyphs");
-	QDir().mkpath(dir);
-	const QString path = QStringLiteral("%1/%2-%3-%4.png")
-		.arg(dir, name).arg(px).arg(color.name(QColor::HexRgb).mid(1)); // drop the '#'
+	static const QTemporaryDir dir(QDir::tempPath() + QStringLiteral("/voidwalk-glyphs-XXXXXX"));
+	if (!dir.isValid())
+		return QString();
+	const QString path = dir.filePath(QStringLiteral("%1-%2-%3.png")
+		.arg(name).arg(px).arg(color.name(QColor::HexRgb).mid(1))); // drop the '#'
 	if (!pm.save(path, "PNG"))
 		return QString();
 	return QDir::fromNativeSeparators(path);
@@ -149,7 +152,7 @@ QLabel#symbolsHeader {
 QLabel#symbolsCount { color: %textGhost%; font-size: 10px; padding: 8px 12px 0 0; }
 QLineEdit#symbolsFilter {
 	background: %bgBase%; border: 1px solid %controlBorder%; border-radius: 5px;
-	padding: 4px 8px; margin: 8px 10px; color: %text%; font-size: 11px;
+	padding: 4px 8px; color: %text%; font-size: 11px;
 }
 QLineEdit#symbolsFilter:focus { border-color: %accent%; }
 QTreeWidget#symbolsTree {

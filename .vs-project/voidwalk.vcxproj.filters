@@ -10,9 +10,6 @@
     <Filter Include="GUI">
       <UniqueIdentifier>{11111111-1111-1111-1111-111111111103}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Tests">
-      <UniqueIdentifier>{11111111-1111-1111-1111-111111111104}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Console-utils">
       <UniqueIdentifier>{11111111-1111-1111-1111-111111111105}</UniqueIdentifier>
     </Filter>
@@ -25,6 +22,21 @@
     <ClCompile Include="..\src\address_space.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\arch\decoder.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\arch\x86_64\x86_64_decoder.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\arch\x86_64\x86_64_tables.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\arch\arm32\arm32_decoder.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\arch\aarch64\aarch64_decoder.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\disassembler\disassembler.cpp">
       <Filter>Core</Filter>
     </ClCompile>
@@ -34,25 +46,25 @@
     <ClCompile Include="..\src\disassembler\format\pe\pe_disassembler.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\analysis_session.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\main.cpp">
       <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="..\tests\runner.cpp">
-      <Filter>Tests</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\session.cpp">
+    <ClCompile Include="..\src\tui\session.cpp">
       <Filter>TUI</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\gui\panes\disassembly_pane.cpp">
+    <ClCompile Include="..\src\tui\panes\disassembly_pane.cpp">
       <Filter>TUI</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\gui\panes\memory_pane.cpp">
+    <ClCompile Include="..\src\tui\panes\memory_pane.cpp">
       <Filter>TUI</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\gui\panes\registers_pane.cpp">
+    <ClCompile Include="..\src\tui\panes\registers_pane.cpp">
       <Filter>TUI</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\gui\panes\stack_pane.cpp">
+    <ClCompile Include="..\src\tui\panes\stack_pane.cpp">
       <Filter>TUI</Filter>
     </ClCompile>
     <ClCompile Include="..\src\tui\tui_main.cpp">
@@ -61,43 +73,13 @@
     <ClCompile Include="..\src\tui\ui.cpp">
       <Filter>TUI</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\gui\gui_main.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\gui\session.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
     <ClCompile Include="..\src\gui\symbols.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\ai\ai_client.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\dialogs\settings_dialog.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\panes\disassembly_pane.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\panes\registers_pane.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\panes\stack_pane.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\panes\memory_pane.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\panes\ai_chat_pane.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\panes\disasm_delegate.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\theme\theme.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\theme\theme_manager.cpp">
-      <Filter>GUI</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\gui\theme\icons.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
     <ClCompile Include="..\src\gui\main_window.cpp">
@@ -106,25 +88,54 @@
     <ClCompile Include="..\src\gui\welcome_widget.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\gui\gui_main.cpp">
+    <ClCompile Include="..\src\gui\ai\ai_client.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\gui\panes\symbols_pane.cpp" />
+    <ClCompile Include="..\src\gui\dialogs\settings_dialog.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\ai_chat_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\column_fit.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\disasm_delegate.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\disassembly_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\memory_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\registers_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\stack_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\panes\symbols_pane.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\theme\icons.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\theme\theme.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\gui\theme\theme_manager.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\address_space.hpp">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\disassembler\disassembler.hpp">
+    <ClInclude Include="..\src\analysis_session.hpp">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\disassembler\format\elf\elf_disassembler.hpp">
-      <Filter>Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\disassembler\format\elf\elf_sections.hpp">
-      <Filter>Core</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\disassembler\format\section.hpp">
+    <ClInclude Include="..\src\arch\aarch64\aarch64_decoder.hpp">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="..\src\arch\aarch64\aarch64_instruction.hpp">
@@ -133,37 +144,76 @@
     <ClInclude Include="..\src\arch\aarch64\aarch64_mnemonic.hpp">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\arch\arch.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\arch\arm32\arm32_decoder.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\arch\arm32\arm32_instruction.hpp">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="..\src\arch\arm32\arm32_mnemonic.hpp">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\arch\decoder.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\arch\instruction.hpp">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\disassembler\format\pe\pe_sections.hpp">
+    <ClInclude Include="..\src\arch\x86_64\registers.hpp">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\disassembler\format\pe\pe_disassembler.hpp">
+    <ClInclude Include="..\src\arch\x86_64\x86_64_decoder.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\arch\x86_64\x86_64_instruction.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\arch\x86_64\x86_64_mnemonic.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\chunk_store.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\cli\console.hpp">
+      <Filter>Console-utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\cli\hex_reader.hpp">
+      <Filter>Console-utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\cli\print_to_console.hpp">
+      <Filter>Console-utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\disassembler\disassembler.hpp">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="..\src\disassembler\format\detect.hpp">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\tui\session.hpp">
-      <Filter>TUI</Filter>
+    <ClInclude Include="..\src\disassembler\format\elf\elf_disassembler.hpp">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\tui\panes\panes.hpp">
-      <Filter>TUI</Filter>
+    <ClInclude Include="..\src\disassembler\format\elf\elf_sections.hpp">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\tui\tui_main.hpp">
-      <Filter>TUI</Filter>
+    <ClInclude Include="..\src\disassembler\format\pe\pe_disassembler.hpp">
+      <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\tui\ui.hpp">
-      <Filter>TUI</Filter>
+    <ClInclude Include="..\src\disassembler\format\pe\pe_sections.hpp">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\disassembler\format\section.hpp">
+      <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="..\src\gui\dialogs\settings.hpp">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\gui\gui_main.hpp">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\gui\panes\column_fit.hpp">
       <Filter>GUI</Filter>
     </ClInclude>
     <ClInclude Include="..\src\gui\session.hpp">
@@ -172,7 +222,7 @@
     <ClInclude Include="..\src\gui\symbols.hpp">
       <Filter>GUI</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\gui\gui_main.hpp">
+    <ClInclude Include="..\src\gui\theme\icons.hpp">
       <Filter>GUI</Filter>
     </ClInclude>
     <ClInclude Include="..\src\gui\theme\theme.hpp">
@@ -181,23 +231,17 @@
     <ClInclude Include="..\src\gui\theme\theme_manager.hpp">
       <Filter>GUI</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\gui\theme\icons.hpp">
-      <Filter>GUI</Filter>
+    <ClInclude Include="..\src\tui\panes\panes.hpp">
+      <Filter>TUI</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\arch\x86_64\x86_64_instruction.hpp">
-      <Filter>Core</Filter>
+    <ClInclude Include="..\src\tui\session.hpp">
+      <Filter>TUI</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\arch\x86_64\x86_64_mnemonic.hpp">
-      <Filter>Core</Filter>
+    <ClInclude Include="..\src\tui\tui_main.hpp">
+      <Filter>TUI</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\cli\console.hpp">
-      <Filter>Console-utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\cli\print_to_console.hpp">
-      <Filter>Console-utils</Filter>
-    </ClInclude>
-    <ClInclude Include="..\src\cli\hex_reader.hpp">
-      <Filter>Console-utils</Filter>
+    <ClInclude Include="..\src\tui\ui.hpp">
+      <Filter>TUI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -207,16 +251,7 @@
     <QtMoc Include="..\src\gui\dialogs\settings_dialog.hpp">
       <Filter>GUI</Filter>
     </QtMoc>
-    <QtMoc Include="..\src\gui\panes\disassembly_pane.hpp">
-      <Filter>GUI</Filter>
-    </QtMoc>
-    <QtMoc Include="..\src\gui\panes\registers_pane.hpp">
-      <Filter>GUI</Filter>
-    </QtMoc>
-    <QtMoc Include="..\src\gui\panes\stack_pane.hpp">
-      <Filter>GUI</Filter>
-    </QtMoc>
-    <QtMoc Include="..\src\gui\panes\memory_pane.hpp">
+    <QtMoc Include="..\src\gui\main_window.hpp">
       <Filter>GUI</Filter>
     </QtMoc>
     <QtMoc Include="..\src\gui\panes\ai_chat_pane.hpp">
@@ -225,10 +260,19 @@
     <QtMoc Include="..\src\gui\panes\disasm_delegate.hpp">
       <Filter>GUI</Filter>
     </QtMoc>
-    <QtMoc Include="..\src\gui\panes\symbols_pane.hpp">
+    <QtMoc Include="..\src\gui\panes\disassembly_pane.hpp">
       <Filter>GUI</Filter>
     </QtMoc>
-    <QtMoc Include="..\src\gui\main_window.hpp">
+    <QtMoc Include="..\src\gui\panes\memory_pane.hpp">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\src\gui\panes\registers_pane.hpp">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\src\gui\panes\stack_pane.hpp">
+      <Filter>GUI</Filter>
+    </QtMoc>
+    <QtMoc Include="..\src\gui\panes\symbols_pane.hpp">
       <Filter>GUI</Filter>
     </QtMoc>
     <QtMoc Include="..\src\gui\welcome_widget.hpp">

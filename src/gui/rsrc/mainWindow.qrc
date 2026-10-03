@@ -11,5 +11,6 @@
         <file alias="reset.svg">icons/reset.svg</file>
         <file alias="recompile.svg">icons/recompile.svg</file>
         <file alias="settings.svg">icons/settings.svg</file>
+        <file alias="clear.svg">icons/clear.svg</file>
     </qresource>
 </RCC>

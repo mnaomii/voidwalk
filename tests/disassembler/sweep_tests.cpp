@@ -82,7 +82,7 @@ class Sweep_Tests : public Tests {
         Swept s;
         // The fixture has exactly one .text. If the parser found none, the fields stay
         // zero and the invariants below fail loudly rather than this indexing past the end.
-        const auto& texts = d.getSections()._text;
+        const auto& texts = d.getSections().text;
         if (!texts.empty()) {
             s.textOff   = texts.front().getOffset();
             s.textVaddr = texts.front().getVaddr();

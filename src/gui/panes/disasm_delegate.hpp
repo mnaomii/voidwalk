@@ -49,7 +49,8 @@ private:
 		QString text;
 		QColor color;
 	};
-	std::vector<Token> tokenize(const QString& instruction) const;
+	// `branch`: the row is a call / jump / return (DisassemblyPane::FlowRole).
+	std::vector<Token> tokenize(const QString& instruction, bool branch) const;
 	bool isBreakpoint(int row) const;
 
 	Theme theme_;

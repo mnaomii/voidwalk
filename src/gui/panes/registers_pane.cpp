@@ -6,12 +6,14 @@
 #include <QAbstractItemView>
 #include <QFontMetrics>
 #include <QHeaderView>
+#include <QSet>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
 #include <array>
 #include <utility>
+#include <vector>
 
 namespace gui {
 
@@ -52,11 +54,20 @@ void RegistersPane::refresh() {
 	const QFont mono = monoFont();
 	const int gpDigits = is64 ? 16 : 8; // 64- vs 32-bit value width
 
+	// Keep each category's open/closed state across rebuilds. The first build opens
+	// only the base groups, so the vector registers start collapsed.
+	const bool first = tree_->topLevelItemCount() == 0;
+	QSet<QString> open;
+	for (int i = 0; i < tree_->topLevelItemCount(); ++i)
+		if (tree_->topLevelItem(i)->isExpanded()) open.insert(tree_->topLevelItem(i)->text(0));
+	std::vector<std::pair<QTreeWidgetItem*, bool>> cats; // category, open by default
+
 	tree_->clear();
 
 	// A bold, non-value header row that spans both columns.
-	auto addCategory = [this](const QString& title) {
+	auto addCategory = [this, &cats](const QString& title, bool openByDefault = true) {
 		auto* cat = new QTreeWidgetItem(tree_, {title});
+		cats.emplace_back(cat, openByDefault);
 		QFont f = cat->font(0);
 		f.setBold(true);
 		cat->setFont(0, f);
@@ -65,15 +76,31 @@ void RegistersPane::refresh() {
 		return cat;
 	};
 
-	auto addReg = [&mono](QTreeWidgetItem* cat, const QString& name, uint64_t value, int digits) {
+	auto addRow = [&mono](QTreeWidgetItem* cat, const QString& name, const QString& text) {
 		auto* item = new QTreeWidgetItem(cat);
-		const QString text = QString("0x%1").arg(value, digits, 16, QLatin1Char('0'));
 		item->setText(0, name);
 		item->setText(1, text);
 		item->setFont(1, mono);
 		// The full value on hover, for when the column is narrower than 16 digits.
 		item->setToolTip(0, name + QLatin1Char(' ') + text);
 		item->setToolTip(1, text);
+	};
+
+	auto addReg = [&addRow](QTreeWidgetItem* cat, const QString& name, uint64_t value, int digits) {
+		addRow(cat, name, QString("0x%1").arg(value, digits, 16, QLatin1Char('0')));
+	};
+
+	// One collapsed category per vector set; each value is one wide hex number,
+	// most significant qword first.
+	auto addVecs = [&]<size_t N, size_t M>(const QString& title, const QString& prefix,
+	                                       const std::array<voidwalk::ExtendedType<N> Registers_x86_64::*, M>& regs) {
+		auto* cat = addCategory(title, false);
+		for (size_t i = 0; i < M; ++i) {
+			QString text = QStringLiteral("0x");
+			for (size_t q = N / 8; q-- > 0;)
+				text += QString("%1").arg((r.*regs[i]).qword(q), 16, 16, QLatin1Char('0'));
+			addRow(cat, prefix + QString::number(i), text);
+		}
 	};
 
 	// General purpose — renamed to the 64-bit set when a 64-bit target is loaded.
@@ -105,7 +132,16 @@ void RegistersPane::refresh() {
 	auto* fl = addCategory(tr("Flags"));
 	addReg(fl, QStringLiteral("flags"), r.flags, 2);
 
-	tree_->expandAll();
+	// Vector registers.
+	auto* mmx = addCategory(tr("MMX"), false);
+	for (size_t i = 0; i < voidwalk::kMmRegs.size(); ++i)
+		addReg(mmx, QStringLiteral("mm%1").arg(i), r.*voidwalk::kMmRegs[i], 16);
+	addVecs(tr("SSE"), QStringLiteral("xmm"), voidwalk::kXmmRegs);
+	addVecs(tr("AVX"), QStringLiteral("ymm"), voidwalk::kYmmRegs);
+	addVecs(tr("AVX-512"), QStringLiteral("zmm"), voidwalk::kZmmRegs);
+
+	for (const auto& [cat, openByDefault] : cats)
+		cat->setExpanded(first ? openByDefault : open.contains(cat->text(0)));
 }
 
 } // namespace gui

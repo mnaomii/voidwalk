@@ -18,26 +18,28 @@ voidwalk started as a deep dive into how executables and machine code work, and 
 - Memory-mapped, bounds-checked file access
 
 **x86 / x86-64 disassembler**
-- Prefixes and the full one-byte opcode map, including extension groups and the x87 FPU
-- The common `0F` instructions (`Jcc`, `SETcc`, `CMOVcc`, `MOVZX`/`MOVSX`, bit operations, `SYSCALL`, …) plus `ENDBR32`/`ENDBR64`
+- Prefixes (`LOCK`, `REP`/`REPNE`, `BND`, `NOTRACK`, segment overrides) and the full one-byte opcode map, including extension groups and the x87 FPU
+- The `0F` map (`Jcc`, `SETcc`, `CMOVcc`, `MOVZX`/`MOVSX`, bit operations, `SYSCALL`, …) plus `ENDBR32`/`ENDBR64`
+- MMX, SSE–SSE4.2 (mandatory `66`/`F2`/`F3` forms, `0F 38`/`0F 3A` maps), 3DNow!, and VEX: AVX, AVX2, FMA, BMI1/2
 - Long mode: REX, `R8`–`R15`, RIP-relative addressing, 64-bit operand defaults
 - Branch and call targets resolved to absolute addresses; raw bytes shown for every instruction
-- Sweeps the whole `.text` section, on a background thread in the TUI and GUI
+- Sweeps every `.text` section, on a background thread in the TUI and GUI
 - On `/bin/ls` (x86-64, Debian 13), all 22,523 instructions start at the same addresses as in GNU `objdump`
 
 **Interfaces**
-- **CLI:** disassemble to stdout and to files; hex dump
-- **TUI:** disassembly, memory, registers and stack panes; open another file without restarting
+- **CLI:** disassemble to stdout and to files; hex dump with ASCII column
+- **TUI:** disassembly, memory, registers (incl. MMX/SSE/AVX/AVX-512) and stack panes; open another file without restarting
 - **GUI:**
   - fast, syntax-coloured disassembly
-  - symbol sidebar (call targets and strings)
-  - hex/ASCII memory view by file offset
+  - symbol sidebar: call targets and the entry point jump to code, strings open in the memory view
+  - hex/ASCII memory view of the whole file, by file offset
+  - registers pane with MMX/SSE/AVX/AVX-512 groups
   - go-to address, drag-and-drop to open, dark and light themes
 
 **Not yet supported**
-- AVX/AVX-512 (VEX/EVEX) and SSE instructions
+- AVX-512 (EVEX), and extensions such as AES and SHA (decoded to the right length, but unnamed)
 - ARM32/AArch64 decoding (detected, but shown as raw bytes)
-- Symbol tables, import tables and the entry point; only `.text` is disassembled
+- Symbol and import tables; only `.text` is disassembled
 - The debugger, reassembly of instructions edited in the GUI, and the AI backend: their UI exists, their engines don't yet
 
 ---
@@ -81,7 +83,7 @@ Binaries are written to `exec/`. A Visual Studio solution is also included in `.
 ```text
 voidwalk                              open the GUI
 voidwalk --gui [binary]               open the GUI, optionally loading <binary>
-voidwalk --tui <binary>               open the terminal UI
+voidwalk [--tui] <binary>             open the terminal UI
 voidwalk --print <binary> [out...]    disassemble to stdout (and to each extra file given)
 voidwalk --dump-hex <binary>          hex dump
 voidwalk --help                       show usage

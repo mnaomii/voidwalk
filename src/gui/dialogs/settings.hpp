@@ -4,6 +4,10 @@
 #include <QSettings>
 #include <QString>
 
+#ifndef Q_OS_WIN
+#include <sys/stat.h>
+#endif
+
 namespace gui {
 
 // Persisted app settings (QSettings, HKCU\Software\voidwalk\voidwalk-gui on
@@ -20,10 +24,11 @@ namespace gui {
 //      with aiKeyFromEnv, and never written back to disk;
 //   2. QSettings — plaintext, readable by anything running as this user.
 //
-// (2) is a real exposure, not a hypothetical one. save() narrows the settings
-// file to owner-only on POSIX, which reduces the blast radius but is a
-// mitigation rather than a fix; the Settings dialog states the exposure and
-// points at (1). Replacing (2) with a credential store is the actual fix.
+// (2) is a real exposure, not a hypothetical one. On POSIX save() writes the
+// settings file owner-only from the moment it exists, and keeps no key while the
+// AI pane is disabled - a mitigation rather than a fix; the Settings dialog states
+// the exposure and points at (1). Replacing (2) with a credential store is the
+// actual fix.
 struct AppSettings {
 	QString theme = QStringLiteral("dark");                  // "dark" | "light"
 
@@ -68,14 +73,20 @@ struct AppSettings {
 	}
 
 	void save() const {
+#ifndef Q_OS_WIN
+		// QSettings writes a temp file and renames it over the old one; under the
+		// usual 022 umask that file is world-readable until the chmod below. 077
+		// makes it owner-only from creation.
+		const mode_t oldMask = ::umask(077);
+#endif
 		QSettings s(QStringLiteral("voidwalk"), QStringLiteral("voidwalk-gui"));
 		s.setValue(QStringLiteral("ui/theme"), theme);
 		s.setValue(QStringLiteral("ai/enabled"), aiEnabled);
 		// A key supplied through the environment is not ours to persist: writing it
 		// out would defeat the whole point of putting it there. Clear any stored
 		// copy at the same time, so setting the variable once also cleans up a key
-		// saved before it existed.
-		if (aiKeyFromEnv)
+		// saved before it existed. Nor is a key kept for a pane that is turned off.
+		if (aiKeyFromEnv || !aiEnabled)
 			s.remove(QStringLiteral("ai/apiKey"));
 		else
 			s.setValue(QStringLiteral("ai/apiKey"), aiApiKey);
@@ -84,11 +95,13 @@ struct AppSettings {
 		s.setValue(QStringLiteral("ai/contextLines"), aiContextLines);
 		s.sync(); // the file has to exist before its permissions can be set
 		restrictStorePermissions(s);
+#ifndef Q_OS_WIN
+		::umask(oldMask);
+#endif
 	}
 
 private:
-	// QSettings creates the file with the process umask — 0644 on a stock Linux,
-	// i.e. world-readable, for a file that can hold an API key. Narrow it to the
+	// A settings file written by an older build may still be 0644. Narrow it to the
 	// owner. No-op on Windows, where the backend is the registry and the ACL
 	// already follows HKCU.
 	static void restrictStorePermissions(const QSettings& s) {

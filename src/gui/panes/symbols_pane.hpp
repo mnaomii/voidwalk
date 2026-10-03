@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vector>
 
+class QAction;
 class QLabel;
 class QLineEdit;
 class QTreeWidget;
@@ -15,9 +16,10 @@ class QTreeWidgetItem;
 namespace gui {
 
 // Symbol sidebar: FUNCTIONS / IMPORTS / STRINGS, each a collapsible group with
-// name on the left and address (or module) on the right. Selecting a row emits
-// navigateRequested(vaddr); MainWindow forwards that to the disassembly pane,
-// which is why the toolbar's field can shrink to raw addresses only — symbol
+// name on the left and address (or module) on the right. Selecting a function
+// emits navigateRequested(vaddr), which MainWindow forwards to the disassembly
+// pane; selecting a string emits memoryRequested(fileOffset) for the memory pane.
+// That is why the toolbar's field can shrink to raw addresses only — symbol
 // lookup lives here, in the filter box, instead of behind a dialog.
 //
 // Contents come from collectSymbols() (model/symbols.h), so the pane needs no
@@ -46,6 +48,7 @@ public slots:
 
 signals:
 	void navigateRequested(uint64_t vaddr);
+	void memoryRequested(uint64_t fileOffset);
 
 private:
 	void rebuild();                       // re-applies filter_ to symbols_
@@ -56,6 +59,7 @@ private:
 	QLabel* header_ = nullptr;
 	QLabel* countLabel_ = nullptr;
 	QLineEdit* filter_ = nullptr;
+	QAction* clearAct_ = nullptr;         // filter_'s clear button, shown while it has text
 	QTreeWidget* tree_ = nullptr;
 	std::vector<SymbolInfo> symbols_;
 

@@ -42,20 +42,30 @@ Session::Session(std::shared_ptr<AddressSpace> space,
 	refresh();
 }
 
-// Drops the previous sweep's rows so refresh() appends from zero.
+// Drops the previous sweep's rows.
 void Session::onDecodeStarted() {
-	disasmLines_.clear();
-	builtInstrs_ = 0;
+	shownInstrs_ = 0;
+	extraLines_.clear();
+}
+
+std::string Session::disassemblyRow(size_t i) const {
+	if (i >= shownInstrs_)
+		return i - shownInstrs_ < extraLines_.size() ? extraLines_[i - shownInstrs_] : std::string();
+	// i < shownInstrs_ <= the worker's published count, so both stores hold row i.
+	return "  " + hexAddr(disassembler_->getInstructionAddresses()[i]) + "  "
+		+ disassembler_->getDecodedInstructions()[i]->decodeLineString();
 }
 
 void Session::refresh() {
+	throwIfFileChanged();
 	regRows_.clear();
+	for (auto& rows : vecRows_) rows.clear();
 	stackRows_.clear();
+	extraLines_.clear();
+	shownInstrs_ = 0;
 
 	if (!loaded()) {
-		disasmLines_.clear();
-		builtInstrs_ = 0;
-		disasmLines_.push_back("  [no binary loaded - use Open]");
+		extraLines_.push_back("  [no binary loaded - use Open]");
 		regRows_.push_back("  [no binary loaded]");
 		stackRows_.push_back("  [no binary loaded]");
 		return;
@@ -65,55 +75,36 @@ void Session::refresh() {
 	// Real path: the strings the mnemonic layer produced during runDecode().
 	// Fallback path: the decoder for this arch is still a stub, so show the raw
 	// .text bytes and say why nothing decoded rather than silently showing "??".
-	const auto& decoded = disassembler_->getDecodedInstructions();
-	const auto& addresses = disassembler_->getInstructionAddresses();
 	// Only [0, ready) is safe to read while decode() runs on the worker; this
 	// acquire pairs with the worker's release store of readyCount.
 	const size_t ready = disassembler_->readyInstructions();
 	// The note is only safe to read once the worker has stopped (see isDecoding).
 	const std::string note = (!isDecoding() && decodeState_) ? decodeState_->note : std::string();
 	if (ready > 0) {
-		// APPEND-ONLY. The instruction lines in [0, builtInstrs_) were built on a
-		// previous poll and never change, so drop only the trailing status line from
-		// last time (resize to builtInstrs_) and append the new instructions. This is
-		// what stops every frame during decode from rebuilding the whole vector —
-		// the O(n²) that made a large binary crawl in the TUI.
-		disasmLines_.resize(builtInstrs_);
-		for (size_t i = builtInstrs_; i < ready; ++i) {
-			// Both vectors have >= ready elements (readyCount is published only once
-			// they are consistent), so index directly. Do NOT call addresses.size()
-			// here — that would race the worker's push_back on the same store.
-			std::string addr = hexAddr(addresses[i]) + "  ";
-			disasmLines_.push_back("  " + addr + decoded[i]->decodeLineString());
-		}
-		builtInstrs_ = ready;
+		shownInstrs_ = ready;   // the rows themselves are read through on demand
 		if (isDecoding())
-			disasmLines_.push_back("  ... decoding");
+			extraLines_.push_back("  ... decoding");
 		else if (!note.empty())
-			disasmLines_.push_back("  ... decode stopped: " + note);
+			extraLines_.push_back("  ... decode stopped: " + note);
 	}
 	else if (isDecoding()) {
-		disasmLines_.clear();
-		builtInstrs_ = 0;
-		disasmLines_.push_back("  [decoding...]");
+		extraLines_.push_back("  [decoding...]");
 	}
 	else {
-		disasmLines_.clear();
-		builtInstrs_ = 0;
 		// Every .text section, in table order. The row cap is shared across all of them.
-		const std::vector<Header>& texts = disassembler_->getSections()._text;
+		const std::vector<Header>& texts = disassembler_->getSections().text;
 		uint64_t size = 0;
 		for (const Header& text : texts)
 			size += text.getSize();
 		if (size == 0) {
-			disasmLines_.push_back("  [.text section not found or empty]");
+			extraLines_.push_back("  [.text section not found or empty]");
 		}
 		else {
-			disasmLines_.push_back(note.empty()
+			extraLines_.push_back(note.empty()
 				? "  [no instructions decoded - decodeLine() is a stub for " + architecture() + "]"
 				: "  [decode failed: " + note + "]");
-			disasmLines_.push_back("  [raw .text bytes follow]");
-			disasmLines_.push_back("");
+			extraLines_.push_back("  [raw .text bytes follow]");
+			extraLines_.push_back("");
 
 			constexpr uint64_t kMaxPlaceholderRows = 512;
 			uint64_t rows = 0; // bytes requested so far, across sections
@@ -126,12 +117,12 @@ void Session::refresh() {
 				for (size_t i = 0; i < raw.size(); ++i) {
 					char line[64];
 					std::snprintf(line, sizeof(line), "%s  %02X", hexAddr(vaddr + i).c_str(), raw[i]);
-					disasmLines_.push_back(line);
+					extraLines_.push_back(line);
 				}
 				rows += want;
 			}
 			if (size > rows)
-				disasmLines_.push_back("  ... (" + std::to_string(size - rows) + " more bytes)");
+				extraLines_.push_back("  ... (" + std::to_string(size - rows) + " more bytes)");
 		}
 	}
 
@@ -139,15 +130,13 @@ void Session::refresh() {
 	// Values are the core's emulated Registers struct (all zero until the
 	// debugger/emulator exists) - real plumbing, placeholder semantics.
 	const Registers_x86_64& r = disassembler_->getRegisters();
-	regRows_.push_back("eax " + hex64(r.rax));
-	regRows_.push_back("ebx " + hex64(r.rbx));
-	regRows_.push_back("ecx " + hex64(r.rcx));
-	regRows_.push_back("edx " + hex64(r.rdx));
-	regRows_.push_back("esi " + hex64(r.rsi));
-	regRows_.push_back("edi " + hex64(r.rdi));
-	regRows_.push_back("ebp " + hex64(r.rbp));
-	regRows_.push_back("esp " + hex64(r.rsp));
-	regRows_.push_back("eip " + hex64(r.rip));
+	const bool wide = is64bit();   // rax.. for a 64-bit target, eax.. otherwise
+	auto reg = [&](const char* name, uint64_t v) {
+		regRows_.push_back((wide ? "r" : "e") + std::string(name) + " " + hex64(v));
+	};
+	reg("ax", r.rax); reg("bx", r.rbx); reg("cx", r.rcx); reg("dx", r.rdx);
+	reg("si", r.rsi); reg("di", r.rdi); reg("bp", r.rbp); reg("sp", r.rsp);
+	reg("ip", r.rip);
 	regRows_.push_back("");
 	regRows_.push_back("cs  " + hex64(r.cs) + "   ds  " + hex64(r.ds));
 	regRows_.push_back("ss  " + hex64(r.ss) + "   es  " + hex64(r.es));
@@ -159,6 +148,22 @@ void Session::refresh() {
 		regRows_.push_back(flagRow);
 	}
 	regRows_.push_back("[emulated - debugger WIP]");
+
+	// Vector registers: one wide hex number each, most significant qword first.
+	for (size_t i = 0; i < voidwalk::kMmRegs.size(); ++i)
+		vecRows_[0].push_back("mm" + std::to_string(i) + " " + hex64(r.*voidwalk::kMmRegs[i]));
+	auto vecs = [&]<size_t N, size_t M>(std::vector<std::string>& rows, const char* prefix,
+	                                    const std::array<voidwalk::ExtendedType<N> Registers_x86_64::*, M>& regs) {
+		for (size_t i = 0; i < M; ++i) {
+			std::string row = prefix + std::to_string(i) + " 0x";
+			for (size_t q = N / 8; q-- > 0;)
+				row += hex64((r.*regs[i]).qword(q)).substr(2);
+			rows.push_back(std::move(row));
+		}
+	};
+	vecs(vecRows_[1], "xmm", voidwalk::kXmmRegs);
+	vecs(vecRows_[2], "ymm", voidwalk::kYmmRegs);
+	vecs(vecRows_[3], "zmm", voidwalk::kZmmRegs);
 
 	// --- stack ------------------------------------------------------------
 	// The core no longer keeps a simulated stack (Disassembler::virtStack was

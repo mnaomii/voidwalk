@@ -13,28 +13,28 @@ void Disassembler::decode(std::stop_token stopToken) {
 	decodedInstructions.clear();
 	instructionAddresses.clear();
 
-	size_t worst{};
-	for (const auto _txt : baseSections._text)
-		worst += _txt.getSize();
+	size_t totalTextSize{};
+	for (const auto textSection : commonSections.text)
+		totalTextSize += textSection.getSize();
 
-	decodedInstructions.reserveFor(worst);
-	instructionAddresses.reserveFor(worst);
+	decodedInstructions.reserveFor(totalTextSize);
+	instructionAddresses.reserveFor(totalTextSize);
 
 	readyCount.store(0, std::memory_order_relaxed);
 
-	for (auto _txt : baseSections._text) {
+	for (auto textSection : commonSections.text) {
 
-		const uint64_t start = _txt.getOffset();
-		const uint64_t end = start + _txt.getSize();
+		const uint64_t start = textSection.getOffset();
+		const uint64_t end = start + textSection.getSize();
 
-		uint64_t ptr = start;
-		uint64_t vaddr = _txt.getVaddr();
+		uint64_t currentOffset = start;
+		uint64_t vaddr = textSection.getVaddr();
 
-		while (ptr < end) {
+		while (currentOffset < end) {
 			if (stopToken.stop_requested()) break; // re-open / shutdown asked to bail
 
 			const uint64_t lineVaddr = vaddr;
-			uint64_t next = decodeLine(ptr, vaddr);
+			uint64_t nextOffset = decodeLine(currentOffset, vaddr);
 
 			while (instructionAddresses.size() < decodedInstructions.size())
 				instructionAddresses.push_back(lineVaddr);
@@ -42,12 +42,12 @@ void Disassembler::decode(std::stop_token stopToken) {
 
 			readyCount.store(decodedInstructions.size(), std::memory_order_release);
 
-			if (next <= ptr) break;
+			if (nextOffset <= currentOffset) break;
 
 			emitDecodedLine();
 
-			vaddr += next - ptr;
-			ptr = next;
+			vaddr += nextOffset - currentOffset;
+			currentOffset = nextOffset;
 
 		}
 	}
@@ -58,9 +58,9 @@ void Disassembler::decode(std::stop_token stopToken) {
 // Hands one instruction to the architecture's decoder. A null decoder means the
 // container named a machine number we do not recognise at all - the message is the
 // one the per-format switches used to throw for their `default` case.
-uint64_t Disassembler::decodeLine(uint64_t address, uint64_t vaddr) {
+uint64_t Disassembler::decodeLine(uint64_t fileOffset, uint64_t vaddr) {
 	if (!decoder) throw std::runtime_error("Invalid architecture. Cannot parse.");
-	return decoder->decodeLine(contents, address, vaddr, decodedInstructions);
+	return decoder->decodeLine(contents, fileOffset, vaddr, decodedInstructions);
 }
 
 
@@ -71,14 +71,14 @@ void Disassembler::emitDecodedLine(bool showVaddr) {
 	for(auto stream : outputStreams)
 	{
 		if (showVaddr)
-			*stream << std::hex << std::setfill('0') << std::setw(8)
-			<<   instructionAddresses[instrDecodePos]  << ":  ";
+			*stream << std::hex << std::setfill('0') << std::right << std::setw(8)
+			<<   instructionAddresses[nextEmitIndex]  << ":  ";
 
 		*stream << std::setfill(' ') << std::left << std::setw(24)
-		<< decodedInstructions[instrDecodePos]->getMachineCode() << ' '
-		<< decodedInstructions[instrDecodePos]->decodeLineString() << '\n';
+		<< decodedInstructions[nextEmitIndex]->getMachineCode() << ' '
+		<< decodedInstructions[nextEmitIndex]->decodeLineString() << '\n';
 	}
-	instrDecodePos++;
+	nextEmitIndex++;
 }
 
 } // namespace voidwalk

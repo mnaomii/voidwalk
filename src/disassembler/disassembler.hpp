@@ -19,7 +19,7 @@ namespace voidwalk {
 // The four sections every container has in common. Format-specific extras live in
 // the ELF_Sections / PE_Sections structs beside their own reader.
 struct Sections {
-    std::vector<Header> _text, _data, _ronly, _bss;
+    std::vector<Header> text, data, readOnly, bss;
 };
 
 
@@ -30,18 +30,19 @@ struct Sections {
 class Disassembler {
 
 private:
-    size_t instrDecodePos{};
+    size_t nextEmitIndex{};
     std::vector<std::ostream*> outputStreams;
 
 
 protected:
 
     uint64_t imageBase{};
+    uint64_t entryAddress{};   // entry point vaddr, set by the subclass from its header
 
     InstructionStore decodedInstructions;
     ChunkStore<uint64_t> instructionAddresses;
     //std::vector<uint64_t> virtStack;
-    Sections baseSections;
+    Sections commonSections;
     uint64_t offset;
 
     // Set by setArch() from the subclass constructor, before setHeadersOffsets().
@@ -56,13 +57,13 @@ protected:
 
     // Records the architecture the subclass read from the container header and
     // builds the matching decoder. Leaves `decoder` null for Arch::Unknown.
-    void setArch(Arch a) { arch = a; decoder = makeDecoder(a); }
+    void setArch(Arch targetArch) { arch = targetArch; decoder = makeDecoder(targetArch); }
 
     std::atomic<size_t> readyCount{0};
 
 public:
-    Disassembler(AddressSpace& temp, const std::vector<std::ostream*>& stream)
-        : contents(temp), arch(Arch::Unknown), offset(0x00), outputStreams(stream) {};
+    Disassembler(AddressSpace& addressSpace, const std::vector<std::ostream*>& streams)
+        : outputStreams(streams), offset(0x00), arch(Arch::Unknown), contents(addressSpace) {};
 
     // Prints the last decoded line to all the specified streams.
     void emitDecodedLine(bool showVaddr = true) ;
@@ -73,11 +74,14 @@ public:
     // Returns the architecture this binary targets.
     Arch architecture() const { return arch; }
 
-    // Decodes the instruction at file offset `address` (runtime address `vaddr`)
+    // Virtual address execution starts at (ELF e_entry, PE ImageBase + AddressOfEntryPoint).
+    uint64_t entryPoint() const { return entryAddress; }
+
+    // Decodes the instruction at file offset `fileOffset` (runtime address `vaddr`)
     // and appends it. Returns the offset of the next instruction; a value
-    // <= `address` means no forward progress. Throws std::runtime_error if the
+    // <= `fileOffset` means no forward progress. Throws std::runtime_error if the
     // architecture was not recognised.
-    uint64_t decodeLine(uint64_t address, uint64_t vaddr);
+    uint64_t decodeLine(uint64_t fileOffset, uint64_t vaddr);
 
     virtual ~Disassembler() = default;
 
@@ -95,7 +99,7 @@ public:
     // cannot be allowed (see chunk_store.hpp). Index them only in [0, readyInstructions()).
     const InstructionStore& getDecodedInstructions() const { return decodedInstructions; }
     const ChunkStore<uint64_t>& getInstructionAddresses() const { return instructionAddresses; }
-    const Sections& getSections() const { return baseSections; }
+    const Sections& getSections() const { return commonSections; }
     AddressSpace& getAddressSpace() { return contents; }
 
     size_t readyInstructions() const { return readyCount.load(std::memory_order_acquire); }

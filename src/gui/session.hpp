@@ -72,8 +72,10 @@ public:
 	size_t rowCount() const { return rows_; }
 	uint64_t rowVaddr(size_t i) const;
 	std::string rowText(size_t i) const; // formatted mnemonic + operands
+	Instruction::Flow rowFlow(size_t i) const;
+	uint64_t rowTarget(size_t i) const;
 
-	uint64_t textVaddr() const;
+	uint64_t entryPoint() const;
 	std::vector<SectionInfo> sections() const;
 	std::vector<uint8_t> bytes(uint64_t offset, size_t count) const;
 
@@ -114,6 +116,9 @@ public:
 	uint64_t rowVaddr(size_t i) const;
 	std::string rowBytes(size_t i) const; // machine-code hex, trailing space trimmed
 	std::string rowText(size_t i) const;  // formatted mnemonic + operands
+	// The row's control flow and direct branch target (0 if none); see Instruction.
+	Instruction::Flow rowFlow(size_t i) const;
+	uint64_t rowTarget(size_t i) const;
 
 	// Core's emulated register file (all zero until the debugger exists) and
 	// simulated stack (empty until execution exists). Valid only when loaded().
@@ -139,23 +144,18 @@ public:
 	// how a re-open restarts the view from zero.
 	void refresh();
 
-	// Bumped once per decode start. The disassembly view watches it: a change means
-	// the row content is entirely new, so it resets rather than diffing row counts.
-	uint64_t decodeGeneration() const { return decodeGen_; }
-
 	// A snapshot of the rows published so far, safe to hand to a worker thread —
 	// see Snapshot. Empty (but valid) while the arch decoder is a stub.
 	Snapshot snapshot() const;
 
 private:
-	// Drops the previous sweep's view state and bumps the generation counter.
+	// Drops the previous sweep's view state.
 	void onDecodeStarted() override;
 
 	// Fills fallbackRows_ (small, capped) for an architecture whose decoder is a stub.
 	void buildFallback();
 
 	bool decodedForReal_ = false;
-	uint64_t decodeGen_ = 0;
 
 	// Real decode: the count the worker has published (rows are read through to the
 	// core, never copied here). Stub arch: the small capped raw-bytes fallback,

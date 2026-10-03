@@ -13,21 +13,38 @@
 
 #include <QAction>
 #include <QDockWidget>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
+#include <QMimeData>
 #include <QScreen>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QUrl>
 
 #include <algorithm>
 
 namespace gui {
+
+namespace {
+
+// The first dropped URL when it is a local regular file, else "".
+QString droppedFile(const QMimeData* mime) {
+	const QList<QUrl> urls = mime->urls();
+	if (urls.isEmpty() || !urls.first().isLocalFile()) return {};
+	const QString path = urls.first().toLocalFile();
+	return QFileInfo(path).isFile() ? path : QString();
+}
+
+} // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	setWindowTitle(tr("voidwalk"));
@@ -45,6 +62,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 	// better closed than squeezed.
 	setMinimumSize(720, 480);
 	setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowTabbedDocks);
+	setAcceptDrops(true);
 
 	settings_ = AppSettings::load();
 	applyTheme(); // style/palette/QSS + icon colors, before any widget paints
@@ -55,7 +73,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
 	welcome_ = new WelcomeWidget(this);
 	connect(welcome_, &WelcomeWidget::openRequested, this, &MainWindow::onOpen);
-	connect(welcome_, &WelcomeWidget::fileDropped, this, &MainWindow::openPath);
 
 	central_ = new QStackedWidget(this);
 	central_->addWidget(welcome_);
@@ -230,6 +247,13 @@ void MainWindow::buildDocks() {
 		disasm_->navigateTo(vaddr);
 		setStatus(tr("Jumped to 0x%1").arg(vaddr, 8, 16, QLatin1Char('0')));
 	});
+	// Strings are data, not code: show them in the memory pane at their file offset.
+	connect(symbols_, &SymbolsPane::memoryRequested, this, [this](uint64_t offset) {
+		memoryDock_->show();
+		memoryDock_->raise();
+		memory_->gotoOffset(offset);
+		setStatus(tr("Showing file offset 0x%1").arg(offset, 8, 16, QLatin1Char('0')));
+	});
 	// Two-way binding: the toolbar button drives the dock, closing the dock (or
 	// the View-menu entry) un-checks the button.
 	connect(sidebarAct_, &QAction::toggled, symbolsDock_, &QWidget::setVisible);
@@ -355,6 +379,15 @@ void MainWindow::openPath(const QString& path) {
 
 	refreshAll();
 	setStatus(QString::fromStdString(session_.status()));
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event) {
+	if (!droppedFile(event->mimeData()).isEmpty())
+		event->acceptProposedAction();
+}
+
+void MainWindow::dropEvent(QDropEvent* event) {
+	openPath(droppedFile(event->mimeData()));
 }
 
 void MainWindow::onDecodeTick() {

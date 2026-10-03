@@ -19,15 +19,15 @@ class ELF_Sections_Tests : public Tests {
 
         expect_eq(d.getArchitecture(), arch, label + " architecture");
         // The fixture's section table has exactly one .text.
-        if (expect_eq((long long)s._text.size(), 1, label + " exactly one .text")) {
-            const Header& text = s._text.front();
+        if (expect_eq((long long)s.text.size(), 1, label + " exactly one .text")) {
+            const Header& text = s.text.front();
             expect_eq((long long)text.getVaddr(),  (long long)fx.text.vaddr,  label + " .text vaddr");
             expect_eq((long long)text.getOffset(), (long long)fx.text.offset, label + " .text offset");
             expect_eq((long long)text.getSize(),   (long long)fx.text.size,   label + " .text size");
         }
         // .bss is not present in the fixture's section table: its list must stay empty,
         // proving the parser only records sections it actually finds.
-        expect_eq((long long)s._bss.size(), 0, label + " absent .bss stays empty");
+        expect_eq((long long)s.bss.size(), 0, label + " absent .bss stays empty");
     }
 
     void runAll() {

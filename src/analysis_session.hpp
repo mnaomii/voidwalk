@@ -15,11 +15,12 @@ namespace voidwalk {
 // it independently of the Session.
 //
 // `running` is the acquire/release flag readers poll. `note` is the decode's error
-// message, written before `running` is cleared and therefore readable only once
-// `running` reads false.
+// message and `fileChanged` says the error was a FileChanged; both are written
+// before `running` is cleared and therefore readable only once `running` reads false.
 struct DecodeState {
 	std::atomic<bool> running{false};
 	std::string note;
+	bool fileChanged = false;
 };
 
 // Everything a frontend needs from a loaded binary that is not presentation: the
@@ -60,7 +61,7 @@ public:
 
 	// Status-bar message. Also carries "not implemented yet" for stub actions.
 	const std::string& status() const { return status_; }
-	void setStatus(std::string s) { status_ = std::move(s); }
+	void setStatus(std::string message) { status_ = std::move(message); }
 
 	// True while the decode worker is still running. Poll this to keep refreshing.
 	bool isDecoding() const {
@@ -71,6 +72,10 @@ public:
 	// Reads empty while isDecoding() is true: the note is not safe to read until the
 	// worker has published it by clearing `running`.
 	const std::string& decodeNote() const;
+
+	// Rethrows, on the calling (UI) thread, a FileChanged the decode worker hit, so
+	// it exits through the same path as a FileChanged from a UI-thread read.
+	void throwIfFileChanged() const;
 
 	void compact();
 
@@ -87,6 +92,13 @@ public:
 
 	// Virtual address of .text; 0 when nothing is loaded or it was not found.
 	uint64_t textVaddr() const;
+
+	// The binary's entry point vaddr; 0 when nothing is loaded.
+	uint64_t entryPoint() const { return loaded() ? disassembler_->entryPoint() : 0; }
+
+	// Bumped once per decode start. A view that sees it change knows every row is
+	// new content (a re-open, even of the same path) and resets instead of diffing.
+	uint64_t decodeGeneration() const { return decodeGeneration_; }
 
 protected:
 	// Installs a binary and starts decoding it. `format` is stored as-is so a caller
@@ -111,6 +123,7 @@ protected:
 	std::string format_;
 	std::string status_;
 	std::shared_ptr<DecodeState> decodeState_;
+	uint64_t decodeGeneration_ = 0;
 
 	// Declared LAST so it is destroyed - and therefore joined - before decodeState_,
 	// disassembler_ and space_ are torn down.

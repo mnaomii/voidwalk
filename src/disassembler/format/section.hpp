@@ -27,8 +27,8 @@ public:
     // An absent section: all three fields zero.
     Header() : vaddr(0), offset(0), size(0) {};
 
-    // v = runtime virtual address, o = file offset, s = size in bytes.
-    Header(uint64_t v, uint64_t o, uint64_t s) : vaddr(v), offset(o), size(s) {};
+    // Runtime virtual address, file offset, and size in bytes.
+    Header(uint64_t virtualAddress, uint64_t fileOffset, uint64_t sizeInBytes) : vaddr(virtualAddress), offset(fileOffset), size(sizeInBytes) {};
 
     void setVaddr(uint64_t value) { vaddr = value; }
     void setOffset(uint64_t value) { offset = value; }

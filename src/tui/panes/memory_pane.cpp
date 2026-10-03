@@ -16,7 +16,7 @@ namespace {
 
 // "%08X  4D 5A 90 00 00 00 00 00  00 00 00 00 00 00 00 00  MZ.............."
 std::string formatHexRow(uint64_t rowIndex, const std::vector<uint8_t>& raw) {
-	char offsetBuf[9];
+	char offsetBuf[17];   // 8 digits is the minimum; an offset past 4 GiB needs up to 16
 	std::snprintf(offsetBuf, sizeof(offsetBuf), "%08llX", static_cast<unsigned long long>(rowIndex * 16));
 
 	std::string hexPart;
@@ -42,13 +42,12 @@ std::string formatHexRow(uint64_t rowIndex, const std::vector<uint8_t>& raw) {
 // aren't discrete selectable rows, just a scrolled byte window).
 class MemoryPaneImpl : public ftxui::ComponentBase {
 public:
-	explicit MemoryPaneImpl(Session& session) : session_(session) {
-		rowOffset_ = session_.textOffset() / 16;
-	}
+	explicit MemoryPaneImpl(Session& session) : session_(session) { sync(); }
 
 	bool Focusable() const override { return true; }
 
 	bool OnEvent(ftxui::Event event) override {
+		sync();
 		size_t total = session_.binarySize();
 		if (total == 0) return false;
 		uint64_t totalRows = (total + 15) / 16;
@@ -78,6 +77,7 @@ public:
 	}
 
 	ftxui::Element OnRender() override {
+		sync();
 		ftxui::Element title = ftxui::text("Memory");
 		if (Focused()) title = title | ftxui::inverted; // visible focus cue
 
@@ -104,11 +104,19 @@ public:
 	}
 
 private:
+	// A new decode means a new (or rebuilt) binary: start again at its .text.
+	void sync() {
+		if (gen_ == session_.decodeGeneration()) return;
+		gen_ = session_.decodeGeneration();
+		rowOffset_ = session_.textOffset() / 16;
+	}
+
 	static constexpr uint64_t kVisibleRows = 40;
 	static constexpr uint64_t kPageRows = 16;
 
 	Session& session_;
 	uint64_t rowOffset_ = 0;
+	uint64_t gen_ = ~0ull;   // Session::decodeGeneration() rowOffset_ was set for
 };
 
 } // namespace

@@ -13,12 +13,11 @@ namespace tui {
 namespace {
 
 // Scrollable disassembly list with its own cursor + window state. It renders ONLY
-// the lines around the cursor, never the whole vector: feeding all of
-// Session::disassemblyLines() to a Menu (as this pane used to) builds a DOM element
-// per line every single frame — O(n) — which made a large binary crawl even after
-// decode finished. The window follows the cursor; yframe + focus do the fine scroll
-// within the pane's actual height. session.disassemblyLines() is read fresh every
-// render, and refresh() only appends/clears it, so there are no stale iterators.
+// the rows around the cursor: feeding every row to a Menu (as this pane used to)
+// builds a DOM element per line every single frame — O(n) — which made a large
+// binary crawl even after decode finished. The window follows the cursor; yframe +
+// focus do the fine scroll within the pane's actual height. Rows are built on
+// demand by Session::disassemblyRow(), so only the window's rows are ever formatted.
 class DisassemblyPaneImpl : public ftxui::ComponentBase {
 public:
 	explicit DisassemblyPaneImpl(Session& session) : session_(session) {}
@@ -26,7 +25,7 @@ public:
 	bool Focusable() const override { return true; }
 
 	bool OnEvent(ftxui::Event event) override {
-		const int total = static_cast<int>(session_.disassemblyLines().size());
+		const int total = static_cast<int>(session_.disassemblyRowCount());
 		if (total == 0) return false;
 
 		if (event == ftxui::Event::ArrowUp)   { move(-1, total); return true; }
@@ -42,12 +41,11 @@ public:
 		ftxui::Element title = ftxui::text("Disassembly");
 		if (Focused()) title = title | ftxui::inverted; // visible focus cue
 
-		const auto& lines = session_.disassemblyLines();
-		const int total = static_cast<int>(lines.size());
+		const int total = static_cast<int>(session_.disassemblyRowCount());
 		if (total == 0)
 			return ftxui::window(title, ftxui::text("  [decoding...]"));
 
-		// The vector can shrink when a new (smaller) file is opened.
+		// The row count can shrink when a new (smaller) file is opened.
 		if (selected_ >= total) selected_ = total - 1;
 		if (selected_ < 0) selected_ = 0;
 
@@ -62,7 +60,7 @@ public:
 		ftxui::Elements out;
 		out.reserve(static_cast<size_t>(end - rowOffset_));
 		for (int idx = rowOffset_; idx < end; ++idx) {
-			ftxui::Element row = ftxui::text(lines[static_cast<size_t>(idx)]);
+			ftxui::Element row = ftxui::text(session_.disassemblyRow(static_cast<size_t>(idx)));
 			if (idx == selected_) {
 				// inverted = the highlight; focus/select = the anchor yframe scrolls to
 				// (focus while this pane holds focus, the weaker select otherwise).

@@ -55,7 +55,7 @@ class RealBinary_Tests : public Tests {
         expect(arch != "Unknown", "architecture is recognised (" + arch + ")");
 
         // Every .text section counts: the sweep covers all of them.
-        const std::vector<Header>& texts = d->getSections()._text;
+        const std::vector<Header>& texts = d->getSections().text;
         uint64_t size = 0;
         for (const Header& t : texts)
             size += t.getSize();

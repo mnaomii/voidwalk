@@ -7,14 +7,14 @@
 
 namespace voidwalk {
 
-// Returns the decoder for `a`, or nullptr for Arch::Unknown.
+// Returns the decoder for `arch`, or nullptr for Arch::Unknown.
 //
 // Unknown yields nullptr rather than a throwing stub because "the architecture
 // was not identified" and "the architecture is known but undecodable" are
 // different failures: Disassembler::decodeLine reports the first, the stub
 // decoders report the second.
-std::unique_ptr<Decoder> makeDecoder(Arch a) {
-    switch (a) {
+std::unique_ptr<Decoder> makeDecoder(Arch arch) {
+    switch (arch) {
         case Arch::X86:     return std::make_unique<X86Decoder>(false);
         case Arch::X86_64:  return std::make_unique<X86Decoder>(true);
         case Arch::ARM32:   return std::make_unique<Arm32Decoder>();

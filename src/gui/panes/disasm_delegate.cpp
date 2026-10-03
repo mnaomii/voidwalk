@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QHelpEvent>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QSet>
 #include <QToolTip>
 #include <algorithm>
@@ -13,13 +14,16 @@
 namespace gui {
 
 namespace {
-bool isJumpMnemonic(const QString& w) {
-	// call/ret/loop and the whole jcc family.
-	if (w == QLatin1String("call") || w == QLatin1String("ret")
-		|| w == QLatin1String("retn") || w == QLatin1String("iret")
-		|| w.startsWith(QLatin1String("loop")))
-		return true;
-	return w.startsWith(QLatin1Char('j'));
+// Words the decoder prints ahead of the mnemonic: LOCK, REP/REPNE, BND, NOTRACK,
+// and a segment override no operand used (a branch hint).
+bool isPrefixWord(const QString& w) {
+	static const QSet<QString> prefixes = {
+		QStringLiteral("lock"), QStringLiteral("rep"), QStringLiteral("repne"),
+		QStringLiteral("bnd"), QStringLiteral("notrack"),
+		QStringLiteral("cs"), QStringLiteral("ds"), QStringLiteral("es"),
+		QStringLiteral("fs"), QStringLiteral("gs"), QStringLiteral("ss"),
+	};
+	return prefixes.contains(w);
 }
 
 bool isRegister(const QString& w) {
@@ -35,14 +39,15 @@ bool isRegister(const QString& w) {
 		QStringLiteral("si"), QStringLiteral("di"), QStringLiteral("bp"), QStringLiteral("sp"),
 		QStringLiteral("al"), QStringLiteral("bl"), QStringLiteral("cl"), QStringLiteral("dl"),
 		QStringLiteral("ah"), QStringLiteral("bh"), QStringLiteral("ch"), QStringLiteral("dh"),
-		// 64-bit, for the AMD64 decoder later
+		QStringLiteral("spl"), QStringLiteral("bpl"), QStringLiteral("sil"), QStringLiteral("dil"),
+		// 64-bit
 		QStringLiteral("rax"), QStringLiteral("rbx"), QStringLiteral("rcx"), QStringLiteral("rdx"),
 		QStringLiteral("rsi"), QStringLiteral("rdi"), QStringLiteral("rbp"), QStringLiteral("rsp"),
-		QStringLiteral("rip"), QStringLiteral("r8"), QStringLiteral("r9"), QStringLiteral("r10"),
-		QStringLiteral("r11"), QStringLiteral("r12"), QStringLiteral("r13"), QStringLiteral("r14"),
-		QStringLiteral("r15"),
+		QStringLiteral("rip"), QStringLiteral("st"),
 	};
-	return regs.contains(w);
+	// R8..R15 at every width (R8, R8D, R8W, R8B), and the MMX / XMM / YMM registers.
+	static const QRegularExpression numbered(QStringLiteral("^(r(8|9|1[0-5])[dwb]?|[xy]?mm([0-9]|1[0-5]))$"));
+	return regs.contains(w) || numbered.match(w).hasMatch();
 }
 
 bool isImmediate(const QString& w) {
@@ -82,10 +87,10 @@ bool DisasmDelegate::isBreakpoint(int row) const {
 	return std::find(breakpoints_.begin(), breakpoints_.end(), row) != breakpoints_.end();
 }
 
-std::vector<DisasmDelegate::Token> DisasmDelegate::tokenize(const QString& text) const {
+std::vector<DisasmDelegate::Token> DisasmDelegate::tokenize(const QString& text, bool branch) const {
 	std::vector<Token> out;
 	bool mnemonicSeen = false;
-	bool jumpContext = false; // color 0x… as a target after jmp/jcc/call
+	const bool jumpContext = branch; // color 0x… as a target after jmp/jcc/call
 	bool inComment = false;
 
 	int i = 0;
@@ -111,8 +116,7 @@ std::vector<DisasmDelegate::Token> DisasmDelegate::tokenize(const QString& text)
 
 			QColor color = theme_.text;
 			if (!mnemonicSeen) {
-				mnemonicSeen = true;
-				jumpContext = isJumpMnemonic(lower);
+				mnemonicSeen = !isPrefixWord(lower);   // prefixes share the mnemonic's color
 				color = jumpContext ? theme_.synJump : theme_.synMnemonic;
 			}
 			else if (isRegister(lower)) color = theme_.synRegister;
@@ -223,7 +227,9 @@ void DisasmDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
 		const qreal limit = overflows ? r.right() - fm.horizontalAdvance(ellipsis())
 		                              : static_cast<qreal>(r.right());
 		qreal x = r.left();
-		for (const Token& tok : tokenize(text)) {
+		const bool branch = index.data(DisassemblyPane::FlowRole).toInt()
+			!= static_cast<int>(voidwalk::Instruction::Flow::None);
+		for (const Token& tok : tokenize(text, branch)) {
 			if (x >= limit) break;
 			QString piece = tok.text;
 			qreal advance = fm.horizontalAdvance(piece);

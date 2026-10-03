@@ -14,7 +14,8 @@ namespace gui {
 // Contract:
 //   - ask() is called when the user sends a chat message. `userMessage` is the
 //     text typed; `context` is the analysis context the pane assembled for this
-//     turn (see AiChatPane — currently the visible disassembly plus file info).
+//     turn (see AiChatPane — currently the file name, format and architecture,
+//     plus the first aiContextLines rows of the disassembly, not the rows on screen).
 //   - Implementations run asynchronously and must emit exactly one of
 //     responseReady / errorOccurred per ask() call.
 //   - busy() lets the pane disable its input while a request is in flight.

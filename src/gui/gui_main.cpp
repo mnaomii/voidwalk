@@ -2,11 +2,33 @@
 #include "gui/theme/theme.hpp"
 #include "gui/main_window.hpp"
 
+#include "address_space.hpp"
+
 #include <QApplication>
+#include <iostream>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
+
+namespace {
+
+// Qt must not see an exception unwind through its event loop. A FileChanged from
+// any slot or event handler (the file shrank on disk mid-session) ends here
+// instead: report it and leave exec() normally with status 1.
+struct App : QApplication {
+	using QApplication::QApplication;
+	bool notify(QObject* receiver, QEvent* event) override {
+		try { return QApplication::notify(receiver, event); }
+		catch (const voidwalk::FileChanged& e) {
+			std::cerr << "voidwalk: " << e.what();
+			exit(1);
+			return true;
+		}
+	}
+};
+
+} // namespace
 
 // GUI entry point. Invoked from main/main.cpp's dispatcher for the "--gui" mode
 // (guarded by VOIDWALK_WITH_GUI) rather than being a main() of its own, so the
@@ -23,7 +45,7 @@ int start(int argc, char** argv) {
 	FreeConsole();
 #endif
 
-	QApplication app(argc, argv);
+	App app(argc, argv);
 	QApplication::setApplicationName(QStringLiteral("voidwalk-gui"));
 	QApplication::setOrganizationName(QStringLiteral("voidwalk"));
 

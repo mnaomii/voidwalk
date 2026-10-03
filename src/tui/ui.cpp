@@ -8,7 +8,9 @@
 #include "ftxui/component/screen_interactive.hpp"
 #include "ftxui/dom/elements.hpp"
 
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <thread>
 #include <utility>
@@ -61,18 +63,25 @@ int UI::start() {
 	auto layout = Container::Vertical({ topBar, body });
 
 	// decode() runs on a worker thread; re-derive the pane feeds each frame while
-	// it is still filling in, plus one final frame right after it finishes (so the
-	// completed disassembly and any "decode stopped" note land). prevDecoding
-	// carries the "was decoding last frame" edge so the final refresh happens once.
-	bool prevDecoding = true;
+	// it is still filling in, plus once after it finishes (so the completed
+	// disassembly and any "decode stopped" note land). refreshedGen is the decode
+	// generation that final refresh has been done for, so a decode that finishes
+	// before the next frame - a small binary, re-opened - is still picked up.
+	uint64_t refreshedGen = 0;
+	// Whether the heartbeat below should keep waking the loop. Written each frame.
+	std::atomic<bool> ticking{true};
 
 	// Whole-screen frame: top bar, body, then the (non-focusable) status bar,
 	// re-read from the Session every frame.
 	auto mainComponent = Renderer(layout, [&] {
-		if (session_.isDecoding() || prevDecoding) {
+		if (session_.isDecoding() || refreshedGen != session_.decodeGeneration()) {
+			// Read before refresh(): seeing the worker stopped is the acquire that
+			// makes every row visible to the refresh that follows.
+			const bool done = !session_.isDecoding();
 			session_.refresh();
-			prevDecoding = session_.isDecoding();
+			if (done) refreshedGen = session_.decodeGeneration();
 		}
+		ticking.store(refreshedGen != session_.decodeGeneration(), std::memory_order_relaxed);
 
 		std::string path = session_.filePath();
 		if (path.empty()) path = "-";
@@ -104,7 +113,8 @@ int UI::start() {
 	auto pathInputComp = Input(&pathInput, "path to binary");
 
 	auto btnLoad = Button("Load", [&] {
-		// open() sets status and refreshes internally; only close on success.
+		// open() sets status and bumps the decode generation, which makes the next
+		// frame refresh; only close on success.
 		if (session_.open(pathInput))
 			showOpen = false;
 	}, ButtonOption::Ascii());
@@ -153,14 +163,14 @@ int UI::start() {
 	mainComponent |= Modal(openDialog, &showOpen);
 
 	// Heartbeat: FTXUI only redraws on events, but the decode worker produces none.
-	// Post a custom event ~10x/s so the render loop above re-reads decode progress.
-	// A plain heartbeat (not tied to one decode) keeps working across re-opens; the
-	// Renderer itself decides when to actually rebuild. Declared after `screen` so
-	// it is stopped/joined before the screen is destroyed.
-	std::jthread ticker([&screen](std::stop_token st) {
+	// Post a custom event ~10x/s while a decode is unfinished, so the render loop
+	// above re-reads its progress; once it is done the loop sleeps until input.
+	// Declared after `screen` so it is stopped/joined before the screen is destroyed.
+	std::jthread ticker([&screen, &ticking](std::stop_token st) {
 		while (!st.stop_requested()) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			screen.PostEvent(Event::Custom);
+			if (ticking.load(std::memory_order_relaxed))
+				screen.PostEvent(Event::Custom);
 		}
 	});
 

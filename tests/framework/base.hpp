@@ -86,7 +86,7 @@ public:
     }
 
     // A check that is KNOWN to fail because of an open defect. `ref` names the defect
-    // (e.g. "instrDecodePos not reset") so the marker says what it is waiting on.
+    // (e.g. "nextEmitIndex not reset") so the marker says what it is waiting on.
     //
     //   cond == false -> xfail: expected, reported, does NOT fail the build.
     //   cond == true  -> XPASS: the defect looks fixed. That IS a failure, because the

@@ -259,12 +259,12 @@ class Malformed_Tests : public Tests {
             std::vector<std::ostream*> streams{ &sink };
             ELF_Disassembler d(as, streams);
             d.decode();
-            d.decode();   // instrDecodePos is never reset
+            d.decode();   // nextEmitIndex is never reset
         });
         expect_xfail(outcome != isolate::Outcome::Crashed,
                      std::string("decode() twice with an output stream -> ")
                          + isolate::describe(outcome),
-                     "instrDecodePos not reset (disassembler.cpp:398)");
+                     "nextEmitIndex not reset (disassembler.cpp:398)");
     }
 
     void runAll() {

@@ -49,6 +49,12 @@ public:
 	// path (no-op). Errors surface in the status bar, not a dialog.
 	void openPath(const QString& path);
 
+protected:
+	// A file dropped anywhere on the window opens it. Only a local regular file is
+	// accepted, so a directory or FIFO never reaches the loader.
+	void dragEnterEvent(QDragEnterEvent* event) override;
+	void dropEvent(QDropEvent* event) override;
+
 private slots:
 	void onOpen();
 	void onRecompile();

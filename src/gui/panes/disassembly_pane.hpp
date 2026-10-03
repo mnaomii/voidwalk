@@ -57,8 +57,8 @@ signals:
 	void editsChanged();
 
 private:
-	// The NOTES text for row i: resolved symbol for a call, direction for a jump,
-	// "" when there is nothing worth saying. Never invents facts.
+	// The NOTES text for row i: the callee's name for a direct call, "backward" for
+	// a jump that goes back, "" when there is nothing worth saying. Never invents facts.
 	QString noteFor(int row) const;
 
 	Session* session_ = nullptr;
@@ -84,6 +84,8 @@ class DisassemblyPane : public QWidget {
 public:
 	// Column order, shared with DisasmDelegate and DisasmModel.
 	enum Column { ColGutter = 0, ColAddress, ColBytes, ColInstruction, ColNotes, ColCount };
+	// The row's Instruction::Flow as an int, for the delegate to color branches by.
+	static constexpr int FlowRole = Qt::UserRole;
 
 	explicit DisassemblyPane(QWidget* parent = nullptr);
 
@@ -98,7 +100,7 @@ public:
 
 public slots:
 	void refresh();
-	// Scrolls to (and selects) the row at `vaddr`, or the closest row above it.
+	// Scrolls to (and selects) the row at `vaddr`, or the closest row below it.
 	// Wired to SymbolsPane::navigateRequested and the toolbar's address field.
 	void navigateTo(uint64_t vaddr);
 
