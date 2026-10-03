@@ -1,128 +1,193 @@
 #include "tui/panes/panes.hpp"
 
-#include "ftxui/component/component.hpp"
-#include "ftxui/component/component_base.hpp"
-#include "ftxui/component/event.hpp"
-#include "ftxui/dom/elements.hpp"
-
 #include <algorithm>
 #include <cstdio>
-#include <string>
-#include <vector>
 
 namespace tui {
 
+using namespace ftxui;
+
 namespace {
 
-// "%08X  4D 5A 90 00 00 00 00 00  00 00 00 00 00 00 00 00  MZ.............."
-std::string formatHexRow(uint64_t rowIndex, const std::vector<uint8_t>& raw) {
-	char offsetBuf[17];   // 8 digits is the minimum; an offset past 4 GiB needs up to 16
-	std::snprintf(offsetBuf, sizeof(offsetBuf), "%08llX", static_cast<unsigned long long>(rowIndex * 16));
-
-	std::string hexPart;
-	std::string asciiPart;
-	for (int i = 0; i < 16; ++i) {
-		if (i == 8) hexPart += ' '; // visual gap between the two 8-byte groups
-		if (static_cast<size_t>(i) < raw.size()) {
-			char byteBuf[4];
-			std::snprintf(byteBuf, sizeof(byteBuf), "%02X ", raw[i]);
-			hexPart += byteBuf;
-			unsigned char c = raw[i];
-			asciiPart += (c >= 0x20 && c <= 0x7E) ? static_cast<char>(c) : '.';
-		}
-		else {
-			hexPart += "   "; // keep column alignment past EOF
-			asciiPart += ' ';
-		}
-	}
-	return std::string(offsetBuf) + "  " + hexPart + " " + asciiPart;
+std::string sectionEntry(const SectionInfo& s) {
+	char buf[96];
+	std::snprintf(buf, sizeof(buf), "%s  (off 0x%llx, %llu bytes)", s.name.c_str(),
+	              static_cast<unsigned long long>(s.offset), static_cast<unsigned long long>(s.size));
+	return buf;
 }
-
-// Focusable hexdump with its own row-scroll state (no Menu here - entries
-// aren't discrete selectable rows, just a scrolled byte window).
-class MemoryPaneImpl : public ftxui::ComponentBase {
-public:
-	explicit MemoryPaneImpl(Session& session) : session_(session) { sync(); }
-
-	bool Focusable() const override { return true; }
-
-	bool OnEvent(ftxui::Event event) override {
-		sync();
-		size_t total = session_.binarySize();
-		if (total == 0) return false;
-		uint64_t totalRows = (total + 15) / 16;
-		uint64_t maxOffset = totalRows > 0 ? totalRows - 1 : 0;
-
-		if (event == ftxui::Event::ArrowUp) {
-			if (rowOffset_ > 0) --rowOffset_;
-			return true;
-		}
-		if (event == ftxui::Event::ArrowDown) {
-			if (rowOffset_ < maxOffset) ++rowOffset_;
-			return true;
-		}
-		if (event == ftxui::Event::PageUp) {
-			rowOffset_ = rowOffset_ > kPageRows ? rowOffset_ - kPageRows : 0;
-			return true;
-		}
-		if (event == ftxui::Event::PageDown) {
-			rowOffset_ = std::min(rowOffset_ + kPageRows, maxOffset);
-			return true;
-		}
-		if (event == ftxui::Event::Home) {
-			rowOffset_ = 0;
-			return true;
-		}
-		return false;
-	}
-
-	ftxui::Element OnRender() override {
-		sync();
-		ftxui::Element title = ftxui::text("Memory");
-		if (Focused()) title = title | ftxui::inverted; // visible focus cue
-
-		size_t total = session_.binarySize();
-		if (total == 0)
-			return ftxui::window(title, ftxui::text("[no binary loaded]"));
-
-		uint64_t totalRows = (total + 15) / 16;
-		uint64_t maxOffset = totalRows > 0 ? totalRows - 1 : 0;
-		if (rowOffset_ > maxOffset) rowOffset_ = maxOffset; // defensive: binary can shrink on reopen
-
-		uint64_t rowsToShow = kVisibleRows;
-		if (rowOffset_ + rowsToShow > totalRows) rowsToShow = totalRows - rowOffset_;
-
-		ftxui::Elements lines;
-		lines.reserve(static_cast<size_t>(rowsToShow));
-		for (uint64_t i = 0; i < rowsToShow; ++i) {
-			uint64_t row = rowOffset_ + i;
-			std::vector<uint8_t> raw = session_.bytes(row * 16, 16);
-			lines.push_back(ftxui::text(formatHexRow(row, raw)));
-		}
-
-		return ftxui::window(title, ftxui::vbox(std::move(lines)) | ftxui::yframe);
-	}
-
-private:
-	// A new decode means a new (or rebuilt) binary: start again at its .text.
-	void sync() {
-		if (gen_ == session_.decodeGeneration()) return;
-		gen_ = session_.decodeGeneration();
-		rowOffset_ = session_.textOffset() / 16;
-	}
-
-	static constexpr uint64_t kVisibleRows = 40;
-	static constexpr uint64_t kPageRows = 16;
-
-	Session& session_;
-	uint64_t rowOffset_ = 0;
-	uint64_t gen_ = ~0ull;   // Session::decodeGeneration() rowOffset_ was set for
-};
 
 } // namespace
 
-ftxui::Component MemoryPane(Session& session) {
-	return ftxui::Make<MemoryPaneImpl>(session);
+void MemoryPane::sync() {
+	const uint64_t gen = s_.loaded() ? s_.decodeGeneration() : 0;
+	if (gen == gen_) return;
+	gen_ = gen;
+	sections_ = s_.sections();
+	chosen_ = -1;
+	picking_ = editing_ = false;
+	at_ = Rows;
+	cursor_ = top_ = 0;   // MemoryPane::refresh() scrolls to the top on a new binary
+}
+
+size_t MemoryPane::totalRows() const {
+	return s_.loaded() ? (s_.binarySize() + 15) / 16 : 0;
+}
+
+void MemoryPane::gotoOffset(uint64_t offset) {
+	sync();
+	const size_t rows = totalRows();
+	if (rows == 0) return;
+	cursor_ = static_cast<size_t>(std::min<uint64_t>(offset / 16, rows - 1));
+	top_ = cursor_;   // PositionAtTop, as the Qt pane
+}
+
+ScrollState MemoryPane::scroll() const {
+	return {totalRows(), top_, static_cast<size_t>(vp_.rows())};
+}
+
+bool MemoryPane::tab(int d) {
+	const int next = at_ + d;
+	if (next < Section || next > Rows) return false;
+	at_ = static_cast<Stop>(next);
+	return true;
+}
+
+bool MemoryPane::onEvent(const Event& e) {
+	sync();
+	if (picking_) {
+		if (e == Event::Escape) { picking_ = false; return true; }
+		if (e == Event::ArrowUp) { if (pick_ > 0) --pick_; return true; }
+		if (e == Event::ArrowDown) { if (pick_ + 1 < sections_.size()) ++pick_; return true; }
+		if (e == Event::Return) {
+			chosen_ = static_cast<int>(pick_);
+			picking_ = false;
+			gotoOffset(sections_[pick_].offset);
+		}
+		return true;
+	}
+	if (editing_) {
+		if (e == Event::Escape) { editing_ = false; return true; }
+		if (e == Event::Return) {
+			editing_ = false;
+			std::string v = offset_.value;
+			if (v.rfind("0x", 0) == 0 || v.rfind("0X", 0) == 0) v = v.substr(2);
+			try {
+				size_t used = 0;
+				const uint64_t off = std::stoull(v, &used, 16);
+				if (used == v.size()) gotoOffset(off);   // not hex: ignored, as in Qt
+			} catch (...) {}
+			return true;
+		}
+		offset_.handle(e);
+		return true;
+	}
+	if (!s_.loaded()) return false;
+	if (at_ != Rows) {
+		// On a field: Enter/Space opens it, Left/Right swaps fields, Down goes to the rows.
+		if (e == Event::Return || e == Event::Character(' ')) return onEvent(Event::Character(at_ == Section ? 's' : 'f'));
+		if (e == Event::ArrowLeft || e == Event::ArrowRight) { at_ = at_ == Section ? Offset : Section; return true; }
+		if (e == Event::ArrowDown) { at_ = Rows; return true; }
+	}
+	if (e == Event::Character('s') && !sections_.empty()) {
+		at_ = Section;
+		picking_ = true;
+		pick_ = chosen_ >= 0 ? static_cast<size_t>(chosen_) : 0;
+		return true;
+	}
+	if (e == Event::Character('f')) { at_ = Offset; editing_ = true; offset_.set(""); return true; }
+	if (moveRows(e, cursor_, totalRows(), vp_.rows())) { at_ = Rows; follow(cursor_, top_, totalRows(), vp_.rows()); return true; }
+	return false;
+}
+
+bool MemoryPane::click(int x, int y) {
+	sync();
+	if (!s_.loaded()) return false;
+	if (sectionBox_.Contain(x, y)) {
+		editing_ = false;
+		at_ = Section;
+		if (picking_) { picking_ = false; return true; }
+		return onEvent(Event::Character('s'));
+	}
+	if (offsetBox_.Contain(x, y)) {
+		picking_ = false;
+		at_ = Offset;
+		if (!editing_) { editing_ = true; offset_.set(""); }
+		return true;
+	}
+	editing_ = false;
+	size_t i = 0;
+	if (!rowAt(vp_, y, picking_ ? pickTop_ : top_, i)) return false;
+	if (picking_) {
+		if (i >= sections_.size()) return false;
+		pick_ = i;
+		return onEvent(Event::Return);
+	}
+	if (i >= totalRows()) return false;
+	at_ = Rows;
+	cursor_ = i;
+	return true;
+}
+
+Element MemoryPane::render(bool focused) {
+	sync();
+	const Glyphs& g = t_.g();
+	const bool loaded = s_.loaded();
+	const std::string label = chosen_ >= 0 ? sectionEntry(sections_[static_cast<size_t>(chosen_)])
+	                                       : std::string("Jump to") + g.ellipsis;
+
+	auto stop = [&](Stop s, Element el) { return focused && at_ == s ? el | inverted : el; };
+
+	Elements out;
+	out.push_back(hbox({
+		text(" "), t_.ink("Memory", focused ? Role::Bright : Role::Muted), text("   "),
+		t_.ink("Section:", Role::Text), text(" "),
+		stop(Section, field(t_, hbox({ fixed(t_.ink(clip(label, 34, g.clip), Role::Text), 35), t_.ink(g.drop, Role::Text) }), loaded)) | reflect(sectionBox_),
+		text(" "), t_.ink("s", Role::Faint), text("   "),
+		t_.ink("Go to offset:", Role::Text), text(" "),
+		stop(Offset, field(t_, offset_.render(t_, "0x0", editing_, 12), loaded)) | reflect(offsetBox_),
+		text(" "), t_.ink("f", Role::Faint), filler(),
+	}));
+
+	Elements rows;
+	if (picking_) {
+		follow(pick_, pickTop_, sections_.size(), vp_.rows());
+		const size_t end = std::min(sections_.size(), pickTop_ + static_cast<size_t>(vp_.rows()));
+		for (size_t i = pickTop_; i < end; ++i) {
+			const bool sel = i == pick_;
+			Element row = hbox({ text("   "), t_.ink(sectionEntry(sections_[i]), sel ? Role::Bright : Role::Text), filler() });
+			if (sel) row = row | t_.bg(Role::AccentBg);
+			rows.push_back(std::move(row));
+		}
+	} else if (loaded) {
+		follow(cursor_, top_, totalRows(), vp_.rows());
+		const size_t end = std::min(totalRows(), top_ + static_cast<size_t>(vp_.rows()));
+		for (size_t r = top_; r < end; ++r) {
+			const std::vector<uint8_t> raw = s_.bytes(r * 16, 16);
+			std::string hex, ascii;
+			for (size_t c = 0; c < 16; ++c) {
+				if (c > 0) hex += ' ';
+				if (c == 8) hex += ' ';   // gap between the two 8-byte groups
+				if (c < raw.size()) {
+					hex += hexUpper(raw[c], 2);
+					ascii += (raw[c] >= 0x20 && raw[c] <= 0x7e) ? static_cast<char>(raw[c]) : '.';
+				} else {
+					hex += "  ";
+				}
+			}
+			const bool sel = r == cursor_;
+			const bool hi = sel && focused && at_ == Rows;
+			Element row = hbox({
+				text(" "), t_.ink(hexUpper(r * 16, 8), hi ? Role::AccentText : (sel ? Role::Bright : Role::Dim)),
+				text("  "), t_.ink(hex, hi ? Role::AccentText : (sel ? Role::Bright : Role::Text)),
+				text("  "), t_.ink("|" + ascii + "|", hi ? Role::AccentText : (sel ? Role::Bright : Role::Muted)),
+				filler(),
+			});
+			if (hi) row = row | t_.bg(Role::AccentBg);
+			rows.push_back(std::move(row));
+		}
+	}
+	out.push_back(vbox(std::move(rows)) | yflex | reflect(vp_.box));
+	return vbox(std::move(out));
 }
 
 } // namespace tui

@@ -3,22 +3,22 @@
 
 namespace tui {
 
-// Owns the Session and the FTXUI screen loop. Layout:
+// Owns the Session and the FTXUI screen loop. Layout and vocabulary follow the
+// Qt MainWindow one-to-one (ANSI 16 colours, CP437 glyphs):
 //
-//   [Open] [Save*] [Run*] [Step*] [Break*] [Quit]        top bar (*=placeholder)
-//   +-- Disassembly ---------------+-- Registers --+
-//   |                              +-- Stack ------+
-//   +-- Memory ------------------------------------+
-//   file | format | arch | status                        status bar
-//
-// Placeholder actions only set session.setStatus("... not implemented yet").
-// "Open" is real: modal path prompt -> Session::open().
+//   File  Debug  Edit  View  Tools                         voidwalk - <path>
+//   ≡ │ Open... ^O │ ► Run F5  Step Into F7 ... │ Recompile   [Go to address ^G]  Settings
+//   ──────────────────────────────────────────────────────────────────────────
+//   SYMBOLS │ ADDRESS  BYTES  INSTRUCTION  NOTES │ Registers  Stack
+//   ──────────────────────────────────────────────────────────────────────────
+//   Memory   Section: [Jump to... ▼]   Go to offset: [0x0]
+//   ──────────────────────────────────────────────────────────────────────────
+//   <status message>                          │ N instr │ ELF ∙ x86-64
 class UI {
 public:
 	explicit UI(Session session);
 
-	// Builds the component tree and blocks in ScreenInteractive::Loop
-	// until the user quits. Returns process exit code.
+	// Builds the view and blocks in ScreenInteractive::Loop until the user quits.
 	int start();
 
 private:
@@ -26,4 +26,3 @@ private:
 };
 
 } // namespace tui
-
